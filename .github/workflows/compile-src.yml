@@ -1,4 +1,4 @@
-name: SWG Source - Continuous Integration for src repo
+name: SWG CI with Discord
 
 on:
   pull_request:
@@ -12,28 +12,38 @@ jobs:
     container: cekisswg/swg-vm3.01-i386:latest
 
     steps:
-      # Step 1: Checkout PR
+      # 1. Checkout PR into the workspace
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # Step 2: Run ANT Build
+      # 2. Create symlink so /home/swg/swg-main points to the repo
+      - name: Create /home/swg/swg-main symlink
+        run: |
+          mkdir -p /home/swg
+          ln -s $GITHUB_WORKSPACE /home/swg/swg-main
+
+      # 3. Install dependencies
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          apt-get install -y jq cmake make gcc g++ 
+
+      # 4. Run ANT build
       - name: Run ANT Build
         id: build
         run: |
           set -e
-          BUILD_LOG=$GITHUB_WORKSPACE/build.log
-          cd $GITHUB_WORKSPACE/src
-          # Run ANT and capture exit code
+          BUILD_LOG=/home/swg/swg-main/build.log
+          cd /home/swg/swg-main
           ant build_src | tee $BUILD_LOG
           echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
-      # Step 3: Send Discord notification
+      # 5. Send Discord notification
       - name: Send Discord Notification
-        if: always()  # Run even if the build fails
+        if: always()
         run: |
-          # Gather info
           PR_NUMBER=${{ github.event.pull_request.number }}
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_URL="${{ github.event.pull_request.html_url }}"
@@ -48,7 +58,6 @@ jobs:
             COLOR=15158332
           fi
 
-          # Create JSON payload for Discord embed
           PAYLOAD=$(jq -n \
             --arg title "SWG CI Build $STATUS" \
             --arg pr_title "$PR_TITLE" \
@@ -57,7 +66,7 @@ jobs:
             --arg branch "$BRANCH" \
             --arg commit "$COMMIT_HASH" \
             --arg status "$STATUS" \
-            --arg build_log "$(tail -n 10 $GITHUB_WORKSPACE/build.log | sed 's/"/\\"/g')" \
+            --arg build_log "$(tail -n 10 /home/swg/swg-main/build.log | sed 's/"/\\"/g')" \
             --arg color "$COLOR" \
             '{
               "username": "SWG CI",
@@ -76,7 +85,6 @@ jobs:
               }]
             }')
 
-          # Send to Discord
           curl -H "Content-Type: application/json" \
                -X POST \
                -d "$PAYLOAD" \
