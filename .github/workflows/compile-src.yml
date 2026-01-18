@@ -12,9 +12,13 @@ jobs:
     container: cekisswg/swg-vm3.01-i386:latest
 
     steps:
+      - name: Prepare directory
+        run: mkdir -p /home/swg/swg-main
+
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
+          path: /home/swg/swg-main
           fetch-depth: 1
 
       - name: Run ANT Build
