@@ -12,25 +12,19 @@ jobs:
     container: cekisswg/swg-vm3.01-i386:latest
 
     steps:
-      # 1. Checkout PR into the workspace
+      # 1. Checkout the PR
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # 2. Create symlink so /home/swg/swg-main points to the repo
+      # 2. Create /home/swg/swg-main symlink
       - name: Create /home/swg/swg-main symlink
         run: |
           mkdir -p /home/swg
           ln -s $GITHUB_WORKSPACE /home/swg/swg-main
 
-      # 3. Install dependencies
-      - name: Install Dependencies
-        run: |
-          apt-get update
-          apt-get install -y jq cmake make gcc g++ 
-
-      # 4. Run ANT build
+      # 3. Run ANT Build
       - name: Run ANT Build
         id: build
         run: |
@@ -40,51 +34,25 @@ jobs:
           ant build_src | tee $BUILD_LOG
           echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
-      # 5. Send Discord notification
+      # 4. Send Discord notification (inline JSON, robust)
       - name: Send Discord Notification
         if: always()
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_URL="${{ github.event.pull_request.html_url }}"
-          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
-          COMMIT_HASH="${{ github.event.pull_request.head.sha }}"
-          BRANCH="${{ github.event.pull_request.head.ref }}"
+          # Determine status
           STATUS="✅ Success"
           COLOR=3066993
-
           if [ "${BUILD_EXIT_CODE}" != "0" ]; then
             STATUS="❌ Failed"
             COLOR=15158332
           fi
 
-          PAYLOAD=$(jq -n \
-            --arg title "SWG CI Build $STATUS" \
-            --arg pr_title "$PR_TITLE" \
-            --arg pr_url "$PR_URL" \
-            --arg pr_author "$PR_AUTHOR" \
-            --arg branch "$BRANCH" \
-            --arg commit "$COMMIT_HASH" \
-            --arg status "$STATUS" \
-            --arg build_log "$(tail -n 10 /home/swg/swg-main/build.log | sed 's/"/\\"/g')" \
-            --arg color "$COLOR" \
-            '{
-              "username": "SWG CI",
-              "embeds": [{
-                "title": $title,
-                "color": ($color | tonumber),
-                "fields": [
-                  {"name": "PR", "value": "[" + $pr_title + "](" + $pr_url + ")", "inline": false},
-                  {"name": "Author", "value": $pr_author, "inline": true},
-                  {"name": "Branch", "value": $branch, "inline": true},
-                  {"name": "Commit", "value": $commit, "inline": false},
-                  {"name": "Status", "value": $status, "inline": true},
-                  {"name": "Last 10 lines of Build Log", "value": $build_log, "inline": false}
-                ],
-                "footer": {"text": "SWG CI • GitHub Actions"}
-              }]
-            }')
+          # Escape last 10 lines of log for JSON
+          BUILD_LOG=$(tail -n 10 /home/swg/swg-main/build.log | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
 
+          # Build JSON payload inline
+          PAYLOAD='{"username":"SWG CI","embeds":[{"title":"SWG CI Build '"$STATUS"'","color":'"$COLOR"',"fields":[{"name":"PR","value":"['"${{ github.event.pull_request.title }}"']('"${{ github.event.pull_request.html_url }}"')","inline":false},{"name":"Author","value":"'"${{ github.event.pull_request.user.login }}"'","inline":true},{"name":"Branch","value":"'"${{ github.event.pull_request.head.ref }}"'","inline":true},{"name":"Commit","value":"'"${{ github.event.pull_request.head.sha }}"'","inline":false},{"name":"Status","value":"'"$STATUS"'","inline":true},{"name":"Last 10 lines of Build Log","value":"'"$BUILD_LOG"'","inline":false}],"footer":{"text":"SWG CI • GitHub Actions"}}]}'
+
+          # Send to Discord
           curl -H "Content-Type: application/json" \
                -X POST \
                -d "$PAYLOAD" \
