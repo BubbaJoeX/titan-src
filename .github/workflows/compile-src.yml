@@ -12,33 +12,26 @@ jobs:
     container: cekisswg/swg-vm3.01-i386:latest
 
     steps:
-      # 1. Checkout the PR
+      # 1. Checkout PR
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # 2. Create /home/swg/swg-main symlink
-      - name: Create /home/swg/swg-main symlink
-        run: |
-          mkdir -p /home/swg
-          ln -s $GITHUB_WORKSPACE /home/swg/swg-main
-
-      # 3. Run ANT Build
+      # 2. Run ANT Build
       - name: Run ANT Build
         id: build
         run: |
           set -e
-          BUILD_LOG=/home/swg/swg-main/build.log
-          cd /home/swg/swg-main
-          ant build_src | tee $BUILD_LOG
+          BUILD_LOG=$GITHUB_WORKSPACE/build.log
+          cd $GITHUB_WORKSPACE
+          ant -Dbasedir=$GITHUB_WORKSPACE build_src | tee $BUILD_LOG
           echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
-      # 4. Send Discord notification (inline JSON, robust)
+      # 3. Send Discord Notification
       - name: Send Discord Notification
         if: always()
         run: |
-          # Determine status
           STATUS="✅ Success"
           COLOR=3066993
           if [ "${BUILD_EXIT_CODE}" != "0" ]; then
@@ -46,14 +39,22 @@ jobs:
             COLOR=15158332
           fi
 
-          # Escape last 10 lines of log for JSON
-          BUILD_LOG=$(tail -n 10 /home/swg/swg-main/build.log | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          # Escape last 10 lines of build log for JSON
+          BUILD_LOG=$(tail -n 10 $GITHUB_WORKSPACE/build.log | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
 
-          # Build JSON payload inline
+          # Inline JSON payload
           PAYLOAD='{"username":"SWG CI","embeds":[{"title":"SWG CI Build '"$STATUS"'","color":'"$COLOR"',"fields":[{"name":"PR","value":"['"${{ github.event.pull_request.title }}"']('"${{ github.event.pull_request.html_url }}"')","inline":false},{"name":"Author","value":"'"${{ github.event.pull_request.user.login }}"'","inline":true},{"name":"Branch","value":"'"${{ github.event.pull_request.head.ref }}"'","inline":true},{"name":"Commit","value":"'"${{ github.event.pull_request.head.sha }}"'","inline":false},{"name":"Status","value":"'"$STATUS"'","inline":true},{"name":"Last 10 lines of Build Log","value":"'"$BUILD_LOG"'","inline":false}],"footer":{"text":"SWG CI • GitHub Actions"}}]}'
 
-          # Send to Discord
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "$PAYLOAD" \
-               https://discord.com/api/webhooks/1462352607015079956/r1jI0LpCUjyvXAbO43a2HUqW1XzZ9y-UdD_13VyyURZdwAghFV_vdZhrAP78CzU5D4RG
+          # Send via curl if available, else fallback to wget
+          if command -v curl >/dev/null 2>&1; then
+            curl -H "Content-Type: application/json" \
+                 -X POST \
+                 -d "$PAYLOAD" \
+                 https://discord.com/api/webhooks/1462352607015079956/r1jI0LpCUjyvXAbO43a2HUqW1XzZ9y-UdD_13VyyURZdwAghFV_vdZhrAP78CzU5D4RG
+          elif command -v wget >/dev/null 2>&1; then
+            wget --header="Content-Type: application/json" \
+                 --post-data="$PAYLOAD" \
+                 https://discord.com/api/webhooks/1462352607015079956/r1jI0LpCUjyvXAbO43a2HUqW1XzZ9y-UdD_13VyyURZdwAghFV_vdZhrAP78CzU5D4RG -O -
+          else
+            echo "Error: Neither curl nor wget available to send Discord webhook"
+          fi
