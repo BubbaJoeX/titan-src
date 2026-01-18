@@ -22,6 +22,7 @@
 #include "serverGame/PlayerCreatureController.h"
 #include "serverGame/PlayerObject.h"
 #include "serverGame/ResourceContainerObject.h"
+#include "serverGame/ServerFactoryObjectTemplate.h"
 #include "serverGame/ServerWorld.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptParameters.h"
