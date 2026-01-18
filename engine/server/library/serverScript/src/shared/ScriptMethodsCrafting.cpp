@@ -108,6 +108,7 @@ namespace ScriptMethodsCraftingNamespace
 	jint         JNICALL getSkillModSockets(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setSkillModSockets(JNIEnv *env, jobject self, jlong target, jint sockets);
 	jlong        JNICALL makeCraftedItem(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container);
+	jlong        JNICALL generateFactoryCrate(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container);
 	jobject      JNICALL getSchematicData(JNIEnv *env, jobject self, jlong manufacturingSchematic);
 	jobject      JNICALL getDraftSchematicData(JNIEnv *env, jobject self, jstring draftSchematic);
 	jobject      JNICALL getDraftSchematicDataCrc(JNIEnv *env, jobject self, jint draftSchematicCrc);
@@ -169,6 +170,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getSkillModSockets", "(J)I", getSkillModSockets),
 	JF("_setSkillModSockets", "(JI)Z", setSkillModSockets),
 	JF("_makeCraftedItem", "(Ljava/lang/String;FJ)J", makeCraftedItem),
+	JF("_generateFactoryCrate", "(Ljava/lang/String;FJ)J", generateFactoryCrate),
 	JF("_getSchematicData", "(J)Lscript/draft_schematic;", getSchematicData),
 	JF("getSchematicData", "(Ljava/lang/String;)Lscript/draft_schematic;", getDraftSchematicData),
 	JF("getSchematicData", "(I)Lscript/draft_schematic;", getDraftSchematicDataCrc),
@@ -2700,6 +2702,157 @@ jlong JNICALL ScriptMethodsCraftingNamespace::makeCraftedItem(JNIEnv *env, jobje
 
 	return (prototype->getNetworkId()).getValue();
 }	// JavaLibrary::makeCraftedItem
+
+//----------------------------------------------------------------------
+
+/**
+ * Generates a factory crate based on a draft schematic. The items in the crate will 
+ * have stats based on a % quality value passed in (0 = worst possible stats, 100 = best 
+ * possible stats).
+ *
+ * @param env				Java environment
+ * @param self				class calling this function
+ * @param draftSchematic	draft schematic to make the objects from
+ * @param qualityPercent	% stat adjustment
+ * @param container			the container to create the crate in
+ *
+ * @return the factory crate, or nullptr on error
+ */
+jlong JNICALL ScriptMethodsCraftingNamespace::generateFactoryCrate(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container)
+{
+	UNREF(self);
+
+	if (draftSchematic == 0 || container == 0)
+	{
+		WARNING(true, ("[script bug] nullptr schematic or container passed to "
+			"generateFactoryCrate"));
+		return 0;
+	}
+
+	JavaStringParam jDraftSchematic(draftSchematic);
+	std::string draftSchematicName;
+	if (!JavaLibrary::convert(jDraftSchematic, draftSchematicName))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate can't convert schematic "
+			"name to string"));
+		return 0;
+	}
+
+	const DraftSchematicObject * schematic = DraftSchematicObject::getSchematic(
+		draftSchematicName);
+	if (schematic == nullptr)
+	{
+		WARNING(true, ("[script bug] bad schematic name %s passed to "
+			"generateFactoryCrate", draftSchematicName.c_str()));
+		return 0;
+	}
+
+	ServerObject * target = nullptr;
+	if (!JavaLibrary::getObject(container, target))
+	{
+		WARNING(true, ("[script bug] bad container id passed to generateFactoryCrate"));
+		return 0;
+	}
+
+	Object * targetParent = ContainerInterface::getFirstParentInWorld(*target);
+	if (targetParent == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate can't find parent in world "
+			"for container %s", target->getNetworkId().getValueString().c_str()));
+		return 0;
+	}
+	Vector createPos(targetParent->getPosition_w());
+	createPos.y = -100000.0f;
+
+	// create a manf schematic
+	ManufactureSchematicObject * manfSchematic = ServerWorld::createNewManufacturingSchematic(
+		*schematic, createPos, false);
+	if (manfSchematic == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating manf "
+			"schematic!"));
+		return 0;
+	}
+
+	// create a prototype item
+	ServerObject * prototype = manfSchematic->manufactureObject(createPos);
+	if (prototype == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating "
+			"prototype!"));
+		manfSchematic->permanentlyDestroy(DeleteReasons::SetupFailed);
+		return 0;
+	}
+
+	if (qualityPercent < 0.0f)
+		qualityPercent = 0.0f;
+	else if (qualityPercent > 100.0f)
+		qualityPercent = 100.0f;
+
+	// apply quality adjustments via script trigger
+	ScriptParams params;
+	params.addParam(prototype->getNetworkId());
+	params.addParam(*manfSchematic);
+	params.addParam(qualityPercent);
+	IGNORE_RETURN(manfSchematic->getScriptObject()->trigAllScripts(
+		Scripting::TRIG_MAKE_CRAFTED_ITEM, params));
+
+	// get the crate template from the draft schematic
+	const ServerFactoryObjectTemplate * crateTemplate = schematic->getCrateObjectTemplate();
+	if (crateTemplate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: schematic %s has no crate template",
+			draftSchematicName.c_str()));
+		prototype->permanentlyDestroy(DeleteReasons::SetupFailed);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// create the factory crate
+	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
+		*crateTemplate, createPos, false));
+	if (factoryCrate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating factory crate"));
+		prototype->permanentlyDestroy(DeleteReasons::SetupFailed);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// initialize the factory crate with data from the manf schematic
+	factoryCrate->initialize(*manfSchematic);
+
+	// put the prototype into the factory crate
+	Container::ContainerErrorCode error;
+	if (!ContainerInterface::transferItemToVolumeContainer(*factoryCrate, *prototype,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error can't store prototype "
+			"in factory crate, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		prototype->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// set initial count to 1
+	factoryCrate->setCount(1);
+
+	// cleanup the manf schematic
+	manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+
+	// move the factory crate to the target container
+	if (!ContainerInterface::transferItemToVolumeContainer(*target, *factoryCrate,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error can't store crate "
+			"in container, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		return 0;
+	}
+
+	return (factoryCrate->getNetworkId()).getValue();
+}	// JavaLibrary::generateFactoryCrate
 
 //----------------------------------------------------------------------
 
