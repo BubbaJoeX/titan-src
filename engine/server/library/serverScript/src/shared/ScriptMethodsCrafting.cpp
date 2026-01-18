@@ -2815,7 +2815,7 @@ jlong JNICALL ScriptMethodsCraftingNamespace::generateFactoryCrate(JNIEnv *env, 
 	Transform tr;
 	tr.setPosition_p(createPos);
 	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-		static_cast<const ServerObjectTemplate&>(*crateTemplate), tr, 0, false));
+		*crateTemplate, tr, 0, false));
 	if (factoryCrate == nullptr)
 	{
 		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating factory crate"));
@@ -2954,7 +2954,7 @@ jlong JNICALL ScriptMethodsCraftingNamespace::makeIntoFactoryCrate(JNIEnv *env, 
 	Transform tr;
 	tr.setPosition_p(createPos);
 	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-		static_cast<const ServerObjectTemplate&>(*crateTemplate), tr, 0, false));
+		*crateTemplate, tr, 0, false));
 	if (factoryCrate == nullptr)
 	{
 		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: error creating factory crate"));
