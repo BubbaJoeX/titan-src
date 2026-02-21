@@ -32,6 +32,7 @@
 #include "sharedNetworkMessages/CreateClientPathMessage.h"
 #include "sharedNetworkMessages/DestroyClientPathMessage.h"
 #include "sharedNetworkMessages/EnterStructurePlacementModeMessage.h"
+#include "sharedNetworkMessages/ShowAirspeederPanelMessage.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/LotManager.h"
 #include "sharedObject/ObjectTemplateList.h"
@@ -57,6 +58,7 @@ namespace ScriptMethodsTerrainNamespace
 	jobject      JNICALL getGoodLocation (JNIEnv* env, jobject self, jfloat hintX, jfloat hintY, jobject searchRectLowerLeftLocation, jobject searchRectUpperRightLocation, jboolean dontCheckWater, jboolean dontCheckSlope);
 	jobject      JNICALL getGoodLocationAvoidCollidables (JNIEnv* env, jobject self, jfloat hintX, jfloat hintY, jobject searchRectLowerLeftLocation, jobject searchRectUpperRightLocation, jboolean dontCheckWater, jboolean dontCheckSlope, jfloat staticObjDistance);
 	jboolean     JNICALL enterClientStructurePlacementMode (JNIEnv* env, jobject self, jlong player, jlong deed, jstring serverObjectTemplateName);
+	jboolean     JNICALL showAirspeederPanel (JNIEnv* env, jobject self, jlong player, jboolean show);
 	jfloat       JNICALL canPlaceStructure (JNIEnv* env, jobject self, jstring serverObjectTemplateName, jobject position, jint rotation);
 	jlong        JNICALL createTemporaryStructure (JNIEnv* env, jobject self, jstring serverObjectTemplateName, jobject position, jint rotation);
 	jint         JNICALL getNumberOfLots (JNIEnv* env, jobject self, jstring serverObjectTemplateName);
@@ -94,6 +96,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("getGoodLocation",                   "(FFLscript/location;Lscript/location;ZZ)Lscript/location;", getGoodLocation),
 	JF("getGoodLocationAvoidCollidables",   "(FFLscript/location;Lscript/location;ZZF)Lscript/location;", getGoodLocationAvoidCollidables),
 	JF("_enterClientStructurePlacementMode", "(JJLjava/lang/String;)Z",       enterClientStructurePlacementMode),
+	JF("_showAirspeederPanel", "(JZ)Z",                                       showAirspeederPanel),
 	JF("canPlaceStructure",                 "(Ljava/lang/String;Lscript/location;I)F",                   canPlaceStructure),
 	JF("_createTemporaryStructure",          "(Ljava/lang/String;Lscript/location;I)J",     createTemporaryStructure),
 	JF("getNumberOfLots",                   "(Ljava/lang/String;)I",                                     getNumberOfLots),
@@ -339,6 +342,28 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMod
 	//-- send the message to the client
 	client->send (EnterStructurePlacementModeMessage (deedNetworkId, sharedObjectTemplateName), true);
 
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::showAirspeederPanel(JNIEnv* /*env*/, jobject /*self*/, jlong jobject_player, jboolean show)
+{
+	ServerObject* player = 0;
+	if (!JavaLibrary::getObject(jobject_player, player))
+	{
+		DEBUG_WARNING(true, ("showAirspeederPanel(): could not find player object"));
+		return JNI_FALSE;
+	}
+
+	Client* const client = player->getClient();
+	if (!client)
+	{
+		DEBUG_WARNING(true, ("showAirspeederPanel(): could not get player's client"));
+		return JNI_FALSE;
+	}
+
+	client->send(ShowAirspeederPanelMessage(show ? true : false), true);
 	return JNI_TRUE;
 }
 

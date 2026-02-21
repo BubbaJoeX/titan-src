@@ -145,6 +145,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL removeAllAttributeAndSkillmodMods(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setInvulnerable(JNIEnv *env, jobject self, jlong target, jboolean invulnerable);
 	jboolean     JNICALL isInvulnerable(JNIEnv *env, jobject self, jlong target);
+	jboolean     JNICALL setObjectCollidable(JNIEnv *env, jobject self, jlong target, jboolean collidable);
 	jfloat       JNICALL getDistance(JNIEnv *env, jobject self, jlong target1, jlong target2);
 	jfloat       JNICALL getLocationDistance(JNIEnv *env, jobject self, jobject loc1, jobject loc2);
 	jboolean     JNICALL isLocationInConicalFrustum(JNIEnv *env, jobject self, jobject jTestLoc, jobject jStartLoc, jobject jEndLoc, jfloat startRadius, jfloat endRadius, jboolean use2d);
@@ -379,6 +380,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_isLocationInCone", "(Lscript/location;Lscript/location;Lscript/location;FFZ)Z", isLocationInCone),
 	JF("_setInvulnerable", "(JZ)Z", setInvulnerable),
 	JF("_isInvulnerable", "(J)Z", isInvulnerable),
+	JF("_setObjectCollidable", "(JZ)Z", setObjectCollidable),
 	JF("_getComplexity", "(J)F", getComplexity),
 	JF("_setComplexity", "(JF)Z", setComplexity),
 	JF("_isGod", "(J)Z", isGod),
@@ -3601,6 +3603,34 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::isInvulnerable(JNIEnv *env, j
 
 	return object->isInvulnerable();
 }	// JavaLibrary::isInvulnerable
+
+//----------------------------------------------------------------------
+
+/**
+ * Sets the collidable flag of an object (e.g. for airspeeder mode vehicles).
+ *
+ * @param env		    Java environment
+ * @param self		    class calling this function
+ * @param target		object to modify
+ * @param collidable	true to enable collision, false to disable
+ *
+ * @return JNI_TRUE on success, JNI_FALSE on error
+ */
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setObjectCollidable(JNIEnv *env, jobject self, jlong target, jboolean collidable)
+{
+	UNREF(self);
+
+	ServerObject * object = nullptr;
+	if (!JavaLibrary::getObject(target, object))
+		return JNI_FALSE;
+
+	CollisionProperty * collision = object->getCollisionProperty();
+	if (!collision)
+		return JNI_FALSE;
+
+	collision->setCollidable(collidable != JNI_FALSE);
+	return JNI_TRUE;
+}	// JavaLibrary::setObjectCollidable
 
 //----------------------------------------------------------------------
 

@@ -248,6 +248,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/EnterStructurePlacementModeMessage.cpp
 	shared/clientGameServer/EnterStructurePlacementModeMessage.h
 	shared/clientGameServer/EnterTicketPurchaseModeMessage.cpp
+	shared/clientGameServer/ShowAirspeederPanelMessage.cpp
+	shared/clientGameServer/ShowAirspeederPanelMessage.h
 	shared/clientGameServer/EnterTicketPurchaseModeMessage.h
 	shared/clientGameServer/ExpertiseRequestMessage.cpp
 	shared/clientGameServer/ExpertiseRequestMessage.h
