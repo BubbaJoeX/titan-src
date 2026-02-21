@@ -25,6 +25,7 @@
 #include "sharedFoundation/FormattedString.h"
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedGame/SharedStringIds.h"
+#include "sharedMath/Transform.h"
 #include "sharedObject/Container.h"
 #include "sharedObject/NetworkIdManager.h"
 
@@ -278,8 +279,10 @@ bool ConsoleCommandParserCraft::performParsing (const NetworkId & userId, const 
 							else
 							{
 								// Create the factory crate
+								Transform createTransform(Transform::identity);
+								createTransform.setPosition_p(createPos);
 								FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-									*crateTemplate, createPos, false));
+									*crateTemplate, createTransform, nullptr, false));
 								if (factoryCrate == nullptr)
 								{
 									result += Unicode::narrowToWide("Error: Failed to create factory crate");
@@ -413,8 +416,10 @@ bool ConsoleCommandParserCraft::performParsing (const NetworkId & userId, const 
 									else
 									{
 										// Create the factory crate
+										Transform createTransform(Transform::identity);
+										createTransform.setPosition_p(createPos);
 										FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-											*crateTemplate, createPos, false));
+											*crateTemplate, createTransform, nullptr, false));
 										if (factoryCrate == nullptr)
 										{
 											result += Unicode::narrowToWide("Error: Failed to create factory crate");
