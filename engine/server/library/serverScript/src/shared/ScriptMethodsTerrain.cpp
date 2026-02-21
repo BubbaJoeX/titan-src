@@ -349,10 +349,17 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMod
 
 jboolean JNICALL ScriptMethodsTerrainNamespace::showAirspeederPanel(JNIEnv* /*env*/, jobject /*self*/, jlong jobject_player, jboolean show)
 {
-	ServerObject* player = 0;
-	if (!JavaLibrary::getObject(jobject_player, player))
+	ServerObject* serverObj = 0;
+	if (!JavaLibrary::getObject(jobject_player, serverObj))
 	{
 		DEBUG_WARNING(true, ("showAirspeederPanel(): could not find player object"));
+		return JNI_FALSE;
+	}
+
+	CreatureObject* const player = serverObj->asCreatureObject();
+	if (!player)
+	{
+		DEBUG_WARNING(true, ("showAirspeederPanel(): object is not a CreatureObject"));
 		return JNI_FALSE;
 	}
 
