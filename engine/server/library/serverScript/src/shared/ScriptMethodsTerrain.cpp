@@ -347,21 +347,12 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMod
 
 // ----------------------------------------------------------------------
 
-jboolean JNICALL ScriptMethodsTerrainNamespace::showAirspeederPanel(JNIEnv* /*env*/, jobject /*self*/, jlong jobject_player, jboolean show)
+jboolean JNICALL ScriptMethodsTerrainNamespace::showAirspeederPanel(JNIEnv* env, jobject /*self*/, jlong jobject_player, jboolean show)
 {
-	ServerObject* serverObj = 0;
-	if (!JavaLibrary::getObject(jobject_player, serverObj))
-	{
-		DEBUG_WARNING(true, ("showAirspeederPanel(): could not find player object"));
-		return JNI_FALSE;
-	}
-
-	CreatureObject* const player = serverObj->asCreatureObject();
+	// Resolve to CreatureObject (player) so the UI message is sent to the correct client
+	CreatureObject* const player = JavaLibrary::getCreatureThrow(env, jobject_player, "showAirspeederPanel(): player did not resolve to a CreatureObject", false);
 	if (!player)
-	{
-		DEBUG_WARNING(true, ("showAirspeederPanel(): object is not a CreatureObject"));
 		return JNI_FALSE;
-	}
 
 	Client* const client = player->getClient();
 	if (!client)

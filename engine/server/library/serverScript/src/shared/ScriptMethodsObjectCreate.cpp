@@ -545,14 +545,7 @@ jlong JNICALL ScriptMethodsObjectCreateNamespace::createNewObjectInContainerOver
 
 	ConstCharCrcString crcName(ObjectTemplateList::lookUp(templateName.c_str()));
 	if (crcName.getCrc() == 0)
-	{
-		WARNING(true, ("[designer bug] JavaLibrary::createNewObjectInContainerOverloaded "
-			"called with unknown template %s", templateName.c_str()));
-		fprintf(stderr, "WARNING: Could not create object from template %s\n",
-			templateName.c_str());
-		JavaLibrary::printJavaStack();
 		return 0;
-	}
 	return createNewObjectInContainerOverloadedCrc(env, self, crcName.getCrc(),
 		container);
 }
@@ -578,14 +571,7 @@ jlong JNICALL ScriptMethodsObjectCreateNamespace::createNewObjectInContainerOver
 
 	ConstCharCrcString crcName(ObjectTemplateList::lookUp(templateName.c_str()));
 	if (crcName.getCrc() == 0)
-	{
-		WARNING(true, ("[designer bug] JavaLibrary::createNewObjectInContainerOverloaded "
-			"called with unknown template %s", templateName.c_str()));
-		fprintf(stderr, "WARNING: Could not create object from template %s\n",
-			templateName.c_str());
-		JavaLibrary::printJavaStack();
 		return 0;
-	}
 	return createNewObjectInContainerOverloadedCrc(env, self, crcName.getCrc(),
 		container);
 }
@@ -774,6 +760,12 @@ jlong JNICALL ScriptMethodsObjectCreateNamespace::createNewObjectInContainerOver
 	if (container == 0)
 		return 0;
 
+	// skip creation if template is unknown to avoid spam
+	ObjectTemplate const * const tmpl = ObjectTemplateList::fetch(sourceCrc);
+	if (!tmpl)
+		return 0;
+	tmpl->releaseReference();
+
 	// make sure the container exists
 	ServerObject * containerOwner = nullptr;
 	if (!JavaLibrary::getObject(container, containerOwner))
@@ -786,11 +778,7 @@ jlong JNICALL ScriptMethodsObjectCreateNamespace::createNewObjectInContainerOver
 
 	ServerObject* target = ServerWorld::createNewObject(sourceCrc, *containerOwner, false, true);
 	if (!target)
-	{
-		fprintf(stderr, "WARNING: Could not create object from crc %d\n", sourceCrc);
-		JavaLibrary::printJavaStack();
 		return 0;
-	}
 
 	//Create its java id
 	NetworkId netId = target->getNetworkId();
