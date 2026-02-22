@@ -166,7 +166,7 @@ void GameConnection::onReceive(const Archive::ByteStream & message)
 					ca.getTemplateName(),
 					ca.getTimeSeconds(),
 					static_cast<int32>(::time(nullptr)),
-					ConfigConnectionServer::getDisableWorldSnapshot());
+					true);  // World snapshot deprecated - always buildout-only
 				client->getClientConnection()->send(startScene, true);
 			}
 			client->handleTransfer(ca.getSceneName(), this);

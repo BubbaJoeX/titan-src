@@ -707,17 +707,34 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 				unsigned int const cellIndex = areaBuildoutTable.getIntValue(cellIndexColumn, buildoutRow);
 
 				ObjectTemplate const * const serverTemplateBase = ObjectTemplateList::fetch(serverTemplateCrc);
-				FATAL(!serverTemplateBase, ("Nonexistant server template 0x%08x in buildout table %s, row %d (line %d) - rebuild your templates and reimport them into the database!", serverTemplateCrc, areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+				if (!serverTemplateBase)
+				{
+					LOG("MISSING_ASSET", ("Nonexistant server template 0x%08x in buildout table %s, row %d (line %d) - skipping object", serverTemplateCrc, areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+					continue;
+				}
 
 				ServerObjectTemplate const * const serverTemplate = serverTemplateBase->asServerObjectTemplate();
-				FATAL(!serverTemplate, ("Bad server template 0x%08x [%s] in buildout table %s, row %d (line %d)", serverTemplateCrc, serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+				if (!serverTemplate)
+				{
+					LOG("MISSING_ASSET", ("Bad server template 0x%08x [%s] in buildout table %s, row %d (line %d) - skipping object", serverTemplateCrc, serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+					continue;
+				}
 
 				std::string const &sharedTemplateName = serverTemplate->getSharedTemplate();
 				ObjectTemplate const * const sharedTemplateBase = ObjectTemplateList::fetch(sharedTemplateName);
-				FATAL(!sharedTemplateBase, ("Nonexistant shared template [%s] for [%s] in buildout table %s, row %d (line %d)", sharedTemplateName.c_str(), serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+				if (!sharedTemplateBase)
+				{
+					LOG("MISSING_ASSET", ("Nonexistant shared template [%s] for [%s] in buildout table %s, row %d (line %d) - skipping object", sharedTemplateName.c_str(), serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+					continue;
+				}
 
 				SharedObjectTemplate const * const sharedTemplate = sharedTemplateBase->asSharedObjectTemplate();
-				FATAL(!sharedTemplate, ("Bad shared template [%s] for [%s] in buildout table %s, row %d (line %d)", sharedTemplateName.c_str(), serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+				if (!sharedTemplate)
+				{
+					LOG("MISSING_ASSET", ("Bad shared template [%s] for [%s] in buildout table %s, row %d (line %d) - skipping object", sharedTemplateName.c_str(), serverTemplateBase->getName(), areaInfo.buildoutArea.areaName.c_str(), buildoutRow, buildoutRow + 3));
+					sharedTemplateBase->releaseReference();
+					continue;
+				}
 				bool const isPob = !sharedTemplate->getPortalLayoutFilename().empty();
 				sharedTemplateBase->releaseReference();
 

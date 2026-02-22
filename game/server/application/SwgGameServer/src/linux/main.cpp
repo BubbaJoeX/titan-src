@@ -28,7 +28,6 @@
 #include "sharedUtility/SetupSharedUtility.h"
 #include "sharedNetworkMessages/SetupSharedNetworkMessages.h"
 #include "SwgGameServer/SwgGameServer.h"
-#include "SwgGameServer/WorldSnapshotParser.h"
 #include "swgSharedNetworkMessages/SetupSwgSharedNetworkMessages.h"
 #include "swgServerNetworkMessages/SetupSwgServerNetworkMessages.h"
 
@@ -114,15 +113,6 @@ int main(int argc, char ** argv)
 	Os::setProgramName("SwgGameServer");
 	SwgGameServer::install();
 
-#ifdef _DEBUG
-	//-- see if the game server is being run in a mode to parse the database dump to create planetary snapshot files
-	const char* const createWorldSnapshots = ConfigFile::getKeyString("WorldSnapshot", "createWorldSnapshots", 0);
-	if (createWorldSnapshots)
-	{
-		WorldSnapshotParser::createWorldSnapshots (createWorldSnapshots);
-	}
-	else
-#endif
 	{
 		//-- run game
 		SetupSharedFoundation::callbackWithExceptionHandling(GameServer::run);

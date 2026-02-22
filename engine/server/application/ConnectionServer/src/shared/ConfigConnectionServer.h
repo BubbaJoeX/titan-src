@@ -18,7 +18,6 @@ public:
         int clientOverflowLimit;
         int gameServicePort;
         const char *clusterName;
-        bool disableWorldSnapshot;
         int maxClients;
         int pingPort;
         bool spamLimitEnabled;
@@ -91,8 +90,6 @@ public:
     static const uint16 getClientServicePortPublic();
 
     static const char *getClusterName();
-
-    static bool getDisableWorldSnapshot();
 
     static const uint16 getGameServicePort();
 
@@ -253,12 +250,6 @@ inline const uint16 ConfigConnectionServer::getClientServicePortPublic() {
 
 inline const char *ConfigConnectionServer::getClusterName() {
     return data->clusterName;
-}
-
-//-----------------------------------------------------------------------
-
-inline bool ConfigConnectionServer::getDisableWorldSnapshot() {
-    return data->disableWorldSnapshot;
 }
 
 //-----------------------------------------------------------------------

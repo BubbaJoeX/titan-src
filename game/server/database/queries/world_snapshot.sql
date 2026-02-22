@@ -1,3 +1,5 @@
+-- DEPRECATED: World snapshot system deprecated. Use buildouts for full server authority.
+-- This script was used to export objects for .ws file generation. No longer executed by build_cluster_daemon.pl
 set head off
 set feedback off
 set pagesize 0

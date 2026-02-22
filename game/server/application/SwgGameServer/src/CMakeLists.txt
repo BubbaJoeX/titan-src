@@ -42,9 +42,6 @@ set(SHARED_SOURCES
     shared/objectTemplate/SwgServerCreatureObjectTemplate.h
     shared/objectTemplate/SwgServerPlayerObjectTemplate.cpp
     shared/objectTemplate/SwgServerPlayerObjectTemplate.h
-
-    shared/snapshot/WorldSnapshotParser.cpp
-    shared/snapshot/WorldSnapshotParser.h
 )
 
 if(WIN32)

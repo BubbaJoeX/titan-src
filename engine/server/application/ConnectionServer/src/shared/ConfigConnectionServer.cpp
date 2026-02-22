@@ -73,7 +73,6 @@ void ConfigConnectionServer::install(void)
 	KEY_INT     (spamLimitBytesPerSec, 32000);
 	KEY_INT     (spamLimitPacketsPerSec, 50);
 	KEY_BOOL    (startPublicServer, true);
-	KEY_BOOL    (disableWorldSnapshot, true);
 	KEY_STRING  (gameServiceBindInterface, "");
 	KEY_STRING  (chatServiceBindInterface, "");
 	KEY_STRING  (customerServiceBindInterface, "");
