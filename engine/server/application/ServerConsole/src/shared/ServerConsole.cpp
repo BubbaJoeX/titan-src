@@ -11,15 +11,17 @@
 #include "sharedNetworkMessages/ConsoleChannelMessages.h"
 #include "ServerConsole.h"
 #include "ServerConsoleConnection.h"
+
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 //-----------------------------------------------------------------------
 
 namespace ServerConsoleNamespace
 {
-	ServerConsoleConnection * s_serverConnection = 0;
-	bool                   s_done = false;
+    ServerConsoleConnection * s_serverConnection = 0;
+    bool s_done = false;
 }
 
 using namespace ServerConsoleNamespace;
@@ -40,50 +42,51 @@ ServerConsole::~ServerConsole()
 
 void ServerConsole::done()
 {
-	s_done = true;
+    s_done = true;
 }
 
 //-----------------------------------------------------------------------
 
 void ServerConsole::run()
 {
-	if(!ConfigServerConsole::getServerAddress())
-		return;
+    const char * address = ConfigServerConsole::getServerAddress();
+    const uint16 port = ConfigServerConsole::getServerPort();
 
-	if(!ConfigServerConsole::getServerPort())
-		return;
+    if (!address || !port)
+        return;
 
-	if(stdin)
-	{
-		std::string input;
-		char inBuf[1024] = {"\0"};
-		while(! feof(stdin))
-		{
-			if (fread(inBuf, 1024, 1, stdin)) {
-				input += inBuf;
-				memset(inBuf, 0, sizeof(inBuf));
-			}
-		}
+    if (!stdin)
+        return;
 
-		if(input.length() > 0)
-		{
-			// connect to the server
-			s_serverConnection = new ServerConsoleConnection(ConfigServerConsole::getServerAddress(), ConfigServerConsole::getServerPort());
-			ConGenericMessage msg(input);
-			s_serverConnection->send(msg);
+    std::string input;
+    char inBuf[1024];
 
-			while(! s_done)
-			{
-				NetworkHandler::update();
-				NetworkHandler::dispatch();
-				Os::sleep(1);
-			}
-		}
-		else
-		{
-			fprintf(stderr, "Nothing to send to the server. Aborting");
-		}
-	}
+    // FIXED: read partial blocks correctly from stdin
+    size_t bytesRead = 0;
+    while ((bytesRead = fread(inBuf, 1, sizeof(inBuf), stdin)) > 0)
+    {
+        input.append(inBuf, bytesRead);
+    }
+
+    if (!input.empty())
+    {
+        // connect to the server
+        s_serverConnection = new ServerConsoleConnection(address, port);
+
+        ConGenericMessage msg(input);
+        s_serverConnection->send(msg);
+
+        while (!s_done)
+        {
+            NetworkHandler::update();
+            NetworkHandler::dispatch();
+            Os::sleep(1);
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Nothing to send to the server. Aborting\n");
+    }
 }
 
 //-----------------------------------------------------------------------
