@@ -103,6 +103,7 @@ public:
 	
 	virtual bool        getExtentDirty      ( void ) const;
 	virtual void        updateExtent        ( void ) const;
+	void                invalidateExtent    ( void );
 	
 	bool                getGoodLocation     ( float radius, Vector & outLoc ) const;
 	

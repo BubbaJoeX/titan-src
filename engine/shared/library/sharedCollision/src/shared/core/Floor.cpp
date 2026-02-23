@@ -209,6 +209,13 @@ bool Floor::getExtentDirty ( void ) const
 
 // ----------
 
+void Floor::invalidateExtent ( void )
+{
+	m_extentDirty = true;
+}
+
+// ----------
+
 void Floor::updateExtent ( void ) const
 {
 	BaseExtent const * localExtent = getExtent_l();
