@@ -244,7 +244,7 @@ as
 
 	end;
 
-	procedure save_object ( p_x VAOFNUMBER, p_y VAOFNUMBER, p_z VAOFNUMBER, p_quaternion_w VAOFNUMBER, p_quaternion_x VAOFNUMBER, p_quaternion_y VAOFNUMBER, p_quaternion_z VAOFNUMBER, p_node_x VAOFNUMBER, p_node_y VAOFNUMBER, p_node_z VAOFNUMBER, p_object_template_id VAOFNUMBER, p_type_id VAOFNUMBER, p_scene_id VAOFSTRING, p_controller_type VAOFNUMBER, p_deleted VAOFNUMBER, p_object_name VAOFSTRING, p_volume VAOFNUMBER, p_contained_by VAOFSTRING, p_slot_arrangement VAOFNUMBER, p_player_controlled VAOFSTRING, p_cache_version VAOFNUMBER, p_load_contents VAOFSTRING, p_cash_balance VAOFNUMBER, p_bank_balance VAOFNUMBER, p_complexity VAOFNUMBER, p_name_string_table VAOFSTRING, p_name_string_text VAOFSTRING, p_static_item_name VAOFSTRING, p_static_item_version VAOFNUMBER, p_conversion_id VAOFNUMBER, p_load_with VAOFSTRING, 
+	procedure save_object ( p_x VAOFNUMBER, p_y VAOFNUMBER, p_z VAOFNUMBER, p_quaternion_w VAOFNUMBER, p_quaternion_x VAOFNUMBER, p_quaternion_y VAOFNUMBER, p_quaternion_z VAOFNUMBER, p_scale_x VAOFNUMBER, p_scale_y VAOFNUMBER, p_scale_z VAOFNUMBER, p_node_x VAOFNUMBER, p_node_y VAOFNUMBER, p_node_z VAOFNUMBER, p_object_template_id VAOFNUMBER, p_type_id VAOFNUMBER, p_scene_id VAOFSTRING, p_controller_type VAOFNUMBER, p_deleted VAOFNUMBER, p_object_name VAOFSTRING, p_volume VAOFNUMBER, p_contained_by VAOFSTRING, p_slot_arrangement VAOFNUMBER, p_player_controlled VAOFSTRING, p_cache_version VAOFNUMBER, p_load_contents VAOFSTRING, p_cash_balance VAOFNUMBER, p_bank_balance VAOFNUMBER, p_complexity VAOFNUMBER, p_name_string_table VAOFSTRING, p_name_string_text VAOFSTRING, p_static_item_name VAOFSTRING, p_static_item_version VAOFNUMBER, p_conversion_id VAOFNUMBER, p_load_with VAOFSTRING, 
 		p_objvar_0_name VAOFSTRING,p_objvar_0_type VAOFNUMBER,p_objvar_0_value VAOFSTRING,p_objvar_1_name VAOFSTRING,p_objvar_1_type VAOFNUMBER,p_objvar_1_value VAOFSTRING,p_objvar_2_name VAOFSTRING,p_objvar_2_type VAOFNUMBER,p_objvar_2_value VAOFSTRING,p_objvar_3_name VAOFSTRING,p_objvar_3_type VAOFNUMBER,p_objvar_3_value VAOFSTRING,p_objvar_4_name VAOFSTRING,p_objvar_4_type VAOFNUMBER,p_objvar_4_value VAOFSTRING,p_objvar_5_name VAOFSTRING,p_objvar_5_type VAOFNUMBER,p_objvar_5_value VAOFSTRING,p_objvar_6_name VAOFSTRING,p_objvar_6_type VAOFNUMBER,p_objvar_6_value VAOFSTRING,p_objvar_7_name VAOFSTRING,p_objvar_7_type VAOFNUMBER,p_objvar_7_value VAOFSTRING,p_objvar_8_name VAOFSTRING,p_objvar_8_type VAOFNUMBER,p_objvar_8_value VAOFSTRING,p_objvar_9_name VAOFSTRING,p_objvar_9_type VAOFNUMBER,p_objvar_9_value VAOFSTRING, p_objvar_10_name VAOFSTRING,p_objvar_10_type VAOFNUMBER,p_objvar_10_value VAOFSTRING,p_objvar_11_name VAOFSTRING,p_objvar_11_type VAOFNUMBER,p_objvar_11_value VAOFSTRING,p_objvar_12_name VAOFSTRING,p_objvar_12_type VAOFNUMBER,p_objvar_12_value VAOFSTRING,p_objvar_13_name VAOFSTRING,p_objvar_13_type VAOFNUMBER,p_objvar_13_value VAOFSTRING,p_objvar_14_name VAOFSTRING,p_objvar_14_type VAOFNUMBER,p_objvar_14_value VAOFSTRING,p_objvar_15_name VAOFSTRING,p_objvar_15_type VAOFNUMBER,p_objvar_15_value VAOFSTRING,p_objvar_16_name VAOFSTRING,p_objvar_16_type VAOFNUMBER,p_objvar_16_value VAOFSTRING,p_objvar_17_name VAOFSTRING,p_objvar_17_type VAOFNUMBER,p_objvar_17_value VAOFSTRING,p_objvar_18_name VAOFSTRING,p_objvar_18_type VAOFNUMBER,p_objvar_18_value VAOFSTRING,p_objvar_19_name VAOFSTRING,p_objvar_19_type VAOFNUMBER,p_objvar_19_value VAOFSTRING, p_script_list VAOFLONGSTRING, p_object_id VAOFSTRING, p_chunk_size number)
 	as
 		cache_update VAOFNUMBER;
@@ -264,6 +264,9 @@ as
 			or (p_quaternion_x(i) is not null)
 			or (p_quaternion_y(i) is not null)
 			or (p_quaternion_z(i) is not null)
+			or (p_scale_x(i) is not null)
+			or (p_scale_y(i) is not null)
+			or (p_scale_z(i) is not null)
 			or (p_contained_by(i) is not null)
 			or (p_cache_version(i) is not null))
 		then
@@ -293,6 +296,9 @@ as
 	  quaternion_x = nvl(p_quaternion_x(i),quaternion_x),
 	  quaternion_y = nvl(p_quaternion_y(i),quaternion_y),
 	  quaternion_z = nvl(p_quaternion_z(i),quaternion_z),
+	  scale_x = nvl(p_scale_x(i),scale_x),
+	  scale_y = nvl(p_scale_y(i),scale_y),
+	  scale_z = nvl(p_scale_z(i),scale_z),
 	  node_x = nvl(p_node_x(i),node_x),
 	  node_y = nvl(p_node_y(i),node_y),
 	  node_z = nvl(p_node_z(i),node_z),
@@ -389,7 +395,7 @@ as
 
 	end;
 
-	procedure add_object ( p_x VAOFNUMBER, p_y VAOFNUMBER, p_z VAOFNUMBER, p_quaternion_w VAOFNUMBER, p_quaternion_x VAOFNUMBER, p_quaternion_y VAOFNUMBER, p_quaternion_z VAOFNUMBER, p_node_x VAOFNUMBER, p_node_y VAOFNUMBER, p_node_z VAOFNUMBER, p_object_template_id VAOFNUMBER, p_type_id VAOFNUMBER, p_scene_id VAOFSTRING, p_controller_type VAOFNUMBER, p_deleted VAOFNUMBER, p_object_name VAOFSTRING, p_volume VAOFNUMBER, p_contained_by VAOFSTRING, p_slot_arrangement VAOFNUMBER, p_player_controlled VAOFSTRING, p_cache_version VAOFNUMBER, p_load_contents VAOFSTRING, p_cash_balance VAOFNUMBER, p_bank_balance VAOFNUMBER, p_complexity VAOFNUMBER, p_name_string_table VAOFSTRING, p_name_string_text VAOFSTRING, p_static_item_name VAOFSTRING, p_static_item_version VAOFNUMBER, p_conversion_id VAOFNUMBER, p_load_with VAOFSTRING, 
+	procedure add_object ( p_x VAOFNUMBER, p_y VAOFNUMBER, p_z VAOFNUMBER, p_quaternion_w VAOFNUMBER, p_quaternion_x VAOFNUMBER, p_quaternion_y VAOFNUMBER, p_quaternion_z VAOFNUMBER, p_scale_x VAOFNUMBER, p_scale_y VAOFNUMBER, p_scale_z VAOFNUMBER, p_node_x VAOFNUMBER, p_node_y VAOFNUMBER, p_node_z VAOFNUMBER, p_object_template_id VAOFNUMBER, p_type_id VAOFNUMBER, p_scene_id VAOFSTRING, p_controller_type VAOFNUMBER, p_deleted VAOFNUMBER, p_object_name VAOFSTRING, p_volume VAOFNUMBER, p_contained_by VAOFSTRING, p_slot_arrangement VAOFNUMBER, p_player_controlled VAOFSTRING, p_cache_version VAOFNUMBER, p_load_contents VAOFSTRING, p_cash_balance VAOFNUMBER, p_bank_balance VAOFNUMBER, p_complexity VAOFNUMBER, p_name_string_table VAOFSTRING, p_name_string_text VAOFSTRING, p_static_item_name VAOFSTRING, p_static_item_version VAOFNUMBER, p_conversion_id VAOFNUMBER, p_load_with VAOFSTRING, 
 		p_objvar_0_name VAOFSTRING,p_objvar_0_type VAOFNUMBER,p_objvar_0_value VAOFSTRING,p_objvar_1_name VAOFSTRING,p_objvar_1_type VAOFNUMBER,p_objvar_1_value VAOFSTRING,p_objvar_2_name VAOFSTRING,p_objvar_2_type VAOFNUMBER,p_objvar_2_value VAOFSTRING,p_objvar_3_name VAOFSTRING,p_objvar_3_type VAOFNUMBER,p_objvar_3_value VAOFSTRING,p_objvar_4_name VAOFSTRING,p_objvar_4_type VAOFNUMBER,p_objvar_4_value VAOFSTRING,p_objvar_5_name VAOFSTRING,p_objvar_5_type VAOFNUMBER,p_objvar_5_value VAOFSTRING,p_objvar_6_name VAOFSTRING,p_objvar_6_type VAOFNUMBER,p_objvar_6_value VAOFSTRING,p_objvar_7_name VAOFSTRING,p_objvar_7_type VAOFNUMBER,p_objvar_7_value VAOFSTRING,p_objvar_8_name VAOFSTRING,p_objvar_8_type VAOFNUMBER,p_objvar_8_value VAOFSTRING,p_objvar_9_name VAOFSTRING,p_objvar_9_type VAOFNUMBER,p_objvar_9_value VAOFSTRING, p_objvar_10_name VAOFSTRING,p_objvar_10_type VAOFNUMBER,p_objvar_10_value VAOFSTRING,p_objvar_11_name VAOFSTRING,p_objvar_11_type VAOFNUMBER,p_objvar_11_value VAOFSTRING,p_objvar_12_name VAOFSTRING,p_objvar_12_type VAOFNUMBER,p_objvar_12_value VAOFSTRING,p_objvar_13_name VAOFSTRING,p_objvar_13_type VAOFNUMBER,p_objvar_13_value VAOFSTRING,p_objvar_14_name VAOFSTRING,p_objvar_14_type VAOFNUMBER,p_objvar_14_value VAOFSTRING,p_objvar_15_name VAOFSTRING,p_objvar_15_type VAOFNUMBER,p_objvar_15_value VAOFSTRING,p_objvar_16_name VAOFSTRING,p_objvar_16_type VAOFNUMBER,p_objvar_16_value VAOFSTRING,p_objvar_17_name VAOFSTRING,p_objvar_17_type VAOFNUMBER,p_objvar_17_value VAOFSTRING,p_objvar_18_name VAOFSTRING,p_objvar_18_type VAOFNUMBER,p_objvar_18_value VAOFSTRING,p_objvar_19_name VAOFSTRING,p_objvar_19_type VAOFNUMBER,p_objvar_19_value VAOFSTRING, p_script_list VAOFLONGSTRING, p_object_id VAOFSTRING, p_chunk_size number)
 	as
 
@@ -406,6 +412,9 @@ as
 			quaternion_x,
 			quaternion_y,
 			quaternion_z,
+			scale_x,
+			scale_y,
+			scale_z,
 			node_x,
 			node_y,
 			node_z,
@@ -506,6 +515,9 @@ as
 			p_quaternion_x(i),
 			p_quaternion_y(i),
 			p_quaternion_z(i),
+			p_scale_x(i),
+			p_scale_y(i),
+			p_scale_z(i),
 			p_node_x(i),
 			p_node_y(i),
 			p_node_z(i),
@@ -609,6 +621,9 @@ as
 			     or (p_quaternion_x(i) is not null)
 			     or (p_quaternion_y(i) is not null)
 			     or (p_quaternion_z(i) is not null)
+			     or (p_scale_x(i) is not null)
+			     or (p_scale_y(i) is not null)
+			     or (p_scale_z(i) is not null)
 			     or (p_contained_by(i) is not null)
 			     or (p_cache_version(i) is not null))
 	      then
@@ -625,6 +640,9 @@ as
 	  			quaternion_x = nvl(p_quaternion_x(i),quaternion_x),
 	  			quaternion_y = nvl(p_quaternion_y(i),quaternion_y),
 	  			quaternion_z = nvl(p_quaternion_z(i),quaternion_z),
+	  			scale_x = nvl(p_scale_x(i),scale_x),
+	  			scale_y = nvl(p_scale_y(i),scale_y),
+	  			scale_z = nvl(p_scale_z(i),scale_z),
 	  			node_x = nvl(p_node_x(i),node_x),
 	  			node_y = nvl(p_node_y(i),node_y),
 	  			node_z = nvl(p_node_z(i),node_z),
@@ -729,6 +747,9 @@ as
 					quaternion_y,
 
 					quaternion_z,
+					scale_x,
+					scale_y,
+					scale_z,
 					node_x,
 					node_y,
 					node_z,
@@ -829,6 +850,9 @@ as
 					p_quaternion_x(i),
 					p_quaternion_y(i),
 					p_quaternion_z(i),
+					p_scale_x(i),
+					p_scale_y(i),
+					p_scale_z(i),
 					p_node_x(i),
 					p_node_y(i),
 					p_node_z(i),
