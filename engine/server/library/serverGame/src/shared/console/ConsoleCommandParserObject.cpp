@@ -385,6 +385,7 @@ static const CommandParser::CmdInfo cmds[] =
 	{"isProxy",                         1, "<oid>",                      "Query as to whether this is a proxy on the avatar's server."},
 	{"listContainer",                   1, "<oid>",                      "Lists the contents of a volume container object."},
 	{"makeGroundSpawner",               9, "<name> <type> <spawns> <radius> <count> <behavior> <goodLocation> <minTime> <maxTime> [locationType]", "Create a ground spawner at your location. type: area|location, behavior: 0=wander 1=sentinel 2=loiter 3=stop"},
+	{"makePatrolSpawner",               8, "<name> <spawns> <radius> <count> <minTime> <maxTime> <cycle|oscillate> <x,y,z>...", "Create a patrol spawner. Waypoints as x,y,z pairs. Min 2 waypoints."},
 	{"loadContents",                    1, "<container> [oid]",          "Load an object in the specified demand-load container.  If oid is not specified, the entire contents are loaded."},
 	{"move",                            4, "<oid> <x> <y> <z>",          "Move an existing object."},
 	{"moveToMe",                        1, "<oid>",                      "Move an existing object to my coordinates."},
@@ -955,6 +956,130 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 
 		result += Unicode::narrowToWide("Ground spawner created. NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
+		result += Unicode::narrowToWide("\n");
+		result += getErrorMessage(argv[0], ERR_SUCCESS);
+	}
+
+	//-----------------------------------------------------------------
+
+	else if (isCommand(argv[0], "makePatrolSpawner"))
+	{
+		ServerObject * const userObject = ServerWorld::findObjectByNetworkId(userId);
+		if (!userObject)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_USER);
+			return true;
+		}
+
+		if (ContainerInterface::getContainedByObject(*userObject))
+		{
+			result += getErrorMessage(argv[0], ERR_FAIL);
+			return true;
+		}
+
+		std::string const name = Unicode::wideToNarrow(argv[1]);
+		std::string const spawns = Unicode::wideToNarrow(argv[2]);
+		float const radius = static_cast<float>(atof(Unicode::wideToNarrow(argv[3]).c_str()));
+		int const spawnCount = atoi(Unicode::wideToNarrow(argv[4]).c_str());
+		float const minSpawnTime = static_cast<float>(atof(Unicode::wideToNarrow(argv[5]).c_str()));
+		float const maxSpawnTime = static_cast<float>(atof(Unicode::wideToNarrow(argv[6]).c_str()));
+		std::string const pathType = Unicode::wideToNarrow(argv[7]);
+
+		if (pathType != "cycle" && pathType != "oscillate")
+		{
+			result += Unicode::narrowToWide("Invalid path type. Use cycle or oscillate.\n");
+			return true;
+		}
+
+		std::vector<Vector> waypoints;
+		for (size_t i = 8; i < argv.size(); ++i)
+		{
+			std::string const wpStr = Unicode::wideToNarrow(argv[i]);
+			float x = 0, y = 0, z = 0;
+			if (sscanf(wpStr.c_str(), "%f,%f,%f", &x, &y, &z) == 3)
+				waypoints.push_back(Vector(x, y, z));
+		}
+
+		if (waypoints.size() < 2)
+		{
+			result += Unicode::narrowToWide("Patrol spawner requires at least 2 waypoints (x,y,z pairs).\n");
+			return true;
+		}
+
+		ServerObject * const cell = safe_cast<ServerObject *>(ContainerInterface::getContainingCellObject(*userObject));
+
+		// Create patrol_spawner at first waypoint
+		Transform tr0;
+		tr0.setPosition_p(waypoints[0]);
+		ServerObjectTemplate const * const spawnerOt = getObjectTemplateForCreation("object/tangible/ground_spawning/patrol_spawner.iff");
+		if (!spawnerOt)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_TEMPLATE);
+			return true;
+		}
+		ServerObject * spawnerObj = ServerWorld::createNewObject(*spawnerOt, tr0, cell, false);
+		spawnerOt->releaseReference();
+		if (!spawnerObj)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_TEMPLATE);
+			return true;
+		}
+		checkBadBuildClusterObject(spawnerObj);
+
+		TangibleObject * const tangibleSpawner = spawnerObj->asTangibleObject();
+		if (tangibleSpawner)
+			tangibleSpawner->setObjectName(Unicode::narrowToWide(name));
+
+		spawnerObj->setObjVarItem("strSpawnerType", "patrol");
+		spawnerObj->setObjVarItem("intSpawnSystem", 1);
+		spawnerObj->setObjVarItem("strName", name);
+		spawnerObj->setObjVarItem("intSpawnCount", spawnCount);
+		spawnerObj->setObjVarItem("fltMaxSpawnTime", maxSpawnTime);
+		spawnerObj->setObjVarItem("fltMinSpawnTime", minSpawnTime);
+		spawnerObj->setObjVarItem("strSpawns", spawns);
+		spawnerObj->setObjVarItem("fltRadius", radius);
+		spawnerObj->setObjVarItem("patrolPathType", pathType);
+		spawnerObj->setObjVarItem("intDefaultBehavior", 3);  // stop
+		spawnerObj->setObjVarItem("intGoodLocationSpawner", 0);
+
+		std::vector<std::string> patrolPointNames;
+		for (size_t i = 1; i < waypoints.size(); ++i)
+		{
+			Transform tr;
+			tr.setPosition_p(waypoints[i]);
+			ServerObjectTemplate const * const wpOt = getObjectTemplateForCreation("object/tangible/ground_spawning/patrol_waypoint.iff");
+			if (!wpOt)
+				continue;
+			ServerObject * wpObj = ServerWorld::createNewObject(*wpOt, tr, cell, false);
+			wpOt->releaseReference();
+			if (wpObj)
+			{
+				std::string wpName = name + "_" + spawnerObj->getNetworkId().getValueString() + "_" + FormattedString<32>().sprintf("%u", static_cast<unsigned>(i));
+				TangibleObject * const wpTangible = wpObj->asTangibleObject();
+				if (wpTangible)
+					wpTangible->setObjectName(Unicode::narrowToWide(wpName));
+				wpObj->setObjVarItem("pointName", wpName);
+				patrolPointNames.push_back(wpName);
+				IGNORE_RETURN(wpObj->getScriptObject()->attachScript("systems.spawning.patrol_point_setup", false));
+				if (!cell)
+					wpObj->addToWorld();
+				wpObj->persist();
+			}
+		}
+		{
+			std::vector<Unicode::String> patrolPointNamesWide;
+			for (std::vector<std::string>::const_iterator it = patrolPointNames.begin(); it != patrolPointNames.end(); ++it)
+				patrolPointNamesWide.push_back(Unicode::narrowToWide(*it));
+			spawnerObj->setObjVarItem("strPatrolPointNames", patrolPointNamesWide);
+		}
+
+		IGNORE_RETURN(spawnerObj->getScriptObject()->attachScript("systems.spawning.spawner_patrol", false));
+		if (!cell)
+			spawnerObj->addToWorld();
+		spawnerObj->persist();
+
+		result += Unicode::narrowToWide("Patrol spawner created. NetworkId: ");
+		result += Unicode::narrowToWide(spawnerObj->getNetworkId().getValueString());
 		result += Unicode::narrowToWide("\n");
 		result += getErrorMessage(argv[0], ERR_SUCCESS);
 	}
