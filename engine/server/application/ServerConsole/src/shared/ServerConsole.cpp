@@ -27,7 +27,7 @@ using namespace ServerConsoleNamespace;
 
 void ServerConsole::done()
 {
-    s_done = true;
+    s_done = true;   // only triggered if connection closes
 }
 
 //-----------------------------------------------------------------------
@@ -43,22 +43,22 @@ void ServerConsole::run()
     s_serverConnection = new ServerConsoleConnection(address, port);
 
     std::cout << "Connected to " << address << ":" << port << std::endl;
-    std::cout << "Type commands. 'quit' to exit." << std::endl;
+    std::cout << "> " << std::flush;
 
     while (!s_done)
     {
-        // ---- Pump Network Every Loop ----
+        // Always pump network
         NetworkHandler::update();
         NetworkHandler::dispatch();
 
-        // ---- Check stdin without blocking ----
+        // Non-blocking stdin check
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(STDIN_FILENO, &readfds);
 
         timeval tv;
         tv.tv_sec = 0;
-        tv.tv_usec = 10000; // 10ms
+        tv.tv_usec = 10000; // 10ms tick
 
         int ret = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &tv);
 
@@ -67,17 +67,17 @@ void ServerConsole::run()
             std::string line;
             if (std::getline(std::cin, line))
             {
-                if (line == "quit" || line == "exit")
-                    break;
-
                 if (!line.empty())
                 {
                     ConGenericMessage msg(line);
                     s_serverConnection->send(msg);
                 }
+
+                // Always return to prompt
+                std::cout << "> " << std::flush;
             }
         }
     }
 
-    std::cout << "ServerConsole exiting." << std::endl;
+    std::cout << "\nConnection closed." << std::endl;
 }
