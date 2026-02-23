@@ -1,8 +1,4 @@
 // ServerConsole.cpp
-// Copyright 2000-02, Sony Online Entertainment Inc., all rights reserved. 
-// Author: Justin Randall
-
-//-----------------------------------------------------------------------
 
 #include "FirstServerConsole.h"
 #include "ConfigServerConsole.h"
@@ -14,6 +10,8 @@
 
 #include <iostream>
 #include <string>
+#include <unistd.h>
+#include <sys/select.h>
 
 //-----------------------------------------------------------------------
 
@@ -24,18 +22,6 @@ namespace ServerConsoleNamespace
 }
 
 using namespace ServerConsoleNamespace;
-
-//-----------------------------------------------------------------------
-
-ServerConsole::ServerConsole()
-{
-}
-
-//-----------------------------------------------------------------------
-
-ServerConsole::~ServerConsole()
-{
-}
 
 //-----------------------------------------------------------------------
 
@@ -54,34 +40,44 @@ void ServerConsole::run()
     if (!address || !port)
         return;
 
-    // Connect once
     s_serverConnection = new ServerConsoleConnection(address, port);
 
-    std::cout << "Pinged and connected to " << address << ":" << port << std::endl;
-    std::cout << "Enter console commands. Type 'quit' to exit." << std::endl;
+    std::cout << "Connected to " << address << ":" << port << std::endl;
+    std::cout << "Type commands. 'quit' to exit." << std::endl;
 
     while (!s_done)
     {
-        // Process network first
+        // ---- Pump Network Every Loop ----
         NetworkHandler::update();
         NetworkHandler::dispatch();
 
-        // Blocking line input (this is what you want)
-        std::string line;
-        if (!std::getline(std::cin, line))
-            break;
+        // ---- Check stdin without blocking ----
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);
 
-        if (line == "quit" || line == "exit")
-            break;
+        timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 10000; // 10ms
 
-        if (!line.empty())
+        int ret = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &tv);
+
+        if (ret > 0 && FD_ISSET(STDIN_FILENO, &readfds))
         {
-            ConGenericMessage msg(line);
-            s_serverConnection->send(msg);
+            std::string line;
+            if (std::getline(std::cin, line))
+            {
+                if (line == "quit" || line == "exit")
+                    break;
+
+                if (!line.empty())
+                {
+                    ConGenericMessage msg(line);
+                    s_serverConnection->send(msg);
+                }
+            }
         }
     }
 
     std::cout << "ServerConsole exiting." << std::endl;
 }
-
-//-----------------------------------------------------------------------
