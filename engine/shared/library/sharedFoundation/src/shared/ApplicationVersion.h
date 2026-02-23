@@ -18,6 +18,7 @@ public:
 	static bool isPublishBuild();
 	static char const * getPublicVersion();
 	static char const * getInternalVersion();
+	static char const * getBranchVersion();
 };
 
 // ======================================================================

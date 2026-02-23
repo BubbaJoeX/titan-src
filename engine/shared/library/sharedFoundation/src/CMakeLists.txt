@@ -2,6 +2,7 @@
 set(SHARED_SOURCES
 	shared/ApplicationVersion.cpp
 	shared/ApplicationVersion.h
+	shared/BranchVersion.h
 	shared/ArrayList.h
 	shared/AutoDeltaNetworkIdPackedMap.cpp
 	shared/AutoDeltaNetworkIdPackedMap.h

@@ -532,63 +532,8 @@ WorldSnapshotReaderWriter::~WorldSnapshotReaderWriter ()
 
 bool WorldSnapshotReaderWriter::load (const char* sceneName)
 {
-	char filename[256];
-	IGNORE_RETURN(snprintf(filename, sizeof(filename)-1, "snapshot/%s.ws", sceneName));
-	filename[sizeof(filename)-1] = '\0';
-
-	Iff iff;
-	if (iff.open (filename, true))
-	{
-		PerformanceTimer timer;
-		timer.start ();
-
-		//-- clear
-		clear ();
-
-		timer.stop ();
-		//DEBUG_REPORT_LOG (true, ("clear %1.2f\n", timer.getElapsedTime ()));
-		timer.start ();
-
-		//-- load
-		load (iff);
-
-		timer.stop ();
-		//DEBUG_REPORT_LOG (true, ("load %1.2f\n", timer.getElapsedTime ()));
-		timer.start ();
-
-		//-- wander through the nodes adding them to the node map
-		{
-			NodeList nodeStack;
-
-			//-- push all root nodes on the node stack
-			{
-				int i;
-				for (i = 0; i < getNumberOfNodes (); ++i)
-					nodeStack.push_back (const_cast<Node*> (getNode (i)));
-			}
-
-			//--
-			while (!nodeStack.empty ())
-			{
-				Node* const node = nodeStack.back ();
-				nodeStack.pop_back ();
-
-				std::pair<NetworkIdNodeMap::iterator, bool> result = m_networkIdNodeMap->insert (std::make_pair (node->getNetworkIdInt (), node));
-				UNREF(result);
-				DEBUG_FATAL (!result.second, ("WorldSnapshotReaderWriter::load: could not insert %i into networkIdNodeMap", node->getNetworkIdInt ()));
-
-				int i;
-				for (i = 0; i < node->getNumberOfNodes (); ++i)
-					nodeStack.push_back (const_cast<Node*> (node->getNode (i)));
-			}
-		}
-
-		timer.stop ();
-		//DEBUG_REPORT_LOG (true, ("process %1.2f\n", timer.getElapsedTime ()));
-
-		return true;
-	}
-
+	// .ws files are deprecated. Use buildouts for full server authority. Do not load .ws files.
+	UNREF(sceneName);
 	return false;
 }
 
