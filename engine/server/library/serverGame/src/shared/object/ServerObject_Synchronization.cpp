@@ -40,6 +40,7 @@
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedNetworkMessages/SceneChannelMessages.h"
 #include "sharedNetworkMessages/UpdateContainmentMessage.h"
+#include "sharedNetworkMessages/UpdateScaleMessage.h"
 
 // ======================================================================
 
@@ -340,6 +341,11 @@ void ServerObject::forwardServerCreateAndBaselines() const
 
 	ServerMessageForwarding::send(createMessage);
 	ServerMessageForwarding::send(uop);
+	if (getScale() != Vector::xyz111)
+	{
+		UpdateScaleMessage const usm(getNetworkId(), getScale());
+		ServerMessageForwarding::send(usm);
+	}
 	ServerMessageForwarding::send(shared);
 	ServerMessageForwarding::send(authClient);
 	ServerMessageForwarding::send(servers);
@@ -905,6 +911,14 @@ void ServerObject::flushCreateMessages() const
 				{
 					GameClientMessage const msgUpdateContainment((*i).second, true, ucm);
 					(*i).first->send(msgUpdateContainment, true);
+				}
+
+				// send scale if non-default
+				if (getScale() != Vector::xyz111)
+				{
+					UpdateScaleMessage const usm(getNetworkId(), getScale());
+					GameClientMessage const msgUpdateScale((*i).second, true, usm);
+					(*i).first->send(msgUpdateScale, true);
 				}
 
 				// send shared data baselines

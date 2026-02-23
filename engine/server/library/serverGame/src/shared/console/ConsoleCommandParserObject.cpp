@@ -78,6 +78,7 @@
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedNetworkMessages/MessageQueueDataTransform.h"
 #include "sharedNetworkMessages/MessageQueueGenericValueType.h"
+#include "sharedNetworkMessages/UpdateScaleMessage.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/ContainedByProperty.h"
 #include "sharedObject/NetworkIdManager.h"
@@ -1751,6 +1752,11 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		o->setScale(scale);
 		if (o->isAuthoritative() && o->isPersisted())
 			o->setTransformChanged(true);
+		if (o->isAuthoritative())
+		{
+			UpdateScaleMessage const usm(oid, scale);
+			o->sendToClientsInUpdateRange(usm, true);
+		}
 		result += getErrorMessage(argv[0], ERR_SUCCESS);
 	}
 

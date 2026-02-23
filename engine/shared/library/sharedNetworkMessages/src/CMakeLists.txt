@@ -558,6 +558,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/UpdatePostureMessage.h
 	shared/clientGameServer/UpdatePvpStatusMessage.cpp
 	shared/clientGameServer/UpdatePvpStatusMessage.h
+	shared/clientGameServer/UpdateScaleMessage.cpp
+	shared/clientGameServer/UpdateScaleMessage.h
 	shared/clientGameServer/UpdateTransformMessage.cpp
 	shared/clientGameServer/UpdateTransformMessage.h
 	shared/clientGameServer/UpdateTransformWithParentMessage.cpp

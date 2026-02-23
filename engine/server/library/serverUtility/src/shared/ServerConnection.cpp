@@ -41,6 +41,7 @@ void ServerConnection::install() // static
 	s_forwardableMessages.push_back(constcrc("SynchronizeScriptVarDeltasMessage"));// deltas
 	s_forwardableMessages.push_back(constcrc("CreateObjectByCrcMessage"));         // baselines
 	s_forwardableMessages.push_back(constcrc("UpdateObjectPositionMessage"));      // baselines
+	s_forwardableMessages.push_back(constcrc("UpdateScaleMessage"));              // scale updates
 	s_forwardableMessages.push_back(constcrc("BaselinesMessage"));                 // baselines
 	s_forwardableMessages.push_back(constcrc("SynchronizeScriptVarsMessage"));     // baselines
 	s_forwardableMessages.push_back(constcrc("setDecayTime"));                     // baselines
