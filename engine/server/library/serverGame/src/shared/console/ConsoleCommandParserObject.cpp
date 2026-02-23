@@ -942,6 +942,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		newObject->setObjVarItem("fltRadius", radius);
 		newObject->setObjVarItem("intDefaultBehavior", behavior);
 		newObject->setObjVarItem("intGoodLocationSpawner", goodLocation);
+		newObject->setObjVarItem("fromGodClient", 1);
 
 		if (type == "location")
 			newObject->setObjVarItem("strSpawnLocations", locationType);
@@ -1041,6 +1042,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		spawnerObj->setObjVarItem("patrolPathType", pathType);
 		spawnerObj->setObjVarItem("intDefaultBehavior", 3);  // stop
 		spawnerObj->setObjVarItem("intGoodLocationSpawner", 0);
+		spawnerObj->setObjVarItem("fromGodClient", 1);
 
 		std::vector<std::string> patrolPointNames;
 		for (size_t i = 1; i < waypoints.size(); ++i)
