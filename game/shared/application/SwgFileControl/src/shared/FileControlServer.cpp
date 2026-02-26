@@ -82,13 +82,23 @@ void FileControlServer::install()
 
 	LOG("FileControl", ("Data root: %s", ms_dataRoot.c_str()));
 
+	printf("  Binding to %s:%d ...\n", host, port);
+	printf("  Data root: %s\n", ms_dataRoot.c_str());
+	fflush(stdout);
+
 	NetworkSetupData setupData;
 	setupData.port = static_cast<unsigned short>(port);
 	setupData.maxConnections = ConfigFileControl::getFileServerMaxConnections();
 	setupData.bindInterface = host;
 	setupData.useTcp = true;
 
+	printf("  Creating network service...\n");
+	fflush(stdout);
+
 	ms_service = new Service(ConnectionAllocator<FileControlConnection>(), setupData);
+
+	printf("  Network service created.\n");
+	fflush(stdout);
 
 	ms_running = true;
 
@@ -101,11 +111,12 @@ void FileControlServer::install()
 		ConfigFileControl::getRateLimitKBps()));
 
 	printf("SwgFileControl server listening on %s:%d\n", host, port);
-	printf("Channel: %s\n", ConfigFileControl::getChannel());
-	printf("Updates allowed: %s\n", ConfigFileControl::getAllowUpdates() ? "yes" : "no");
-	printf("Hot reload: %s\n", ConfigFileControl::getDisableReload() ? "disabled" : "enabled");
-	printf("Compression: %s\n", ConfigFileControl::getEnableCompression() ? "enabled" : "disabled");
-	printf("Backup before reload: %s\n", ConfigFileControl::getBackupBeforeReload() ? "yes" : "no");
+	printf("  Channel:    %s\n", ConfigFileControl::getChannel());
+	printf("  Updates:    %s\n", ConfigFileControl::getAllowUpdates() ? "yes" : "no");
+	printf("  Hot reload: %s\n", ConfigFileControl::getDisableReload() ? "disabled" : "enabled");
+	printf("  Compress:   %s\n", ConfigFileControl::getEnableCompression() ? "enabled" : "disabled");
+	printf("  Backup:     %s\n", ConfigFileControl::getBackupBeforeReload() ? "yes" : "no");
+	fflush(stdout);
 }
 
 // ----------------------------------------------------------------------

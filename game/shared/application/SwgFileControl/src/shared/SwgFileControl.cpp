@@ -120,12 +120,12 @@ int main(int argc, char ** argv)
 void SwgFileControl::run()
 {
 	printf("SwgFileControl " __DATE__ " " __TIME__ "\n");
+	fflush(stdout);
 
 	const CommandLine::MatchCode mc = CommandLine::parseOptions(optionSpecArray, optionSpecCount);
 
 	if (mc != CommandLine::MC_MATCH)
 	{
-		// No command line args: if server config exists, run as server
 		if (ConfigFileControl::isServerMode())
 		{
 			runServer();
@@ -133,6 +133,7 @@ void SwgFileControl::run()
 		}
 
 		printf("Invalid command line. Use --help for usage.\n");
+		fflush(stdout);
 		usage();
 		return;
 	}
@@ -189,9 +190,18 @@ void SwgFileControl::run()
 void SwgFileControl::runServer()
 {
 	printf("Starting in SERVER mode...\n");
+	fflush(stdout);
 	LOG("FileControl", ("Starting server mode"));
 
+	printf("  Installing FileControlServer...\n");
+	fflush(stdout);
+
 	FileControlServer::install();
+
+	printf("  Server installed. Listening on %s:%d\n", ConfigFileControl::getHost(), ConfigFileControl::getPort());
+	printf("  Channel: %s\n", ConfigFileControl::getChannel());
+	printf("  Press Ctrl+C to stop.\n");
+	fflush(stdout);
 
 	while (FileControlServer::isRunning())
 	{
@@ -199,7 +209,13 @@ void SwgFileControl::runServer()
 		Os::sleep(10);
 	}
 
+	printf("  Server shutting down...\n");
+	fflush(stdout);
+
 	FileControlServer::remove();
+
+	printf("  Server stopped.\n");
+	fflush(stdout);
 }
 
 // ======================================================================
