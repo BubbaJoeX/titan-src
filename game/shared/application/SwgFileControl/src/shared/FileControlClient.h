@@ -44,7 +44,8 @@ public:
 	static bool isConnected();
 	static bool isDone();
 
-	// GodClient API — works over a raw TCP socket to the FileControl server
+	// GodClient API — works over a raw TCP socket to the FileControl server.
+	// All request* methods are thread-safe (serialized via internal lock).
 	static bool ensureConnected();
 	static bool requestSendAsset(const std::string & relativePath);
 	static bool requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData);
@@ -54,6 +55,8 @@ public:
 	static bool requestVerifyAsset(const std::string & relativePath, unsigned long & outSize, unsigned long & outCrc);
 	static bool requestFlush();
 	static bool requestDirectoryListing(const std::string & rootPath, std::vector<std::string> & outFiles, std::vector<unsigned long> & outSizes, std::vector<unsigned long> & outCrcs);
+	static void lockApi();
+	static void unlockApi();
 
 private:
 

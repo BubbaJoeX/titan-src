@@ -59,6 +59,32 @@ bool                    FileControlClient::ms_done           = false;
 FileControlClient::ClientCommand FileControlClient::ms_pendingCommand = CC_NONE;
 std::string             FileControlClient::ms_pendingPath;
 
+#if defined(PLATFORM_WIN32)
+static CRITICAL_SECTION s_apiLock;
+static bool             s_apiLockInitialized = false;
+#endif
+
+// ======================================================================
+
+void FileControlClient::lockApi()
+{
+#if defined(PLATFORM_WIN32)
+	if (!s_apiLockInitialized)
+	{
+		InitializeCriticalSection(&s_apiLock);
+		s_apiLockInitialized = true;
+	}
+	EnterCriticalSection(&s_apiLock);
+#endif
+}
+
+void FileControlClient::unlockApi()
+{
+#if defined(PLATFORM_WIN32)
+	LeaveCriticalSection(&s_apiLock);
+#endif
+}
+
 // ======================================================================
 
 void FileControlClient::setLogCallback(LogCallback cb)
@@ -251,6 +277,25 @@ void FileControlClient::handleIncomingMessage(const std::vector<unsigned char> &
 			std::string message;
 			Archive::get(ri, message);
 			logMessage("FileControl: Server error: %s", message.c_str());
+		}
+		break;
+
+	case 0x10: // MT_FILE_UPLOAD (unsolicited file data)
+		{
+			std::string path;
+			Archive::get(ri, path);
+			logMessage("FileControl: Discarding unsolicited file data for %s", path.c_str());
+		}
+		break;
+
+	case 0x14: // MT_FILE_COMPARE_RSP (unsolicited compare)
+		{
+			std::string path;
+			uint32 sz = 0, crc = 0;
+			Archive::get(ri, path);
+			Archive::get(ri, sz);
+			Archive::get(ri, crc);
+			logMessage("FileControl: Discarding unsolicited compare for %s", path.c_str());
 		}
 		break;
 
@@ -634,15 +679,23 @@ bool FileControlClient::ensureConnected()
 
 bool FileControlClient::requestSendAsset(const std::string & relativePath)
 {
+	lockApi();
+
 	if (!ensureConnected())
+	{
+		unlockApi();
 		return false;
+	}
 
 	std::vector<unsigned char> data;
 	if (!readLocalFile(relativePath, data))
 	{
-		WARNING(true, ("FileControlClient: Cannot read local file: %s", relativePath.c_str()));
+		logMessage("FileControl: Send failed - cannot read local file: %s", relativePath.c_str());
+		unlockApi();
 		return false;
 	}
+
+	logMessage("FileControl: Sending %s (%u bytes)...", relativePath.c_str(), static_cast<unsigned>(data.size()));
 
 	Archive::ByteStream bs;
 	Archive::put(bs, static_cast<uint8>(0x10));
@@ -654,15 +707,29 @@ bool FileControlClient::requestSendAsset(const std::string & relativePath)
 		bs.put(&data[0], static_cast<int>(data.size()));
 
 	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
-	return sendRawMessage(msg);
+	if (!sendRawMessage(msg))
+	{
+		logMessage("FileControl: Send failed - network error for %s", relativePath.c_str());
+		unlockApi();
+		return false;
+	}
+
+	logMessage("FileControl: Sent %s OK", relativePath.c_str());
+	unlockApi();
+	return true;
 }
 
 // ----------------------------------------------------------------------
 
 bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData)
 {
+	lockApi();
+
 	if (!ensureConnected())
+	{
+		unlockApi();
 		return false;
+	}
 
 	Archive::ByteStream bs;
 	Archive::put(bs, static_cast<uint8>(0x11));
@@ -670,11 +737,18 @@ bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, s
 
 	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
 	if (!sendRawMessage(msg))
+	{
+		unlockApi();
 		return false;
+	}
 
 	std::vector<unsigned char> response;
-	if (!recvExpectedMessage(0x12, response, 15000))
+	if (!recvExpectedMessage(0x10, response, 30000))
+	{
+		logMessage("FileControl: Retrieve failed - no response for %s", relativePath.c_str());
+		unlockApi();
 		return false;
+	}
 
 	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
 	Archive::ReadIterator ri = rbs.begin();
@@ -688,6 +762,8 @@ bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, s
 	Archive::get(ri, compressed);
 	Archive::get(ri, sz);
 
+	logMessage("FileControl: Retrieve %s (%u bytes, compressed=%s)", path.c_str(), sz, compressed ? "yes" : "no");
+
 	outData.resize(sz);
 	for (uint32 i = 0; i < sz && ri.getSize() > 0; ++i)
 	{
@@ -695,6 +771,13 @@ bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, s
 		Archive::get(ri, byte);
 		outData[i] = byte;
 	}
+
+	if (compressed)
+	{
+		logMessage("FileControl: Decompressing %u bytes...", sz);
+	}
+
+	unlockApi();
 	return true;
 }
 
@@ -753,8 +836,13 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 	outSize = 0;
 	outCrc = 0;
 
+	lockApi();
+
 	if (!ensureConnected())
+	{
+		unlockApi();
 		return false;
+	}
 
 	Archive::ByteStream bs;
 	Archive::put(bs, static_cast<uint8>(0x13));
@@ -762,11 +850,17 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 
 	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
 	if (!sendRawMessage(msg))
+	{
+		unlockApi();
 		return false;
+	}
 
 	std::vector<unsigned char> response;
 	if (!recvExpectedMessage(0x14, response, 10000))
+	{
+		unlockApi();
 		return false;
+	}
 
 	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
 	Archive::ReadIterator ri = rbs.begin();
@@ -781,6 +875,7 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 	Archive::get(ri, crc);
 	outSize = sz;
 	outCrc = crc;
+	unlockApi();
 	return true;
 }
 
@@ -808,11 +903,14 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	outSizes.clear();
 	outCrcs.clear();
 
+	lockApi();
+
 	logMessage("FileControl: Listing '%s'...", rootPath.c_str());
 
 	if (!ensureConnected())
 	{
 		logMessage("FileControl: Listing failed - not connected");
+		unlockApi();
 		return false;
 	}
 
@@ -824,6 +922,7 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	if (!sendRawMessage(msg))
 	{
 		logMessage("FileControl: Listing failed - send error");
+		unlockApi();
 		return false;
 	}
 
@@ -833,6 +932,7 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	if (!recvExpectedMessage(0x21, response, 15000))
 	{
 		logMessage("FileControl: Listing failed - no response");
+		unlockApi();
 		return false;
 	}
 
@@ -855,6 +955,7 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 		outCrcs.push_back(0);
 	}
 	logMessage("FileControl: Listed %u entries", count);
+	unlockApi();
 	return true;
 }
 
