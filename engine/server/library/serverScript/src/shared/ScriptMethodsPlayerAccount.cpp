@@ -1021,6 +1021,7 @@ jstring JNICALL ScriptMethodsPlayerAccountNamespace::getPlayerUsername(JNIEnv *e
         }
     }
 
+    return nullptr;
 }
 
 // ======================================================================
