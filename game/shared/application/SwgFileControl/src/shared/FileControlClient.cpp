@@ -20,6 +20,7 @@
 #include "Archive/ByteStream.h"
 #include "Archive/AutoByteStream.h"
 
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -49,6 +50,7 @@
 
 // ======================================================================
 
+FileControlClient::LogCallback FileControlClient::ms_logCallback = 0;
 int64                   FileControlClient::ms_rawSocket      = -1;
 FileControlConnection * FileControlClient::ms_connection     = 0;
 bool                    FileControlClient::ms_connected      = false;
@@ -56,6 +58,27 @@ bool                    FileControlClient::ms_authenticated  = false;
 bool                    FileControlClient::ms_done           = false;
 FileControlClient::ClientCommand FileControlClient::ms_pendingCommand = CC_NONE;
 std::string             FileControlClient::ms_pendingPath;
+
+// ======================================================================
+
+void FileControlClient::setLogCallback(LogCallback cb)
+{
+	ms_logCallback = cb;
+}
+
+// ----------------------------------------------------------------------
+
+void FileControlClient::logMessage(const char * fmt, ...)
+{
+	char buf[1024];
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+	if (ms_logCallback)
+		ms_logCallback(buf);
+}
 
 // ======================================================================
 
@@ -199,29 +222,34 @@ bool FileControlClient::connect()
 	const char * host = ConfigFileControl::getClientHost();
 	int port = ConfigFileControl::getClientPort();
 
+	logMessage("FileControl: connect() host=%s port=%d", host ? host : "(null)", port);
+
 	if (!host || host[0] == '\0')
 	{
-		WARNING(true, ("FileControlClient: No clientHost configured in [ClientGame]"));
+		logMessage("FileControl: ERROR - No clientHost in [ClientGame]");
 		return false;
 	}
 
 	if (port <= 0 || port > 65535)
 	{
-		WARNING(true, ("FileControlClient: Invalid clientPort %d configured in [ClientGame]", port));
+		logMessage("FileControl: ERROR - Invalid port %d", port);
 		return false;
 	}
 
-	LOG("FileControl", ("FileControlClient: Connecting to %s:%d", host, port));
-
 #if defined(PLATFORM_WIN32)
 	WSADATA wsaData;
-	WSAStartup(MAKEWORD(2, 2), &wsaData);
+	int wsaResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (wsaResult != 0)
+	{
+		logMessage("FileControl: ERROR - WSAStartup failed (%d)", wsaResult);
+		return false;
+	}
 #endif
 
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock == INVALID_SOCKET)
 	{
-		WARNING(true, ("FileControlClient: Failed to create socket"));
+		logMessage("FileControl: ERROR - socket() failed");
 		return false;
 	}
 
@@ -233,38 +261,47 @@ bool FileControlClient::connect()
 	unsigned long addr = inet_addr(host);
 	if (addr == INADDR_NONE)
 	{
+		logMessage("FileControl: Resolving '%s'...", host);
 		struct hostent * he = gethostbyname(host);
 		if (!he)
 		{
-			WARNING(true, ("FileControlClient: Cannot resolve host '%s'", host));
+			logMessage("FileControl: ERROR - Cannot resolve '%s'", host);
 			closesocket(sock);
 			return false;
 		}
 		memcpy(&serverAddr.sin_addr, he->h_addr_list[0], sizeof(serverAddr.sin_addr));
+		logMessage("FileControl: Resolved to %d.%d.%d.%d",
+			(unsigned char)he->h_addr_list[0][0],
+			(unsigned char)he->h_addr_list[0][1],
+			(unsigned char)he->h_addr_list[0][2],
+			(unsigned char)he->h_addr_list[0][3]);
 	}
 	else
 	{
 		serverAddr.sin_addr.s_addr = addr;
 	}
 
+	logMessage("FileControl: Connecting to %s:%d ...", host, port);
+
 	if (::connect(sock, reinterpret_cast<struct sockaddr *>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
 	{
 #if defined(PLATFORM_WIN32)
 		int err = WSAGetLastError();
-		WARNING(true, ("FileControlClient: Failed to connect to %s:%d (WSA error %d)", host, port, err));
+		logMessage("FileControl: ERROR - connect() failed (WSA %d)", err);
 #else
-		WARNING(true, ("FileControlClient: Failed to connect to %s:%d (errno %d)", host, port, errno));
+		logMessage("FileControl: ERROR - connect() failed (errno %d)", errno);
 #endif
 		closesocket(sock);
 		return false;
 	}
 
 	ms_rawSocket = static_cast<int64>(sock);
-
 	ms_connected = true;
-	LOG("FileControl", ("FileControlClient: Connected to %s:%d", host, port));
+	logMessage("FileControl: TCP connected to %s:%d", host, port);
 
 	const char * key = ConfigFileControl::getClientFileServerKey();
+	logMessage("FileControl: authKey=%s", (key && key[0]) ? key : "(empty)");
+
 	if (key && key[0] != '\0')
 	{
 		std::string machineId = getMachineId();
@@ -275,15 +312,21 @@ bool FileControlClient::connect()
 		Archive::put(bs, machineId);
 
 		std::vector<unsigned char> authMsg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+		logMessage("FileControl: Sending auth (%d bytes)...", static_cast<int>(authMsg.size()));
+
 		if (!sendRawMessage(authMsg))
 		{
-			WARNING(true, ("FileControlClient: Failed to send auth request"));
+			logMessage("FileControl: ERROR - Failed to send auth");
 			return false;
 		}
+
+		logMessage("FileControl: Auth sent, waiting for response...");
 
 		std::vector<unsigned char> response;
 		if (recvRawMessage(response, 5000) && !response.empty())
 		{
+			logMessage("FileControl: Auth response (%d bytes)", static_cast<int>(response.size()));
+
 			Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
 			Archive::ReadIterator ri = rbs.begin();
 			uint8 msgType = 0;
@@ -296,19 +339,24 @@ bool FileControlClient::connect()
 				Archive::get(ri, success);
 				Archive::get(ri, message);
 				ms_authenticated = success;
-
-				if (!success)
-				{
-					WARNING(true, ("FileControlClient: Auth failed: %s", message.c_str()));
-				}
-				else
-				{
-					LOG("FileControl", ("FileControlClient: Authenticated: %s", message.c_str()));
-				}
+				logMessage("FileControl: Auth %s: %s", success ? "OK" : "FAILED", message.c_str());
+			}
+			else
+			{
+				logMessage("FileControl: Unexpected response type 0x%02x", msgType);
 			}
 		}
+		else
+		{
+			logMessage("FileControl: No auth response (timeout)");
+		}
+	}
+	else
+	{
+		logMessage("FileControl: No auth key, skipping auth");
 	}
 
+	logMessage("FileControl: Connected successfully");
 	return true;
 }
 
@@ -524,6 +572,7 @@ bool FileControlClient::ensureConnected()
 	if (ms_connected && ms_rawSocket >= 0)
 		return true;
 
+	logMessage("FileControl: Not connected, attempting connection...");
 	return connect();
 }
 
@@ -715,8 +764,13 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	outSizes.clear();
 	outCrcs.clear();
 
+	logMessage("FileControl: Listing '%s'...", rootPath.c_str());
+
 	if (!ensureConnected())
+	{
+		logMessage("FileControl: Listing failed - not connected");
 		return false;
+	}
 
 	Archive::ByteStream bs;
 	Archive::put(bs, static_cast<uint8>(0x20));
@@ -724,11 +778,19 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 
 	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
 	if (!sendRawMessage(msg))
+	{
+		logMessage("FileControl: Listing failed - send error");
 		return false;
+	}
+
+	logMessage("FileControl: Listing request sent, waiting for response...");
 
 	std::vector<unsigned char> response;
 	if (!recvRawMessage(response, 10000) || response.empty())
+	{
+		logMessage("FileControl: Listing failed - no response (timeout)");
 		return false;
+	}
 
 	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
 	Archive::ReadIterator ri = rbs.begin();
@@ -750,9 +812,11 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 			outSizes.push_back(fileSize);
 			outCrcs.push_back(0);
 		}
+		logMessage("FileControl: Listed %u entries", count);
 		return true;
 	}
 
+	logMessage("FileControl: Listing failed - unexpected response 0x%02x", msgType);
 	return false;
 }
 

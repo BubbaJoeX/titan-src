@@ -24,6 +24,8 @@ class FileControlClient
 {
 public:
 
+	typedef void (*LogCallback)(const char * message);
+
 	enum ClientCommand
 	{
 		CC_NONE,
@@ -36,6 +38,7 @@ public:
 	static void install();
 	static void remove();
 	static void update();
+	static void setLogCallback(LogCallback cb);
 
 	static bool executeCommand(ClientCommand command, const std::string & filePath);
 	static bool isConnected();
@@ -73,6 +76,9 @@ private:
 	static bool doCompareFile(const std::string & filePath);
 	static bool doTestRun(const std::string & filePath);
 
+	static void logMessage(const char * fmt, ...);
+
+	static LogCallback             ms_logCallback;
 	static int64                   ms_rawSocket;
 	static FileControlConnection * ms_connection;
 	static bool                    ms_connected;
