@@ -122,7 +122,17 @@ void SwgFileControl::run()
 	printf("SwgFileControl " __DATE__ " " __TIME__ "\n");
 	fflush(stdout);
 
-	// Try parsing command line options for client mode
+	printf("  isServerMode = %s\n", ConfigFileControl::isServerMode() ? "true" : "false");
+	fflush(stdout);
+
+	// Check server mode FIRST, before command line parsing
+	if (ConfigFileControl::isServerMode())
+	{
+		runServer();
+		return;
+	}
+
+	// Not server mode — parse command line for client commands
 	const CommandLine::MatchCode mc = CommandLine::parseOptions(optionSpecArray, optionSpecCount);
 
 	if (mc == CommandLine::MC_MATCH)
@@ -150,13 +160,6 @@ void SwgFileControl::run()
 			runClient();
 			return;
 		}
-	}
-
-	// No client command — check if we should run as server
-	if (ConfigFileControl::isServerMode())
-	{
-		runServer();
-		return;
 	}
 
 	printf("No command specified and no [SwgFileControl] server config found.\n");
