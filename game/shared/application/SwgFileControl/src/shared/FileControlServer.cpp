@@ -1021,13 +1021,16 @@ void FileControlServer::collectDirectoryFiles(const std::string & dirPath, const
 
 		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
-			collectDirectoryFiles(dirPath, relativePath, outFiles, outSizes, outCrcs);
+			relativePath += "/";
+			outFiles.push_back(relativePath);
+			outSizes.push_back(0);
+			outCrcs.push_back(0);
 		}
 		else
 		{
 			outFiles.push_back(relativePath);
 			outSizes.push_back(static_cast<unsigned long>(findData.nFileSizeLow));
-			outCrcs.push_back(getFileCrc(relativePath));
+			outCrcs.push_back(0);
 		}
 	} while (FindNextFileA(hFind, &findData));
 
@@ -1055,13 +1058,16 @@ void FileControlServer::collectDirectoryFiles(const std::string & dirPath, const
 		{
 			if (S_ISDIR(st.st_mode))
 			{
-				collectDirectoryFiles(dirPath, relativePath, outFiles, outSizes, outCrcs);
+				relativePath += "/";
+				outFiles.push_back(relativePath);
+				outSizes.push_back(0);
+				outCrcs.push_back(0);
 			}
 			else
 			{
 				outFiles.push_back(relativePath);
 				outSizes.push_back(static_cast<unsigned long>(st.st_size));
-				outCrcs.push_back(getFileCrc(relativePath));
+				outCrcs.push_back(0);
 			}
 		}
 	}
