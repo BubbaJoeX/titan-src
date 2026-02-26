@@ -213,6 +213,79 @@ bool FileControlClient::recvRawMessage(std::vector<unsigned char> & msg, int tim
 	return true;
 }
 
+// ----------------------------------------------------------------------
+
+void FileControlClient::handleIncomingMessage(const std::vector<unsigned char> & msg)
+{
+	if (msg.empty())
+		return;
+
+	Archive::ByteStream rbs(&msg[0], static_cast<int>(msg.size()));
+	Archive::ReadIterator ri = rbs.begin();
+	uint8 msgType = 0;
+	Archive::get(ri, msgType);
+
+	switch (msgType)
+	{
+	case 0x02: // MT_AUTH_RESPONSE
+		{
+			bool success = false;
+			std::string message;
+			Archive::get(ri, success);
+			Archive::get(ri, message);
+			ms_authenticated = success;
+			logMessage("FileControl: Auth %s: %s", success ? "OK" : "FAILED", message.c_str());
+		}
+		break;
+
+	case 0x40: // MT_STATUS
+		{
+			std::string message;
+			Archive::get(ri, message);
+			logMessage("FileControl: Server: %s", message.c_str());
+		}
+		break;
+
+	case 0x41: // MT_ERROR
+		{
+			std::string message;
+			Archive::get(ri, message);
+			logMessage("FileControl: Server error: %s", message.c_str());
+		}
+		break;
+
+	default:
+		logMessage("FileControl: Unhandled message 0x%02x (%d bytes)", msgType, static_cast<int>(msg.size()));
+		break;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::recvExpectedMessage(uint8 expectedType, std::vector<unsigned char> & outPayload, int timeoutMs)
+{
+	outPayload.clear();
+
+	for (int attempt = 0; attempt < 5; ++attempt)
+	{
+		std::vector<unsigned char> msg;
+		if (!recvRawMessage(msg, timeoutMs) || msg.empty())
+			return false;
+
+		uint8 msgType = msg[0];
+		if (msgType == expectedType)
+		{
+			outPayload.swap(msg);
+			return true;
+		}
+
+		handleIncomingMessage(msg);
+	}
+
+	logMessage("FileControl: Too many unexpected messages while waiting for 0x%02x", expectedType);
+	return false;
+}
+
 // ======================================================================
 // Connection
 // ======================================================================
@@ -323,28 +396,9 @@ bool FileControlClient::connect()
 		logMessage("FileControl: Auth sent, waiting for response...");
 
 		std::vector<unsigned char> response;
-		if (recvRawMessage(response, 5000) && !response.empty())
+		if (recvRawMessage(response, 15000) && !response.empty())
 		{
-			logMessage("FileControl: Auth response (%d bytes)", static_cast<int>(response.size()));
-
-			Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
-			Archive::ReadIterator ri = rbs.begin();
-			uint8 msgType = 0;
-			Archive::get(ri, msgType);
-
-			if (msgType == 0x02)
-			{
-				bool success = false;
-				std::string message;
-				Archive::get(ri, success);
-				Archive::get(ri, message);
-				ms_authenticated = success;
-				logMessage("FileControl: Auth %s: %s", success ? "OK" : "FAILED", message.c_str());
-			}
-			else
-			{
-				logMessage("FileControl: Unexpected response type 0x%02x", msgType);
-			}
+			handleIncomingMessage(response);
 		}
 		else
 		{
@@ -619,7 +673,7 @@ bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, s
 		return false;
 
 	std::vector<unsigned char> response;
-	if (!recvRawMessage(response, 10000) || response.empty())
+	if (!recvExpectedMessage(0x12, response, 15000))
 		return false;
 
 	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
@@ -627,26 +681,21 @@ bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, s
 	uint8 msgType = 0;
 	Archive::get(ri, msgType);
 
-	if (msgType == 0x12)
+	std::string path;
+	bool compressed = false;
+	uint32 sz = 0;
+	Archive::get(ri, path);
+	Archive::get(ri, compressed);
+	Archive::get(ri, sz);
+
+	outData.resize(sz);
+	for (uint32 i = 0; i < sz && ri.getSize() > 0; ++i)
 	{
-		std::string path;
-		bool compressed = false;
-		uint32 sz = 0;
-		Archive::get(ri, path);
-		Archive::get(ri, compressed);
-		Archive::get(ri, sz);
-
-		outData.resize(sz);
-		for (uint32 i = 0; i < sz && ri.getSize() > 0; ++i)
-		{
-			uint8 byte = 0;
-			Archive::get(ri, byte);
-			outData[i] = byte;
-		}
-		return true;
+		uint8 byte = 0;
+		Archive::get(ri, byte);
+		outData[i] = byte;
 	}
-
-	return false;
+	return true;
 }
 
 // ----------------------------------------------------------------------
@@ -716,7 +765,7 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 		return false;
 
 	std::vector<unsigned char> response;
-	if (!recvRawMessage(response, 5000) || response.empty())
+	if (!recvExpectedMessage(0x14, response, 10000))
 		return false;
 
 	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
@@ -724,20 +773,15 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 	uint8 msgType = 0;
 	Archive::get(ri, msgType);
 
-	if (msgType == 0x14)
-	{
-		std::string path;
-		uint32 sz = 0;
-		uint32 crc = 0;
-		Archive::get(ri, path);
-		Archive::get(ri, sz);
-		Archive::get(ri, crc);
-		outSize = sz;
-		outCrc = crc;
-		return true;
-	}
-
-	return false;
+	std::string path;
+	uint32 sz = 0;
+	uint32 crc = 0;
+	Archive::get(ri, path);
+	Archive::get(ri, sz);
+	Archive::get(ri, crc);
+	outSize = sz;
+	outCrc = crc;
+	return true;
 }
 
 // ----------------------------------------------------------------------
@@ -786,9 +830,9 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	logMessage("FileControl: Listing request sent, waiting for response...");
 
 	std::vector<unsigned char> response;
-	if (!recvRawMessage(response, 10000) || response.empty())
+	if (!recvExpectedMessage(0x21, response, 15000))
 	{
-		logMessage("FileControl: Listing failed - no response (timeout)");
+		logMessage("FileControl: Listing failed - no response");
 		return false;
 	}
 
@@ -797,27 +841,21 @@ bool FileControlClient::requestDirectoryListing(const std::string & rootPath, st
 	uint8 msgType = 0;
 	Archive::get(ri, msgType);
 
-	if (msgType == 0x21)
+	uint32 count = 0;
+	Archive::get(ri, count);
+
+	for (uint32 i = 0; i < count && ri.getSize() > 0; ++i)
 	{
-		uint32 count = 0;
-		Archive::get(ri, count);
-
-		for (uint32 i = 0; i < count && ri.getSize() > 0; ++i)
-		{
-			std::string fileName;
-			uint32 fileSize = 0;
-			Archive::get(ri, fileName);
-			Archive::get(ri, fileSize);
-			outFiles.push_back(fileName);
-			outSizes.push_back(fileSize);
-			outCrcs.push_back(0);
-		}
-		logMessage("FileControl: Listed %u entries", count);
-		return true;
+		std::string fileName;
+		uint32 fileSize = 0;
+		Archive::get(ri, fileName);
+		Archive::get(ri, fileSize);
+		outFiles.push_back(fileName);
+		outSizes.push_back(fileSize);
+		outCrcs.push_back(0);
 	}
-
-	logMessage("FileControl: Listing failed - unexpected response 0x%02x", msgType);
-	return false;
+	logMessage("FileControl: Listed %u entries", count);
+	return true;
 }
 
 // ======================================================================

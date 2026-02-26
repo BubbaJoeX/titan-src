@@ -64,6 +64,8 @@ private:
 	static bool connect();
 	static bool sendRawMessage(const std::vector<unsigned char> & msg);
 	static bool recvRawMessage(std::vector<unsigned char> & msg, int timeoutMs);
+	static void handleIncomingMessage(const std::vector<unsigned char> & msg);
+	static bool recvExpectedMessage(uint8 expectedType, std::vector<unsigned char> & outPayload, int timeoutMs);
 
 	static bool readLocalFile(const std::string & filePath, std::vector<unsigned char> & data);
 	static bool writeLocalFile(const std::string & filePath, const std::vector<unsigned char> & data);
