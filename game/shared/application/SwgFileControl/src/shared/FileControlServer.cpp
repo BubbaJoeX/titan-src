@@ -796,10 +796,10 @@ bool FileControlServer::sendReloadCommandToGameServers(const std::string & comma
 {
 	LOG("FileControl", ("Sending reload to game servers: %s %s", command.c_str(), target.c_str()));
 
-	FileControlReloadHandler::handleReloadNotify(target, command);
+	bool result = FileControlReloadHandler::handleReloadNotify(target, command);
 
-	printf("[RELOAD] %s %s -> all game servers (via ReloadHandler + RELOAD_NOTIFY broadcast)\n", command.c_str(), target.c_str());
-	return true;
+	LOG("FileControl", ("Reload command %s for %s: %s", command.c_str(), target.c_str(), result ? "sent" : "failed"));
+	return result;
 }
 
 // ----------------------------------------------------------------------

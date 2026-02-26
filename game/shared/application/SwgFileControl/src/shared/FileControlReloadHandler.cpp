@@ -4,14 +4,16 @@
 // copyright 2024 Sony Online Entertainment
 //
 // Server-side reload handler. When SwgFileControl runs on the server
-// (Linux), it uses ServerMessageForwarding to broadcast reload commands
-// to all connected game servers, and calls local reload APIs directly.
+// (Linux), it uses ClusterBroadcaster to send console commands to
+// CentralServer, which forwards them to all game servers via the
+// existing planet->game server command routing.
 //
 // ======================================================================
 
 #include "FirstSwgFileControl.h"
 #include "FileControlReloadHandler.h"
 
+#include "ClusterBroadcaster.h"
 #include "FileControlServer.h"
 #include "HotReloadManager.h"
 
@@ -90,36 +92,23 @@ bool FileControlReloadHandler::handleReloadNotify(const std::string & relativePa
 }
 
 // ======================================================================
-// Server-side reload implementations
-//
-// SwgFileControl is a standalone process. It cannot directly call
-// GameScriptObject::reloadScript() or ServerMessageForwarding because
-// those live in the game server process. Instead, it issues the reload
-// command via the console command interface that game servers expose,
-// or relies on the RELOAD_NOTIFY message that connected game server
-// clients will process.
-//
-// The actual game server integration works as follows:
-// 1. SwgFileControl stores the file and distributes it to all clients
-// 2. SwgFileControl sends RELOAD_NOTIFY to all connected clients
-// 3. Connected game servers (which run a FileControlClient) receive
-//    the RELOAD_NOTIFY and call their local reload functions
-// 4. The game server's FileControlClient calls the appropriate reload
-//    API (GameScriptObject::reloadScript, DataTableManager::reload, etc.)
-//
-// For the standalone SwgFileControl process, we perform local reloads
-// where possible (DataTableManager is a shared library) and log the
-// reload intent for game-server-specific operations.
-// ======================================================================
 
 bool FileControlReloadHandler::reloadScript(const std::string & scriptName)
 {
 	LOG("FileControl", ("ReloadHandler: script reload %s", scriptName.c_str()));
-	printf("[RELOAD] script reload %s -> broadcast to game servers via RELOAD_NOTIFY\n", scriptName.c_str());
 
-	// Game servers will receive the RELOAD_NOTIFY and call
-	// GameScriptObject::reloadScript(scriptName) locally.
-	return true;
+	bool sent = ClusterBroadcaster::broadcastReloadScript(scriptName);
+	if (sent)
+	{
+		printf("[RELOAD] script %s -> broadcast to all game servers\n", scriptName.c_str());
+	}
+	else
+	{
+		printf("[RELOAD] script %s -> cluster broadcast FAILED (not connected to CentralServer)\n", scriptName.c_str());
+	}
+	fflush(stdout);
+
+	return sent;
 }
 
 // ----------------------------------------------------------------------
@@ -131,7 +120,17 @@ bool FileControlReloadHandler::reloadDatatable(const std::string & datatableName
 	DataTableManager::reload(datatableName);
 	LOG("FileControl", ("ReloadHandler: local DataTableManager::reload(%s) called", datatableName.c_str()));
 
-	printf("[RELOAD] datatable reload %s -> local + broadcast\n", datatableName.c_str());
+	bool sent = ClusterBroadcaster::broadcastReloadDatatable(datatableName);
+	if (sent)
+	{
+		printf("[RELOAD] datatable %s -> local + broadcast to all game servers\n", datatableName.c_str());
+	}
+	else
+	{
+		printf("[RELOAD] datatable %s -> local only (cluster broadcast FAILED)\n", datatableName.c_str());
+	}
+	fflush(stdout);
+
 	return true;
 }
 
@@ -140,11 +139,19 @@ bool FileControlReloadHandler::reloadDatatable(const std::string & datatableName
 bool FileControlReloadHandler::reloadTemplate(const std::string & templatePath)
 {
 	LOG("FileControl", ("ReloadHandler: template reload %s", templatePath.c_str()));
-	printf("[RELOAD] template reload %s -> broadcast to game servers via RELOAD_NOTIFY\n", templatePath.c_str());
 
-	// Game servers will receive the RELOAD_NOTIFY and call
-	// ObjectTemplateList::reload() locally with the Iff data.
-	return true;
+	bool sent = ClusterBroadcaster::broadcastReloadTemplate(templatePath);
+	if (sent)
+	{
+		printf("[RELOAD] template %s -> broadcast to all game servers\n", templatePath.c_str());
+	}
+	else
+	{
+		printf("[RELOAD] template %s -> cluster broadcast FAILED (not connected to CentralServer)\n", templatePath.c_str());
+	}
+	fflush(stdout);
+
+	return sent;
 }
 
 // ----------------------------------------------------------------------
@@ -152,7 +159,13 @@ bool FileControlReloadHandler::reloadTemplate(const std::string & templatePath)
 bool FileControlReloadHandler::reloadBuildout(const std::string & buildoutPath)
 {
 	LOG("FileControl", ("ReloadHandler: buildout reload %s", buildoutPath.c_str()));
-	printf("[RELOAD] buildout reload %s -> broadcast to game/planet servers via RELOAD_NOTIFY\n", buildoutPath.c_str());
+
+	// Buildout data is loaded at scene creation time. The updated file
+	// is on disk and will be used when the scene is next loaded.
+	// For live buildout updates, a server restart of the affected scene
+	// is required.
+	printf("[RELOAD] buildout %s -> updated on disk (requires scene restart for live update)\n", buildoutPath.c_str());
+	fflush(stdout);
 
 	return true;
 }
@@ -162,7 +175,9 @@ bool FileControlReloadHandler::reloadBuildout(const std::string & buildoutPath)
 bool FileControlReloadHandler::reloadGenericAsset(const std::string & assetPath)
 {
 	LOG("FileControl", ("ReloadHandler: generic asset reload %s", assetPath.c_str()));
-	printf("[RELOAD] asset reload %s -> broadcast via RELOAD_NOTIFY\n", assetPath.c_str());
+
+	printf("[RELOAD] asset %s -> updated on disk\n", assetPath.c_str());
+	fflush(stdout);
 
 	return true;
 }

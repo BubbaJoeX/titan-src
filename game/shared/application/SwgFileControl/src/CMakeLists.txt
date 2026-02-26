@@ -1,4 +1,8 @@
 set(SHARED_SOURCES
+    shared/ClusterBroadcaster.cpp
+    shared/ClusterBroadcaster.h
+    shared/ClusterConsoleConnection.cpp
+    shared/ClusterConsoleConnection.h
     shared/ConfigFileControl.cpp
     shared/ConfigFileControl.h
     shared/FileControlClient.cpp

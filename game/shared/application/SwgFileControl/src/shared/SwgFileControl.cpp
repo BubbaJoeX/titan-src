@@ -8,6 +8,7 @@
 #include "FirstSwgFileControl.h"
 #include "SwgFileControl.h"
 
+#include "ClusterBroadcaster.h"
 #include "ConfigFileControl.h"
 #include "FileControlClient.h"
 #include "FileControlServer.h"
@@ -19,10 +20,12 @@
 #include "sharedCompression/SetupSharedCompression.h"
 #include "sharedDebug/SetupSharedDebug.h"
 #include "sharedFile/SetupSharedFile.h"
+#include "sharedFile/TreeFile.h"
 #include "sharedLog/Log.h"
 #include "sharedLog/SetupSharedLog.h"
 #include "sharedNetwork/SetupSharedNetwork.h"
 #include "sharedThread/SetupSharedThread.h"
+#include "sharedUtility/SetupSharedUtility.h"
 
 #include <cstdio>
 #include <cstring>
@@ -101,6 +104,13 @@ int main(int argc, char ** argv)
 
 	SetupSharedCompression::install();
 	SetupSharedFile::install(false);
+	TreeFile::addSearchPath(".", 0);
+
+	{
+		SetupSharedUtility::Data utilData;
+		SetupSharedUtility::setupToolData(utilData);
+		SetupSharedUtility::install(utilData);
+	}
 
 	SetupSharedNetwork::SetupData networkSetupData;
 	SetupSharedNetwork::getDefaultClientSetupData(networkSetupData);
@@ -179,21 +189,32 @@ void SwgFileControl::runServer()
 	fflush(stdout);
 
 	FileControlServer::install();
+	ClusterBroadcaster::install();
 
 	printf("  Server installed. Listening on %s:%d\n", ConfigFileControl::getHost(), ConfigFileControl::getPort());
 	printf("  Channel: %s\n", ConfigFileControl::getChannel());
+	if (ConfigFileControl::getEnableClusterReload())
+	{
+		printf("  Cluster reload: %s:%d\n", ConfigFileControl::getCentralConsoleHost(), ConfigFileControl::getCentralConsolePort());
+	}
+	else
+	{
+		printf("  Cluster reload: disabled\n");
+	}
 	printf("  Press Ctrl+C to stop.\n");
 	fflush(stdout);
 
 	while (FileControlServer::isRunning())
 	{
 		FileControlServer::update();
+		ClusterBroadcaster::update();
 		Os::sleep(10);
 	}
 
 	printf("  Server shutting down...\n");
 	fflush(stdout);
 
+	ClusterBroadcaster::remove();
 	FileControlServer::remove();
 
 	printf("  Server stopped.\n");
