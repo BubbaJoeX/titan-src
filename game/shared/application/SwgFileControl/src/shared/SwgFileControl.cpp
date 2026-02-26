@@ -25,7 +25,7 @@
 #include "sharedLog/SetupSharedLog.h"
 #include "sharedNetwork/SetupSharedNetwork.h"
 #include "sharedThread/SetupSharedThread.h"
-#include "sharedUtility/SetupSharedUtility.h"
+#include "sharedUtility/DataTableManager.h"
 
 #include <cstdio>
 #include <cstring>
@@ -106,11 +106,7 @@ int main(int argc, char ** argv)
 	SetupSharedFile::install(false);
 	TreeFile::addSearchPath(".", 0);
 
-	{
-		SetupSharedUtility::Data utilData;
-		SetupSharedUtility::setupToolData(utilData);
-		SetupSharedUtility::install(utilData);
-	}
+	DataTableManager::install();
 
 	SetupSharedNetwork::SetupData networkSetupData;
 	SetupSharedNetwork::getDefaultClientSetupData(networkSetupData);
