@@ -35,11 +35,15 @@ include_directories(
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFile/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFoundation/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFoundationTypes/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedIoWin/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedLog/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMath/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMemoryManager/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMessageDispatch/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedNetwork/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedNetworkMessages/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedObject/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedRandom/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedSynchronization/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedThread/include/public
     ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedUtility/include/public
@@ -62,9 +66,12 @@ target_link_libraries(SwgFileControl
     sharedFoundation
     sharedLog
     sharedMath
+    sharedMemoryManager
     sharedMessageDispatch
     sharedNetwork
     sharedNetworkMessages
+    sharedObject
+    sharedRandom
     sharedSynchronization
     sharedThread
     sharedUtility
