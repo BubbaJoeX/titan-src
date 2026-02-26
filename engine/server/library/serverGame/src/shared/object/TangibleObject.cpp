@@ -345,6 +345,10 @@ const static std::string OBJVAR_BATTLEFIELD_PARTICIPANTS =            "battleDud
 static const std::string NOMOVE_SCRIPT  = "item.special.nomove";
 
 static const std::string OBJVAR_DECLINE_DUEL  = "decline_duel";
+static const std::string OBJVAR_TEXTURE_URL = "texture.url";
+static const std::string OBJVAR_TEXTURE_MODE = "texture.mode";
+static const std::string OBJVAR_TEXTURE_MODE_IMAGE_ONLY = "IMAGE_ONLY";
+static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
 
@@ -365,6 +369,8 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_ownerId(NetworkId(static_cast<NetworkId::NetworkIdType>(0))),
 	m_customAppearance(),
 	m_appearanceData(),
+	m_remoteTextureUrl(),
+	m_remoteTextureMode(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1161,6 +1167,48 @@ void TangibleObject::appearanceDataModified(const std::string& value)
 	//-- release local reference
 	customizationData->release();
 }
+
+// ----------------------------------------------------------------------
+
+void TangibleObject::updateRemoteTextureUrlFromObjvars()
+{
+	std::string textureUrl;
+	std::string textureMode;
+	bool const magicPaintingEnabled = hasCondition(C_magicPaintingUrl);
+
+	if (magicPaintingEnabled && !getObjVars().getItem(OBJVAR_TEXTURE_URL, textureUrl))
+		textureUrl.clear();
+	else if (!magicPaintingEnabled)
+		textureUrl.clear();
+
+	if (magicPaintingEnabled && !getObjVars().getItem(OBJVAR_TEXTURE_MODE, textureMode))
+		textureMode.clear();
+	else if (!magicPaintingEnabled)
+		textureMode.clear();
+
+	if (magicPaintingEnabled && textureMode.empty())
+		textureMode = OBJVAR_TEXTURE_MODE_IMAGE_ONLY;
+
+	if (m_remoteTextureUrl.get() != textureUrl)
+		m_remoteTextureUrl = textureUrl;
+
+	if (m_remoteTextureMode.get() != textureMode)
+		m_remoteTextureMode = textureMode;
+
+	GameScriptObject * const scriptObject = getScriptObject();
+	if (scriptObject)
+	{
+		if (magicPaintingEnabled)
+		{
+			if (!scriptObject->hasScript(MAGIC_PAINTING_SCRIPT))
+				IGNORE_RETURN(scriptObject->attachScript(MAGIC_PAINTING_SCRIPT, true));
+		}
+		else if (scriptObject->hasScript(MAGIC_PAINTING_SCRIPT))
+		{
+			scriptObject->detachScript(MAGIC_PAINTING_SCRIPT);
+		}
+	}
+}
 //-----------------------------------------------------------------------
 
 /**
@@ -1229,6 +1277,8 @@ float TangibleObject::alter(real time)
 
 	if (isAuthoritative())
 	{
+		updateRemoteTextureUrlFromObjvars();
+
 		// Determine the combat state of the object
 		{
 			CombatEngine::alter(*this);

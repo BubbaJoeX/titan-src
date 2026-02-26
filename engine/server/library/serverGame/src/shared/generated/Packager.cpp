@@ -698,6 +698,8 @@ void TangibleObject::addMembersToPackages()
 	addSharedVariable    (m_pvpFaction);
 	addSharedVariable    (m_pvpType);
 	addSharedVariable    (m_appearanceData);
+	addSharedVariable    (m_remoteTextureUrl);
+	addSharedVariable    (m_remoteTextureMode);
 	addSharedVariable    (m_components);
 	addSharedVariable    (m_condition);
 	addSharedVariable    (m_count);

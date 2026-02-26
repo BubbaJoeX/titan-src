@@ -114,6 +114,7 @@ public:
 		C_spawnedCreature      = 0x04000000,
 		C_holidayInteresting   = 0x08000000,
 		C_locked			   = 0x10000000,
+		C_magicPaintingUrl     = 0x20000000,
 	};
 
 	explicit TangibleObject(const ServerTangibleObjectTemplate* newTemplate);
@@ -534,6 +535,7 @@ private:
 
 	void copyGuildAccessListToObjVars();
 	void readInGuildAccessListObjVars();
+	void updateRemoteTextureUrlFromObjvars();
 
 private:
 
@@ -557,6 +559,8 @@ private:
 
 	Archive::AutoDeltaVariableCallback<std::string, CustomAppearanceCallback, TangibleObject> m_customAppearance;
 	Archive::AutoDeltaVariableCallback<std::string, AppearanceDataCallback, TangibleObject> m_appearanceData;
+	Archive::AutoDeltaVariable<std::string> m_remoteTextureUrl;
+	Archive::AutoDeltaVariable<std::string> m_remoteTextureMode;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 
