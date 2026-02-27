@@ -496,6 +496,9 @@ TangibleObject 		    m_guildAccessList        shared_np            set
 TangibleObject              m_effectsMap             shared_np            map
 TangibleObject              m_remoteTextureUrl       shared_np            std::string
 TangibleObject              m_remoteTextureMode      shared_np            std::string
+TangibleObject              m_remoteTextureDisplayMode shared_np          std::string
+TangibleObject              m_remoteTextureScrollH   shared_np            std::string
+TangibleObject              m_remoteTextureScrollV   shared_np            std::string
 
 VehicleObject               m_bogus                  server               int
 

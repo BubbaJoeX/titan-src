@@ -348,6 +348,10 @@ static const std::string OBJVAR_DECLINE_DUEL  = "decline_duel";
 static const std::string OBJVAR_TEXTURE_URL = "texture.url";
 static const std::string OBJVAR_TEXTURE_MODE = "texture.mode";
 static const std::string OBJVAR_TEXTURE_MODE_IMAGE_ONLY = "IMAGE_ONLY";
+static const std::string OBJVAR_TEXTURE_DISPLAY_MODE = "texture.displayMode";
+static const std::string OBJVAR_TEXTURE_DISPLAY_MODE_DEFAULT = "CUBE";
+static const std::string OBJVAR_TEXTURE_SCROLL_H = "texture.scrollH";
+static const std::string OBJVAR_TEXTURE_SCROLL_V = "texture.scrollV";
 static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
@@ -371,6 +375,9 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_appearanceData(),
 	m_remoteTextureUrl(),
 	m_remoteTextureMode(),
+	m_remoteTextureDisplayMode(),
+	m_remoteTextureScrollH(),
+	m_remoteTextureScrollV(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1174,6 +1181,9 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 {
 	std::string textureUrl;
 	std::string textureMode;
+	std::string textureDisplayMode;
+	std::string textureScrollH;
+	std::string textureScrollV;
 	bool const hasMagicPaintingCondition = hasCondition(C_magicPaintingUrl);
 	bool const hasTextureUrlObjvar = getObjVars().getItem(OBJVAR_TEXTURE_URL, textureUrl);
 	bool const hasTextureModeObjvar = getObjVars().getItem(OBJVAR_TEXTURE_MODE, textureMode);
@@ -1184,35 +1194,39 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 	{
 		textureUrl.clear();
 		textureMode.clear();
+		textureDisplayMode.clear();
+		textureScrollH.clear();
+		textureScrollV.clear();
 	}
-	else if (!hasTextureModeObjvar || textureMode.empty())
+	else
 	{
-		textureMode = OBJVAR_TEXTURE_MODE_IMAGE_ONLY;
+		if (!hasTextureModeObjvar || textureMode.empty())
+			textureMode = OBJVAR_TEXTURE_MODE_IMAGE_ONLY;
+
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_DISPLAY_MODE, textureDisplayMode) || textureDisplayMode.empty())
+			textureDisplayMode = OBJVAR_TEXTURE_DISPLAY_MODE_DEFAULT;
+
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_SCROLL_H, textureScrollH))
+			textureScrollH = "0";
+
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_SCROLL_V, textureScrollV))
+			textureScrollV = "0";
 	}
 
-	bool const remoteUrlChanged = (m_remoteTextureUrl.get() != textureUrl);
-	bool const remoteModeChanged = (m_remoteTextureMode.get() != textureMode);
-
-	if (remoteUrlChanged)
+	if (m_remoteTextureUrl.get() != textureUrl)
 		m_remoteTextureUrl = textureUrl;
 
-	if (remoteModeChanged)
+	if (m_remoteTextureMode.get() != textureMode)
 		m_remoteTextureMode = textureMode;
 
-	if (hasMagicPaintingCondition || hasTextureUrlObjvar || remoteUrlChanged || remoteModeChanged)
-	{
-		REPORT_LOG_PRINT(true, ("magic_painting_url(server): object=%s condition=%d objvarUrlPresent=%d urlNonEmpty=%d enabled=%d modeObjvarPresent=%d remoteUrlChanged=%d remoteModeChanged=%d url=%s mode=%s\n",
-			getNetworkId().getValueString().c_str(),
-			hasMagicPaintingCondition ? 1 : 0,
-			hasTextureUrlObjvar ? 1 : 0,
-			hasNonEmptyTextureUrl ? 1 : 0,
-			magicPaintingEnabled ? 1 : 0,
-			hasTextureModeObjvar ? 1 : 0,
-			remoteUrlChanged ? 1 : 0,
-			remoteModeChanged ? 1 : 0,
-			textureUrl.c_str(),
-			textureMode.c_str()));
-	}
+	if (m_remoteTextureDisplayMode.get() != textureDisplayMode)
+		m_remoteTextureDisplayMode = textureDisplayMode;
+
+	if (m_remoteTextureScrollH.get() != textureScrollH)
+		m_remoteTextureScrollH = textureScrollH;
+
+	if (m_remoteTextureScrollV.get() != textureScrollV)
+		m_remoteTextureScrollV = textureScrollV;
 
 	GameScriptObject * const scriptObject = getScriptObject();
 	if (scriptObject)

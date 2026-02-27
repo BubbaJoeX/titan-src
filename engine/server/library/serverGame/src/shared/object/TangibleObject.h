@@ -561,6 +561,9 @@ private:
 	Archive::AutoDeltaVariableCallback<std::string, AppearanceDataCallback, TangibleObject> m_appearanceData;
 	Archive::AutoDeltaVariable<std::string> m_remoteTextureUrl;
 	Archive::AutoDeltaVariable<std::string> m_remoteTextureMode;
+	Archive::AutoDeltaVariable<std::string> m_remoteTextureDisplayMode;
+	Archive::AutoDeltaVariable<std::string> m_remoteTextureScrollH;
+	Archive::AutoDeltaVariable<std::string> m_remoteTextureScrollV;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 
