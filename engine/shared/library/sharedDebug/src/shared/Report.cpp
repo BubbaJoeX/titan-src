@@ -197,9 +197,11 @@ void Report::puts(const char *buffer)
 void Report::vprintf(const char *format, va_list va)
 {
 	char buffer[8 * 1024];
+	char prefixedBuffer[8 * 1024];
 
 	// make sure the buffer is always nullptr terminated
 	buffer[sizeof(buffer)-1] = '\0';
+	prefixedBuffer[sizeof(prefixedBuffer)-1] = '\0';
 
 	// format the string
 	IGNORE_RETURN(vsnprintf(buffer, sizeof(buffer)-1, format, va));
@@ -211,7 +213,8 @@ void Report::vprintf(const char *format, va_list va)
 		buffer[sizeof(buffer)-2] = '\n';
 	}
 	
-	puts(buffer);
+	IGNORE_RETURN(snprintf(prefixedBuffer, sizeof(prefixedBuffer)-1, "[Titan] %s", buffer));
+	puts(prefixedBuffer);
 }
 
 // ----------------------------------------------------------------------

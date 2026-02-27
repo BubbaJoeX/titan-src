@@ -167,8 +167,10 @@ void NetworkHandler::dispatch()
 				}
 				catch(const Archive::ReadException & readException)
 				{
-					WARNING(true, ("Unhandled Archive read error (%s) on connection. Continuing to throw from NetwokrHandler::Dispatch", readException.what()));
-					throw(readException);
+					// Do not crash the process on malformed packet data; log and drop the connection.
+					WARNING(true, ("[Titan] Unhandled Archive read error (%s) on connection. Dropping connection from NetworkHandler::dispatch", readException.what()));
+					c->setDisconnectReason("Archive read error in NetworkHandler::dispatch");
+					c->disconnect();
 				}
 			}
 
