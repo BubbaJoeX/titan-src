@@ -61,6 +61,7 @@ namespace ScriptMethodsInteriorsNamespace
 	jstring      JNICALL getCellLabel(JNIEnv * env, jobject self, jlong target);
 	jboolean     JNICALL setCellLabel(JNIEnv * env, jobject self, jlong target, jstring cellLabel);
 	jboolean     JNICALL setCellLabelOffset(JNIEnv * env, jobject self, jlong target, jfloat x, jfloat y, jfloat z);
+	jboolean     JNICALL setCellLight(JNIEnv * env, jobject self, jlong cellId, jfloat r, jfloat g, jfloat b, jfloat brightness);
 }
 
 
@@ -95,6 +96,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getCellLabel", "(J)Ljava/lang/String;", getCellLabel),
 	JF("_setCellLabel", "(JLjava/lang/String;)Z", setCellLabel),
 	JF("_setCellLabelOffset", "(JFFF)Z", setCellLabelOffset),
+	JF("_setCellLight", "(JFFFF)Z", setCellLight),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -853,6 +855,19 @@ jboolean JNICALL ScriptMethodsInteriorsNamespace::setCellLabelOffset(JNIEnv * en
 	Vector offset(x, y, z);
 
 	cellObject->setLabelLocationOffset(offset);
+
+	return JNI_TRUE;
+}
+
+//--------------------------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsInteriorsNamespace::setCellLight(JNIEnv * env, jobject self, jlong cellId, jfloat r, jfloat g, jfloat b, jfloat brightness)
+{
+	CellObject * cellObject = nullptr;
+	if (!JavaLibrary::getObject(cellId, cellObject))
+		return JNI_FALSE;
+
+	cellObject->setCellLightColor(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b), static_cast<float>(brightness));
 
 	return JNI_TRUE;
 }

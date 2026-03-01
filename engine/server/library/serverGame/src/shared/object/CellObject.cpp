@@ -27,6 +27,7 @@
 #include "sharedFoundation/DynamicVariableList.h"
 #include "sharedLog/Log.h"
 #include "sharedNetworkMessages/MessageQueueGenericValueType.h"
+#include "sharedNetworkMessages/UpdateCellLightsMessage.h"
 #include "sharedNetworkMessages/UpdateCellPermissionMessage.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/ContainedByProperty.h"
@@ -122,9 +123,10 @@ void CellObject::sendObjectSpecificBaselinesToClient(Client const &client) const
 	if (so)
 	{
 		CreatureObject const * const creature = so->asCreatureObject();
-        UpdateCellPermissionMessage message(getNetworkId(), creature ? isAllowed(*creature) : false);
-        client.send(message, true);
-    }
+		UpdateCellPermissionMessage message(getNetworkId(), creature ? isAllowed(*creature) : false);
+		client.send(message, true);
+	}
+	sendCellLightColorToClient(client);
 }
 
 // ----------------------------------------------------------------------
@@ -771,6 +773,73 @@ CellObject const * CellObject::asCellObject(Object const * object)
 	CellObject const * const cellObject = (serverObject != nullptr) ? serverObject->asCellObject() : nullptr;
 	
 	return cellObject;
+}
+
+// ----------------------------------------------------------------------
+
+void CellObject::setCellLightColor(float r, float g, float b, float brightness)
+{
+	BuildingObject * const building = getOwnerBuilding();
+	if (!building)
+		return;
+
+	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
+	building->setObjVarItem(objvarBase + ".r", r);
+	building->setObjVarItem(objvarBase + ".g", g);
+	building->setObjVarItem(objvarBase + ".b", b);
+	building->setObjVarItem(objvarBase + ".brightness", brightness);
+
+	sendCellLightColorToAllObservers();
+}
+
+// ----------------------------------------------------------------------
+
+void CellObject::sendCellLightColorToClient(Client const &client) const
+{
+	BuildingObject const * const building = getOwnerBuilding();
+	if (!building)
+		return;
+
+	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
+	float r = 1.0f, g = 1.0f, b = 1.0f, brightness = 1.0f;
+
+	if (!building->getObjVars().getItem(objvarBase + ".r", r))
+		return;
+
+	building->getObjVars().getItem(objvarBase + ".g", g);
+	building->getObjVars().getItem(objvarBase + ".b", b);
+	building->getObjVars().getItem(objvarBase + ".brightness", brightness);
+
+	UpdateCellLightsMessage const message(getNetworkId(), r, g, b, brightness);
+	client.send(message, true);
+}
+
+// ----------------------------------------------------------------------
+
+void CellObject::sendCellLightColorToAllObservers() const
+{
+	BuildingObject const * const building = getOwnerBuilding();
+	if (!building)
+		return;
+
+	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
+	float r = 1.0f, g = 1.0f, b = 1.0f, brightness = 1.0f;
+
+	if (!building->getObjVars().getItem(objvarBase + ".r", r))
+		return;
+
+	building->getObjVars().getItem(objvarBase + ".g", g);
+	building->getObjVars().getItem(objvarBase + ".b", b);
+	building->getObjVars().getItem(objvarBase + ".brightness", brightness);
+
+	UpdateCellLightsMessage const message(getNetworkId(), r, g, b, brightness);
+
+	const std::set<Client *> &observers = building->getObservers();
+	for (auto * observer : observers)
+	{
+		if (observer)
+			observer->send(message, true);
+	}
 }
 
 // ======================================================================

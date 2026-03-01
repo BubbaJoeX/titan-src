@@ -58,6 +58,10 @@ public:
 	Vector const & getLabelLocationOffset() const;
 	void setLabelLocationOffset(Vector const & offset);
 
+	void setCellLightColor(float r, float g, float b, float brightness);
+	void sendCellLightColorToClient(Client const &client) const;
+	void sendCellLightColorToAllObservers() const;
+
 	bool getClosestPathNodePos( const ServerObject & object, Vector & outPos ) const;
 
 	ServerObject *         getOwner();

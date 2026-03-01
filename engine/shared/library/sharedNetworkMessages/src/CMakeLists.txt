@@ -548,6 +548,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/StatMigrationTargetsMessage.h
 	shared/clientGameServer/StomachRequestMessage.cpp
 	shared/clientGameServer/StomachRequestMessage.h
+	shared/clientGameServer/UpdateCellLightsMessage.cpp
+	shared/clientGameServer/UpdateCellLightsMessage.h
 	shared/clientGameServer/UpdateCellPermissionMessage.cpp
 	shared/clientGameServer/UpdateCellPermissionMessage.h
 	shared/clientGameServer/UpdateContainmentMessage.cpp
