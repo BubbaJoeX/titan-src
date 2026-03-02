@@ -32,6 +32,7 @@
 #include "sharedNetworkMessages/CreateClientPathMessage.h"
 #include "sharedNetworkMessages/DestroyClientPathMessage.h"
 #include "sharedNetworkMessages/EnterStructurePlacementModeMessage.h"
+#include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedNetworkMessages/ShowAirspeederPanelMessage.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/LotManager.h"
@@ -59,6 +60,8 @@ namespace ScriptMethodsTerrainNamespace
 	jobject      JNICALL getGoodLocationAvoidCollidables (JNIEnv* env, jobject self, jfloat hintX, jfloat hintY, jobject searchRectLowerLeftLocation, jobject searchRectUpperRightLocation, jboolean dontCheckWater, jboolean dontCheckSlope, jfloat staticObjDistance);
 	jboolean     JNICALL enterClientStructurePlacementMode (JNIEnv* env, jobject self, jlong player, jlong deed, jstring serverObjectTemplateName);
 	jboolean     JNICALL showAirspeederPanel (JNIEnv* env, jobject self, jlong player, jboolean show);
+	jboolean     JNICALL sendAutoPilotEngage (JNIEnv* env, jobject self, jlong player, jfloat targetX, jfloat targetZ);
+	jboolean     JNICALL sendAutoPilotDisengage (JNIEnv* env, jobject self, jlong player);
 	jfloat       JNICALL canPlaceStructure (JNIEnv* env, jobject self, jstring serverObjectTemplateName, jobject position, jint rotation);
 	jlong        JNICALL createTemporaryStructure (JNIEnv* env, jobject self, jstring serverObjectTemplateName, jobject position, jint rotation);
 	jint         JNICALL getNumberOfLots (JNIEnv* env, jobject self, jstring serverObjectTemplateName);
@@ -97,6 +100,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("getGoodLocationAvoidCollidables",   "(FFLscript/location;Lscript/location;ZZF)Lscript/location;", getGoodLocationAvoidCollidables),
 	JF("_enterClientStructurePlacementMode", "(JJLjava/lang/String;)Z",       enterClientStructurePlacementMode),
 	JF("_showAirspeederPanel", "(JZ)Z",                                       showAirspeederPanel),
+	JF("_sendAutoPilotEngage", "(JFF)Z",                                     sendAutoPilotEngage),
+	JF("_sendAutoPilotDisengage", "(J)Z",                                    sendAutoPilotDisengage),
 	JF("canPlaceStructure",                 "(Ljava/lang/String;Lscript/location;I)F",                   canPlaceStructure),
 	JF("_createTemporaryStructure",          "(Ljava/lang/String;Lscript/location;I)J",     createTemporaryStructure),
 	JF("getNumberOfLots",                   "(Ljava/lang/String;)I",                                     getNumberOfLots),
@@ -362,6 +367,40 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::showAirspeederPanel(JNIEnv* env,
 	}
 
 	client->send(ShowAirspeederPanelMessage(show ? true : false), true);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::sendAutoPilotEngage(JNIEnv* env, jobject /*self*/, jlong jobject_player, jfloat targetX, jfloat targetZ)
+{
+	CreatureObject* const player = JavaLibrary::getCreatureThrow(env, jobject_player, "sendAutoPilotEngage(): player did not resolve to a CreatureObject", false);
+	if (!player)
+		return JNI_FALSE;
+
+	Client* const client = player->getClient();
+	if (!client)
+		return JNI_FALSE;
+
+	GenericValueTypeMessage<std::pair<float, float> > const msg("AutoPilotEngageMessage", std::make_pair(static_cast<float>(targetX), static_cast<float>(targetZ)));
+	client->send(msg, true);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::sendAutoPilotDisengage(JNIEnv* env, jobject /*self*/, jlong jobject_player)
+{
+	CreatureObject* const player = JavaLibrary::getCreatureThrow(env, jobject_player, "sendAutoPilotDisengage(): player did not resolve to a CreatureObject", false);
+	if (!player)
+		return JNI_FALSE;
+
+	Client* const client = player->getClient();
+	if (!client)
+		return JNI_FALSE;
+
+	GenericValueTypeMessage<bool> const msg("AutoPilotDisengageMessage", true);
+	client->send(msg, true);
 	return JNI_TRUE;
 }
 

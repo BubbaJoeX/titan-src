@@ -859,6 +859,24 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("AutoPilotArrived") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                GenericValueTypeMessage<std::string> const msg(ri);
+                CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
+                if (creatureOwner && creatureOwner->isAuthoritative() && creatureOwner->getScriptObject()) {
+                    ScriptParams params;
+                    ScriptDictionaryPtr dictionary;
+                    GameScriptObject::makeScriptDictionary(params, dictionary);
+                    if (dictionary.get() != nullptr) {
+                        dictionary->serialize();
+                        creatureOwner->getScriptObject()->handleMessage("handleAutoPilotArrived", dictionary);
+                    }
+                }
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("SetLfgInterests") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 GenericValueTypeMessage <BitArray> const msg(ri);
