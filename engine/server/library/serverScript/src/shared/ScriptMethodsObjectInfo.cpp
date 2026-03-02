@@ -3631,19 +3631,27 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setObjectCollidable(JNIEnv *e
 
 	collision->setCollidable(collidable != JNI_FALSE);
 
-	// Notify rider's client so client collision mirrors server (airspeeder mode is button-triggered, not height-triggered)
+	GenericValueTypeMessage<std::pair<NetworkId, bool> > const msg("SetObjectCollidableMessage",
+		std::make_pair(object->getNetworkId(), collidable != JNI_FALSE));
+
 	CreatureObject * const creatureObject = object->asCreatureObject();
 	if (creatureObject)
 	{
-		CreatureObject const * const rider = creatureObject->getPrimaryMountingRider();
-		if (rider)
+		Client * const directClient = creatureObject->getClient();
+		if (directClient)
 		{
-			Client * const client = rider->getClient();
-			if (client)
+			directClient->send(msg, true);
+		}
+		else
+		{
+			CreatureObject const * const rider = creatureObject->getPrimaryMountingRider();
+			if (rider)
 			{
-				GenericValueTypeMessage<std::pair<NetworkId, bool> > const msg("SetObjectCollidableMessage",
-					std::make_pair(object->getNetworkId(), collidable != JNI_FALSE));
-				client->send(msg, true);
+				Client * const riderClient = rider->getClient();
+				if (riderClient)
+				{
+					riderClient->send(msg, true);
+				}
 			}
 		}
 	}
