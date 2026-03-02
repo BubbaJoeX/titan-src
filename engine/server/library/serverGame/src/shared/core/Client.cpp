@@ -824,14 +824,12 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
             case constcrc("AutoPilotWaypoint") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
-                GenericValueTypeMessage<std::pair<float, float> > const msg(ri);
+                GenericValueTypeMessage<std::string> const msg(ri);
                 CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
                 if (creatureOwner && creatureOwner->isAuthoritative()) {
-                    char buf[64];
-                    snprintf(buf, sizeof(buf), "%.2f,%.2f", msg.getValue().first, msg.getValue().second);
                     ScriptParams scriptParams;
                     scriptParams.addParam(NetworkId::cms_invalid);
-                    scriptParams.addParam(Unicode::narrowToWide(std::string(buf)));
+                    scriptParams.addParam(Unicode::narrowToWide(msg.getValue()));
                     scriptParams.addParam(0.0f);
                     creatureOwner->getScriptObject()->callScriptCommandHandler("onAutoPilotWaypoint", scriptParams);
                 }
