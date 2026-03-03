@@ -136,10 +136,13 @@ bool CreatureObject::unpilotShip()
 				ShipClientUpdateTracker::queueForUpdate(*client, *ship);
 			}
 
-			// Transfer pilot to location of the object it was contained by, which may or may not have been the ship, but it something with a pilot slot.
-			// Resolve dest cell: getAttachedTo may be the cell, or we may need to walk up (e.g. pilot seat in ship in cell).
-			CellObject * destCell = dynamic_cast<CellObject *>(containingObject->getAttachedTo());
-			if (!destCell)
+			// Transfer pilot back to the cell or world.
+			// For POB ships the containingObject (pilot seat) lives inside a cell of the ship.
+			// Use the pilot seat's cell-relative transform directly - this is already in the
+			// correct coordinate space and avoids world-space round-trips that cause skewed
+			// orientation and brief world placement (dpvs crash).
+			CellObject * destCell = nullptr;
+			if (!containingObject->asShipObject())
 			{
 				CellProperty * const parentCell = containingObject->getParentCell();
 				if (parentCell && !parentCell->isWorldCell())
@@ -147,34 +150,19 @@ bool CreatureObject::unpilotShip()
 			}
 			if (destCell)
 			{
-				// Use player's world position converted to cell space for correct placement (avoids interior cell transform issues).
-				Transform worldToCell;
-				worldToCell.invert(destCell->getTransform_o2w());
-				Transform tr(worldToCell.rotateTranslate_p2l(getTransform_o2w()));
-				// push them back a meter as well if they are unpiloting a pob ship
-				if (!containingObject->asShipObject())
-					tr.move_l(Vector(0.f, 0.f, -1.f));
-				// Use cell-aligned upright orientation so the player stands on the floor and the overhead map aligns correctly.
-				// Ship orientation can be tilted (pitch/roll); we want yaw only, standing on the cell's floor (Y up in cell space).
-				{
-					Transform const & shipTransform = ship->getTransform_o2w();
-					Vector kHorizontal(shipTransform.getLocalFrameK_p().x, 0.f, shipTransform.getLocalFrameK_p().z);
-					if (!kHorizontal.normalize())
-						kHorizontal = Vector(0.f, 0.f, 1.f);
-					Transform const & cellToWorld = destCell->getTransform_o2w();
-					Vector forward_cell = cellToWorld.rotate_p2l(kHorizontal);
-					// Flatten to cell XZ plane so we only keep yaw (player stands on floor, Y up in cell space).
-					forward_cell.y = 0.f;
-					if (forward_cell.normalize())
-					{
-						// Cell floor is XZ with +Y up; use cell's natural up so map and geometry align.
-						Vector const up_cell(Vector::unitY);
-						tr.setLocalFrameKJ_p(forward_cell, up_cell);
-					}
-				}
+				// Start from the pilot seat's cell-relative transform (already in cell space).
+				Transform tr = containingObject->getTransform_o2p();
+				// Make the player face the same direction as the seat but stand upright.
+				Vector forward_cell = tr.getLocalFrameK_p();
+				forward_cell.y = 0.f;
+				if (!forward_cell.normalize())
+					forward_cell = Vector(0.f, 0.f, 1.f);
+				tr.setLocalFrameKJ_p(forward_cell, Vector::unitY);
+				// Step back 1m so the player isn't stuck inside the seat.
+				tr.move_l(Vector(0.f, 0.f, -1.f));
+
 				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
 				{
-					// Sync transform to client immediately (avoids interior cell transform desync).
 					PlayerCreatureController * const pcc = dynamic_cast<PlayerCreatureController *>(getController());
 					if (pcc)
 						pcc->teleport(tr, safe_cast<ServerObject *>(destCell));
@@ -182,19 +170,15 @@ bool CreatureObject::unpilotShip()
 			}
 			else
 			{
-				Transform const & shipTransform = containingObject->getTransform_o2w();
-				Transform tr = shipTransform;
-				// In atmospheric flight, use upright orientation (yaw only) so the player walks forward correctly.
+				// Non-POB ship or no cell: transfer to world at the ship's position.
+				Transform tr = containingObject->getTransform_o2w();
 				if (ServerWorld::isAtmosphericFlightScene())
 				{
-					Vector kHorizontal(shipTransform.getLocalFrameK_p().x, 0.f, shipTransform.getLocalFrameK_p().z);
+					Vector kHorizontal(tr.getLocalFrameK_p().x, 0.f, tr.getLocalFrameK_p().z);
 					if (!kHorizontal.normalize())
-						kHorizontal = Vector(0.f, 0.f, 1.f);  // Fallback if ship pointed straight up/down
-					tr.setPosition_p(shipTransform.getPosition_p());
+						kHorizontal = Vector(0.f, 0.f, 1.f);
 					tr.setLocalFrameKJ_p(kHorizontal, Vector::unitY);
 				}
-				// World transfer: do not call teleport() immediately - can cause access violation on landing
-				// when client processes control handoff. Rely on baseline/delta sync.
 				IGNORE_RETURN(ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode));
 			}
 			if (errorCode == Container::CEC_Success)

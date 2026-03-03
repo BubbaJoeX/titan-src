@@ -14,7 +14,9 @@
 #include "serverGame/PlayerShipController.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
+#include "serverGame/TangibleObject.h"
 #include "SwgGameServer/CombatEngine.h"
+#include "sharedTerrain/TerrainObject.h"
 #include "sharedRandom/Random.h"
 #include "serverNetworkMessages/GameConnectionServerMessages.h"
 #include "serverScript/GameScriptObject.h"
@@ -154,6 +156,30 @@ namespace ProjectileManagerNamespace
 				}
 			}
 
+			// Check terrain collision in atmospheric flight (ship-to-ground combat).
+			float terrainHitTime = 2.0f;  // >1 means no hit
+			if (ServerWorld::isAtmosphericFlightScene())
+			{
+				TerrainObject const * const terrain = TerrainObject::getConstInstance();
+				if (terrain)
+				{
+					Vector const pathEnd_w = projectilePosition_w + projectilePath;
+					float const pathLength = projectilePath.magnitude();
+					int const numSteps = pathLength > 0.f ? std::max(1, static_cast<int>(pathLength / 2.f)) : 1;
+					for (int s = 1; s <= numSteps; ++s)
+					{
+						float const t = static_cast<float>(s) / static_cast<float>(numSteps);
+						Vector const sample_w = Vector::linearInterpolate(projectilePosition_w, pathEnd_w, t);
+						float terrainHeight = 0.f;
+						if (terrain->getHeightForceChunkCreation(Vector(sample_w.x, 0.f, sample_w.z), terrainHeight) && sample_w.y < terrainHeight)
+						{
+							terrainHitTime = t;
+							break;
+						}
+					}
+				}
+			}
+
 			// Get all objects that collide with the line segment from m_position_w to endPosition.  Don't collide with the owner.
 			float const projectileSize = 1.f;
 			Capsule const projectileCapsule_w(Sphere(projectilePosition_w, projectileSize), projectilePath);
@@ -161,7 +187,7 @@ namespace ProjectileManagerNamespace
 			CollisionWorld::getDatabase()->queryFor(static_cast<int>(SpatialDatabase::Q_Physicals), CellProperty::getWorldCellProperty(), true, projectileCapsule_w, collidedWith);
 
 			Object * closestObject = nullptr;
-			float smallestTime = 0.0f;
+			float smallestTime = 2.0f;  // >1 means no hit
 			Vector collisionPosition_o;
 
 			for (ColliderList::const_iterator i = collidedWith.begin(); i != collidedWith.end(); ++i)
@@ -189,6 +215,14 @@ namespace ProjectileManagerNamespace
 						}
 					}
 				}
+			}
+
+			// Terrain impact takes precedence if it occurs first (or is the only hit).
+			if (terrainHitTime < smallestTime)
+			{
+				Vector const impactPosition_w = Vector::linearInterpolate(projectilePosition_w, projectilePosition_w + projectilePath, terrainHitTime);
+				triggerTerrainImpact(impactPosition_w);
+				return false;
 			}
 
 			if (closestObject)
@@ -225,6 +259,46 @@ namespace ProjectileManagerNamespace
 			                || Pvp::canAttack(*actorShip, *targetShip)))))
 				return true;
 			return false;
+		}
+
+		// ----------------------------------------------------------------------
+		// Splash damage constants for ship-to-ground combat.
+		static float const s_splashRadius;
+		static float const s_splashDamageFraction;
+
+		void applySplashDamage(Vector const &center_w, ServerObject const *excludeDirectTarget, bool inAtmospheric) const
+		{
+			if (!inAtmospheric)
+				return;
+			ShipObject * const actorShip = m_owner.getPointer();
+			if (!actorShip)
+				return;
+			int const weaponSlot = m_weaponIndex + static_cast<int>(ShipChassisSlotType::SCST_weapon_0);
+			float const damageMin = actorShip->getWeaponDamageMinimum(weaponSlot);
+			float const damageMax = actorShip->getWeaponDamageMaximum(weaponSlot);
+			int const splashAmount = static_cast<int>(Random::randomReal(damageMin, damageMax) * s_splashDamageFraction);
+			if (splashAmount <= 0)
+				return;
+			std::vector<ServerObject *> targetList;
+			ServerWorld::findObjectsInRange(center_w, s_splashRadius, targetList);
+			for (std::vector<ServerObject *>::const_iterator it = targetList.begin(); it != targetList.end(); ++it)
+			{
+				ServerObject * const obj = *it;
+				if (!obj || obj == actorShip || obj == excludeDirectTarget)
+					continue;
+				TangibleObject * const defender = obj->asTangibleObject();
+				if (!defender || defender->getKill())
+					continue;
+				if (defender->isAuthoritative())
+					CombatEngine::damage(*defender, ServerWeaponObjectTemplate::DT_kinetic, 0, splashAmount);
+			}
+		}
+
+		// ----------------------------------------------------------------------
+
+		void triggerTerrainImpact(Vector const &impactPosition_w) const
+		{
+			applySplashDamage(impactPosition_w, nullptr, true);
 		}
 
 		// ----------------------------------------------------------------------
@@ -286,6 +360,9 @@ namespace ProjectileManagerNamespace
 						IGNORE_RETURN(target.getScriptObject()->trigAllScripts(Scripting::TRIG_SHIP_HIT, params));
 						targetShip->setNumberOfHits(targetShip->getNumberOfHits() + 1);	
 					}
+					// Splash damage in atmospheric flight (ship-to-ground combat).
+					Vector const splashCenter_w = target.rotateTranslate_o2w(collisionPosition_o);
+					applySplashDamage(splashCenter_w, &target, ServerWorld::isAtmosphericFlightScene());
 				}
 
 				// trigger attacker that they hit
@@ -322,6 +399,9 @@ namespace ProjectileManagerNamespace
 	};
 
 	// ======================================================================
+
+	float const Projectile::s_splashRadius = 10.0f;
+	float const Projectile::s_splashDamageFraction = 0.5f;
 
 	std::vector<Projectile> s_projectiles;
 
