@@ -150,15 +150,14 @@ bool CreatureObject::unpilotShip()
 			}
 			if (destCell)
 			{
-				// Use the player's own cell-relative transform for position and facing.
-				Transform tr = getTransform_o2p();
-				// Flatten to upright (yaw only) so the player stands on the floor.
-				Vector forward_cell = tr.getLocalFrameK_p();
-				forward_cell.y = 0.f;
-				if (!forward_cell.normalize())
-					forward_cell = Vector(0.f, 0.f, 1.f);
-				tr.setLocalFrameKJ_p(forward_cell, Vector::unitY);
-				// Step back 1m so the player isn't stuck inside the seat.
+				// Place the player at the pilot seat's position in the cell.
+				// Containment: Player -> PilotSeat -> Cell -> Ship -> World
+				// containingObject->getTransform_o2p() = seat position/orientation in cell space.
+				// Use seat position but with a clean upright identity orientation to avoid
+				// inheriting any seat tilt/rotation that warps the player.
+				Transform tr;
+				tr.setPosition_p(containingObject->getTransform_o2p().getPosition_p());
+				// Step back 1m so the player isn't stuck inside the seat geometry.
 				tr.move_l(Vector(0.f, 0.f, -1.f));
 
 				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
