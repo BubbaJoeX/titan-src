@@ -3513,7 +3513,15 @@ static void commandFuncOpenContainer(Command const & cmd, NetworkId const &actor
 		bool const doPermissionCheckOnItem = !isPublicContainer;
 		bool const doPermissionCheckOnParents = !isPublicContainer;
 
-		if (player->canManipulateObject(*container, false, doPermissionCheckOnItem, doPermissionCheckOnParents, 6.0f, code))
+		float openRange = 6.0f;
+		if (ServerWorld::isAtmosphericFlightScene())
+		{
+			ShipObject const * const containingShip = ShipObject::getContainingShipObject(player);
+			if (containingShip != nullptr)
+				openRange = 150.0f;
+		}
+
+		if (player->canManipulateObject(*container, false, doPermissionCheckOnItem, doPermissionCheckOnParents, openRange, code))
 		{
 			// Additional check for Locked containers.
 			if (container->asTangibleObject() && container->asTangibleObject()->isLocked())
