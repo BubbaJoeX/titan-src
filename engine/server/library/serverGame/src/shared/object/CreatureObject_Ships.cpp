@@ -160,32 +160,14 @@ bool CreatureObject::unpilotShip()
 			}
 			if (destCell)
 			{
-				// Containment: Player -> PilotSeat -> Cell -> Ship -> World
-				// Use the ship's world forward direction converted to cell space
-				// so the player faces the same way the ship is pointing.
+				// Place the player at the pilot seat position with an identity
+				// orientation in cell space (facing +Z, upright).  Cell space is
+				// fixed relative to the ship hull, so the player's WASD movement
+				// is always consistent regardless of the ship's world pitch/yaw/roll.
 				Transform const & seatTransform = containingObject->getTransform_o2p();
 				Transform tr;
 				tr.setPosition_p(seatTransform.getPosition_p());
-
-				// Get the ship's world-space forward, flatten to horizontal,
-				// then rotate into cell space for the player's facing.
-				Vector forward_world = ship->getObjectFrameK_w();
-				forward_world.y = 0.f;
-				if (!forward_world.normalize())
-					forward_world = Vector(0.f, 0.f, 1.f);
-
-				CellProperty const * const cellProp = destCell->getCellProperty();
-				if (cellProp)
-				{
-					Transform const & cellToWorld = cellProp->getOwner().getTransform_o2w();
-					Transform worldToCell;
-					cellToWorld.invert(worldToCell);
-					Vector forward_cell = worldToCell.rotate_p2l(forward_world);
-					forward_cell.y = 0.f;
-					if (forward_cell.normalize())
-						tr.setLocalFrameKJ_p(forward_cell, Vector::unitY);
-				}
-
+				tr.setLocalFrameKJ_p(Vector::unitZ, Vector::unitY);
 				tr.move_l(Vector(0.f, 0.f, -1.f));
 
 				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
