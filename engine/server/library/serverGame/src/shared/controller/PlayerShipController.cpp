@@ -96,7 +96,10 @@ PlayerShipController::PlayerShipController(ShipObject * const owner) :
 	m_lastVerifiedSpeed(0.f),
 	m_lastVerifiedSyncStamp(0),
 	m_gunnerWeaponIndexList(new GunnerWeaponIndexList),
-	m_targetedByAiTimer(s_targetedByAiExpireTime)
+	m_targetedByAiTimer(s_targetedByAiExpireTime),
+	m_autopilotActive(false),
+	m_autopilotTarget(Vector::zero),
+	m_autopilotCruiseAltitude(200.0f)
 {
 	preventMovementUpdates();
 }
@@ -428,6 +431,41 @@ float PlayerShipController::realAlter(float const elapsedTime)
 		{
 			//-- The docking behavior will calculate new values for m_yaw/m_pitch/m_roll/m_throttle[Position] implicitly through calling ShipController members
 			m_dockingBehavior->alter(elapsedTime);
+		}
+
+		if (m_autopilotActive && m_dockingBehavior == nullptr)
+		{
+			Vector const shipPos = owner->getPosition_w();
+			Vector const delta(m_autopilotTarget.x - shipPos.x, 0.0f, m_autopilotTarget.z - shipPos.z);
+			float const horizDist = delta.magnitude();
+
+			float desiredY = shipPos.y;
+			if (ServerWorld::isAtmosphericFlightScene())
+			{
+				TerrainObject const * const terrain = TerrainObject::getConstInstance();
+				if (terrain)
+				{
+					float terrainHere = 0.0f;
+					terrain->getHeightForceChunkCreation(Vector(shipPos.x, 0.0f, shipPos.z), terrainHere);
+					desiredY = terrainHere + m_autopilotCruiseAltitude;
+				}
+			}
+
+			Vector const flatGoal(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z);
+			face(flatGoal, elapsedTime);
+
+			float const altDelta = desiredY - shipPos.y;
+			float const pitchForAlt = clamp(-0.3f, altDelta * 0.01f, 0.3f);
+			m_pitchPosition = pitchForAlt;
+
+			m_rollPosition = 0.0f;
+
+			if (horizDist > 80.0f)
+				m_throttlePosition = 1.0f;
+			else if (horizDist > 20.0f)
+				m_throttlePosition = clamp(0.2f, horizDist / 80.0f, 1.0f);
+			else
+				m_throttlePosition = 0.0f;
 		}
 
 		//-- Update flight model
@@ -863,6 +901,30 @@ void PlayerShipController::addAiTargetingMe(NetworkId const & unit)
 	}
 
 	m_targetedByAiTimer.reset();
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::setAutopilotTarget(Vector const & target, float cruiseAltitude)
+{
+	m_autopilotActive = true;
+	m_autopilotTarget = target;
+	m_autopilotCruiseAltitude = cruiseAltitude;
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::clearAutopilot()
+{
+	m_autopilotActive = false;
+	m_autopilotTarget = Vector::zero;
+}
+
+// ----------------------------------------------------------------------
+
+bool PlayerShipController::isAutopilotActive() const
+{
+	return m_autopilotActive;
 }
 
 // ======================================================================

@@ -15,6 +15,7 @@
 #include "serverGame/ShipController.h"
 #include "serverUtility/RecentMaxSyncedValue.h"
 #include "sharedFoundation/Timer.h"
+#include "sharedMath/Vector.h"
 
 // ======================================================================
 
@@ -55,6 +56,10 @@ public:
 	virtual void addAiTargetingMe(NetworkId const & unit);
 	bool isTeleporting() const;
 
+	void setAutopilotTarget(Vector const & target, float cruiseAltitude);
+	void clearAutopilot();
+	bool isAutopilotActive() const;
+
 protected:
 	virtual void handleMessage(int message, float value, const MessageQueue::Data* data, uint32 flags);
 
@@ -93,6 +98,10 @@ private:
 	uint32 m_lastVerifiedSyncStamp;
 	GunnerWeaponIndexList * const m_gunnerWeaponIndexList;
 	Timer m_targetedByAiTimer;
+
+	bool m_autopilotActive;
+	Vector m_autopilotTarget;
+	float m_autopilotCruiseAltitude;
 };
 
 // ======================================================================
