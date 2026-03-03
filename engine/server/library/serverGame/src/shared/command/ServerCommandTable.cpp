@@ -10,6 +10,7 @@
 #include "serverGame/ServerCommandTable.h"
 
 #include "serverGame/ConfigServerGame.h"
+#include "serverGame/ServerWorld.h"
 #include "sharedFile/Iff.h"
 #include "sharedFile/TreeFile.h"
 #include "sharedGame/CommandTable.h"
@@ -67,6 +68,11 @@ void ServerCommandTable::load()
 	{
 		getCommandTableListFromDataTable("datatables/command/command_tables_shared_ground.iff", commandTablesToLoad);
 		getCommandTableListFromDataTable("datatables/command/command_tables_server_ground.iff", commandTablesToLoad);
+		if (ServerWorld::isAtmosphericFlightScene())
+		{
+			getCommandTableListFromDataTable("datatables/command/command_tables_shared_space.iff", commandTablesToLoad);
+			getCommandTableListFromDataTable("datatables/command/command_tables_server_space.iff", commandTablesToLoad);
+		}
 	}
 
 	CommandTable::loadCommandTables(commandTablesToLoad);
