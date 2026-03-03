@@ -153,7 +153,7 @@ void PositionUpdateTracker::sendPositionUpdate(ServerObject &obj)
 		LOG("PositionUpdate", ("Sending position update for %s", obj.getNetworkId().getValueString().c_str()));
 	}
 
-	NetworkId const loadWithId = ContainerInterface::getLoadWithContainerId(obj);
+	NetworkId loadWithId = ContainerInterface::getLoadWithContainerId(obj);
 
 	//-- Determine Object container's network id and Object's arrangement as far as the Database is concerned.
 	NetworkId containerNetworkIdForDatabase = ContainerInterface::getContainedByProperty(obj)->getContainedByNetworkId();
@@ -185,6 +185,13 @@ void PositionUpdateTracker::sendPositionUpdate(ServerObject &obj)
 			containerNetworkIdForDatabase = shipControlDevice->getNetworkId();
 			objectArrangementForDatabase = -1;
 			transformForDatabase.resetRotateTranslate_l2p();
+		}
+		else if (containerNetworkIdForDatabase == NetworkId::cms_invalid)
+		{
+			// Ship is in the world without a control device (e.g. atmospheric
+			// flight).  Treat it as self-loading so the DB check doesn't reject
+			// the position update or unload the object.
+			loadWithId = obj.getNetworkId();
 		}
 	}
 	else
