@@ -14,6 +14,7 @@
 #include "serverGame/PlayerShipController.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
+#include "SwgGameServer/CombatEngine.h"
 #include "sharedRandom/Random.h"
 #include "serverNetworkMessages/GameConnectionServerMessages.h"
 #include "serverScript/GameScriptObject.h"
@@ -24,11 +25,8 @@
 #include "sharedCollision/Extent.h"
 #include "sharedCollision/SpatialDatabase.h"
 #include "sharedGame/GameObjectTypes.h"
-#include "sharedGame/AttribMod.h"
 #include "sharedGame/SharedObjectTemplate.h"
 #include "sharedGame/ShipChassisSlotType.h"
-#include "swgSharedUtility/Attributes.def"
-#include "swgSharedUtility/CombatEngineData.h"
 #include "sharedMath/MultiShape.h"
 #include "sharedMathArchive/TransformArchive.h"
 #include "sharedNetworkMessages/CreateProjectileMessage.h"
@@ -274,24 +272,10 @@ namespace ProjectileManagerNamespace
 						int const weaponSlot = m_weaponIndex + static_cast<int>(ShipChassisSlotType::SCST_weapon_0);
 						float const damageMin = actorShip->getWeaponDamageMinimum(weaponSlot);
 						float const damageMax = actorShip->getWeaponDamageMaximum(weaponSlot);
-						int const damage = -static_cast<int>(Random::randomReal(damageMin, damageMax));
-						if (damage < 0 && targetCreature->isAuthoritative())
+						int const damageAmount = static_cast<int>(Random::randomReal(damageMin, damageMax));
+						if (damageAmount > 0)
 						{
-							CreatureObject const * const pilot = actorShip->getPilot();
-							NetworkId const attackerId = (pilot && pilot->isPlayerControlled()) ? pilot->getNetworkId() : actorShip->getNetworkId();
-							CombatEngineData::DamageData damageData;
-							AttribMod::AttribMod mod;
-							mod.tag = 0;
-							mod.attrib = Attributes::Health;
-							mod.value = damage;
-							mod.attack = 0;
-							mod.sustain = 0;
-							mod.decay = AttribMod::AMDS_pool;
-							mod.flags = AttribMod::AMF_directDamage;
-							damageData.damage.push_back(mod);
-							damageData.attackerId = CachedNetworkId(attackerId);
-							damageData.ignoreInvulnerable = false;
-							targetCreature->applyDamage(damageData);
+							CombatEngine::damage(*targetCreature, ServerWeaponObjectTemplate::DT_kinetic, 0, damageAmount);
 						}
 					}
 					if(!targetShip) // For Non ship objects. Just trigger the event.
