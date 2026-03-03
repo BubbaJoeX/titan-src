@@ -75,14 +75,11 @@ namespace PlayerShipControllerNamespace
 		virtual float getMaximumSpeed() const
 		{
 			float baseSpeed = m_shipObject->getShipActualSpeedMaximum();
-			float boosterSpeed = m_shipObject->getBoosterSpeedMaximum();
-			if (boosterSpeed > 0.0f)
-				return baseSpeed + (boosterSpeed * 0.75f);
-			return baseSpeed * 1.5f;
+			return baseSpeed * 2.5f;
 		}
 
-		virtual float getSpeedAcceleration() const { return m_shipObject->getShipActualAccelerationRate() * 3.0f; }
-		virtual float getSpeedDeceleration() const { return m_shipObject->getShipActualDecelerationRate() * 3.0f; }
+		virtual float getSpeedAcceleration() const { return m_shipObject->getShipActualAccelerationRate() * 5.0f; }
+		virtual float getSpeedDeceleration() const { return m_shipObject->getShipActualDecelerationRate() * 5.0f; }
 		virtual float getSlideDampener() const     { return 0.0f; }
 		virtual float getMaximumYaw() const        { return 2.0f; }
 		virtual float getYawAcceleration() const   { return 4.0f; }
