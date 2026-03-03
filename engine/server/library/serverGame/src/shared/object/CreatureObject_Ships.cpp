@@ -150,9 +150,9 @@ bool CreatureObject::unpilotShip()
 			}
 			if (destCell)
 			{
-				// Start from the pilot seat's cell-relative transform (already in cell space).
-				Transform tr = containingObject->getTransform_o2p();
-				// Make the player face the same direction as the seat but stand upright.
+				// Use the player's own cell-relative transform for position and facing.
+				Transform tr = getTransform_o2p();
+				// Flatten to upright (yaw only) so the player stands on the floor.
 				Vector forward_cell = tr.getLocalFrameK_p();
 				forward_cell.y = 0.f;
 				if (!forward_cell.normalize())
