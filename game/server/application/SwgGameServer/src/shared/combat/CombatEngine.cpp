@@ -528,6 +528,57 @@ void CombatEngine::damage(TangibleObject & defender,
 }	// CombatEngine::damage
 
 /**
+ * Damages an object with a known attacker. Used for ship-to-ground combat
+ * so that kill credit, XP, and script triggers are properly attributed.
+ */
+void CombatEngine::damage(TangibleObject & defender, 
+	ServerWeaponObjectTemplate::DamageType damageType, uint16 hitLocation, 
+	int damageDone, NetworkId const & attackerId)
+{
+	if (defender.isAuthoritative())
+	{
+		CreatureObject *critter = defender.asCreatureObject();
+		const bool isVehicle    = GameObjectTypes::isTypeOf (defender.getGameObjectType (), SharedObjectTemplate::GOT_vehicle);
+
+		if (critter == nullptr || isVehicle)
+			hitLocation = 0;
+
+		const ConfigCombatEngine::SkeletonAttackMod & skeletonAttackMod = 
+			ConfigCombatEngine::getSkeletonAttackMod(static_cast<ServerTangibleObjectTemplate::CombatSkeleton>(defender.getCombatSkeleton()));
+		if (hitLocation >= static_cast<int>(skeletonAttackMod.attackMods.size()))
+			return;
+		const ConfigCombatEngineData::BodyAttackMod & hitLocationData = 
+			skeletonAttackMod.attackMods[static_cast<size_t>(hitLocation)];
+
+		DamageList damageList;
+		if (critter && !isVehicle)
+			CombatEngine::computeCreatureDamage(&hitLocationData, damageDone, damageList);
+		else
+			CombatEngine::computeObjectDamage(&hitLocationData, damageDone, damageList);
+
+		if (damageList.empty())
+			return;
+
+		CombatEngineData::DamageData damageData;
+		damageData.attackerId = attackerId;
+		damageData.weaponId = NetworkId::cms_invalid;
+		damageData.damageType = static_cast<CombatEngineData::DamageType>(static_cast<int>(damageType));
+		damageData.hitLocationIndex = hitLocation;
+		damageData.damage.insert(damageData.damage.end(), damageList.begin(), damageList.end());
+
+		if (critter != nullptr || !defender.isDisabled())
+		{
+			defender.applyDamage(damageData);
+		}
+	}
+	else
+	{
+		defender.sendControllerMessageToAuthServer(CM_directDamage, 
+			new MessageQueueDirectDamage(damageType, hitLocation, damageDone));
+	}
+}
+
+/**
  * Damages all objects within a given area.
  *
  * @param center			the center of the area to damage

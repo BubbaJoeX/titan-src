@@ -279,6 +279,8 @@ namespace ProjectileManagerNamespace
 			int const splashAmount = static_cast<int>(Random::randomReal(damageMin, damageMax) * s_splashDamageFraction);
 			if (splashAmount <= 0)
 				return;
+			CreatureObject const * const pilot = actorShip->getPilot();
+			NetworkId const & attackerId = pilot ? pilot->getNetworkId() : actorShip->getNetworkId();
 			std::vector<ServerObject *> targetList;
 			ServerWorld::findObjectsInRange(center_w, s_splashRadius, targetList);
 			for (std::vector<ServerObject *>::const_iterator it = targetList.begin(); it != targetList.end(); ++it)
@@ -290,7 +292,7 @@ namespace ProjectileManagerNamespace
 				if (!defender || defender->getKill())
 					continue;
 				if (defender->isAuthoritative())
-					CombatEngine::damage(*defender, ServerWeaponObjectTemplate::DT_kinetic, 0, splashAmount);
+					CombatEngine::damage(*defender, ServerWeaponObjectTemplate::DT_kinetic, 0, splashAmount, attackerId);
 			}
 		}
 
@@ -349,7 +351,9 @@ namespace ProjectileManagerNamespace
 						int const damageAmount = static_cast<int>(Random::randomReal(damageMin, damageMax));
 						if (damageAmount > 0)
 						{
-							CombatEngine::damage(*targetCreature, ServerWeaponObjectTemplate::DT_kinetic, 0, damageAmount);
+							CreatureObject const * const pilot = actorShip->getPilot();
+							NetworkId const & attackerId = pilot ? pilot->getNetworkId() : actorShip->getNetworkId();
+							CombatEngine::damage(*targetCreature, ServerWeaponObjectTemplate::DT_kinetic, 0, damageAmount, attackerId);
 						}
 					}
 					if(!targetShip) // For Non ship objects. Just trigger the event.
