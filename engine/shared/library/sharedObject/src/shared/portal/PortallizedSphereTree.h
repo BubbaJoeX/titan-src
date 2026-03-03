@@ -202,6 +202,8 @@ void PortallizedSphereTree<ObjectType, Accessor>::onObjectAddedInternal(ObjectTy
 	{
 		// object in the world cell
 		PobContentsTreeNodeHandle * const objectNodeHandle = static_cast<PobContentsTreeNodeHandle *>(m_worldCellContentsTree.addObject(object));
+		if (!objectNodeHandle)
+			return;
 		Accessor::setNodeHandle(object, objectNodeHandle);
 		objectNodeHandle->setStoredPob(0);
 	}
@@ -223,6 +225,8 @@ void PortallizedSphereTree<ObjectType, Accessor>::onObjectAddedInternal(ObjectTy
 
 		// Add the object to the contents tree for this pob
 		PobContentsTreeNodeHandle * const objectNodeHandle = static_cast<PobContentsTreeNodeHandle *>(pobContentsInfo->contents.addObject(object));
+		if (!objectNodeHandle)
+			return;
 		Accessor::setNodeHandle(object, objectNodeHandle);
 		objectNodeHandle->setStoredPob(pob);
 
