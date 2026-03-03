@@ -175,12 +175,13 @@ void PositionUpdateTracker::sendPositionUpdate(ServerObject &obj)
 		}
 	}
 
-	// Ships should be persisted in their ship control device if they have one
+	// Ships should be persisted in their ship control device if they have one,
+	// unless they are deployed in an atmospheric flight scene (persist in-world).
 	ShipObject const * const ship = obj.asShipObject();
 	if (ship)
 	{
 		ServerObject const * const shipControlDevice = ship->getControlDevice();
-		if (shipControlDevice)
+		if (shipControlDevice && !(ship->isInWorld() && ServerWorld::isAtmosphericFlightScene()))
 		{
 			containerNetworkIdForDatabase = shipControlDevice->getNetworkId();
 			objectArrangementForDatabase = -1;
@@ -188,9 +189,6 @@ void PositionUpdateTracker::sendPositionUpdate(ServerObject &obj)
 		}
 		else if (containerNetworkIdForDatabase == NetworkId::cms_invalid)
 		{
-			// Ship is in the world without a control device (e.g. atmospheric
-			// flight).  Treat it as self-loading so the DB check doesn't reject
-			// the position update or unload the object.
 			loadWithId = obj.getNetworkId();
 		}
 	}
