@@ -125,12 +125,14 @@ public:
 
 	// --- Follow Target (hover + follow another object, matching rotation) ---
 
-	void  setFollowTargetEffect(uint64 targetNetworkId, float followDistance, float followSpeed,
+	void   setFollowTargetEffect(uint64 targetNetworkId, float followDistance, float followSpeed,
 	                            float hoverHeight = 1.0f, float bobAmplitude = 0.05f, float duration = -1.0f);
-	void  clearFollowTargetEffect();
+	void   clearFollowTargetEffect();
 	uint64 getFollowTargetId() const;
 	float  getFollowDistance() const;
 	float  getFollowSpeed() const;
+	float  getFollowHoverHeight() const;
+	float  getFollowBobAmplitude() const;
 
 	// --- Easing ---
 

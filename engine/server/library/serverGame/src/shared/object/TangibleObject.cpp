@@ -1480,6 +1480,34 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 			td->setOrbitEffect(Vector(orbitCenterX, centerY, centerZ), radius, orbitSpeed, orbitDuration);
 	}
 
+	// --- Hover ---
+	float hoverHeight = 0.0f;
+	if (getObjVars().getItem("dynamics.hover.height", hoverHeight))
+	{
+		float bobAmplitude = 0.1f, bobSpeed = 1.0f, hoverDuration = -1.0f;
+		getObjVars().getItem("dynamics.hover.bobAmplitude", bobAmplitude);
+		getObjVars().getItem("dynamics.hover.bobSpeed", bobSpeed);
+		getObjVars().getItem("dynamics.hover.duration", hoverDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_hover))
+			td->setHoverEffect(hoverHeight, bobAmplitude, bobSpeed, hoverDuration);
+	}
+
+	// --- Follow Target ---
+	int64 followTargetId = 0;
+	if (getObjVars().getItem("dynamics.follow.targetId", followTargetId))
+	{
+		float followDistance = 2.0f, followSpeed = 3.0f, followHoverHeight = 1.0f, followBobAmplitude = 0.05f, followDuration = -1.0f;
+		getObjVars().getItem("dynamics.follow.distance", followDistance);
+		getObjVars().getItem("dynamics.follow.speed", followSpeed);
+		getObjVars().getItem("dynamics.follow.hoverHeight", followHoverHeight);
+		getObjVars().getItem("dynamics.follow.bobAmplitude", followBobAmplitude);
+		getObjVars().getItem("dynamics.follow.duration", followDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_followTarget))
+			td->setFollowTargetEffect(static_cast<uint64>(followTargetId), followDistance, followSpeed, followHoverHeight, followBobAmplitude, followDuration);
+	}
+
 	// --- Easing ---
 	int easeType = 0;
 	if (getObjVars().getItem("dynamics.easing.type", easeType))
@@ -1598,7 +1626,7 @@ void TangibleObject::sendTangibleDynamicsToClient()
 		snprintf(buf, sizeof(buf), "F:%llu,%.4f,%.4f,%.4f,%.4f,-1.0000",
 			static_cast<unsigned long long>(td->getFollowTargetId()),
 			td->getFollowDistance(), td->getFollowSpeed(),
-			td->getHoverHeight(), td->getHoverBobAmplitude());
+			td->getFollowHoverHeight(), td->getFollowBobAmplitude());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}

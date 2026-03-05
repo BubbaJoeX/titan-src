@@ -557,6 +557,8 @@ void TangibleDynamics::clearFollowTargetEffect()
 uint64 TangibleDynamics::getFollowTargetId() const  { return m_followTargetId; }
 float  TangibleDynamics::getFollowDistance() const  { return m_followDistance; }
 float  TangibleDynamics::getFollowSpeed() const     { return m_followSpeed; }
+float  TangibleDynamics::getFollowHoverHeight() const    { return m_followHoverHeight; }
+float  TangibleDynamics::getFollowBobAmplitude() const   { return m_followBobAmplitude; }
 
 //===================================================================
 // EASING
