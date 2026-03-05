@@ -393,6 +393,8 @@ void TangibleDynamics::clearBounceEffect()
 
 float TangibleDynamics::getBounceGravity() const     { return m_bounceGravity; }
 float TangibleDynamics::getBounceElasticity() const  { return m_bounceElasticity; }
+float TangibleDynamics::getBounceFloorY() const      { return m_bounceFloorY; }
+float TangibleDynamics::getBounceVerticalVelocity() const { return m_bounceVerticalVelocity; }
 
 //===================================================================
 // WOBBLE (sinusoidal position oscillation)
@@ -435,6 +437,8 @@ void TangibleDynamics::clearWobbleEffect()
 
 Vector TangibleDynamics::getWobbleAmplitude() const   { return m_wobbleAmplitude; }
 Vector TangibleDynamics::getWobbleFrequency() const   { return m_wobbleFrequency; }
+float  TangibleDynamics::getWobblePhase() const       { return m_wobblePhase; }
+Vector TangibleDynamics::getWobbleOrigin() const      { return m_wobbleOrigin; }
 
 //===================================================================
 // ORBIT (circular motion around point)
@@ -483,6 +487,7 @@ void TangibleDynamics::clearOrbitEffect()
 
 Vector TangibleDynamics::getOrbitCenter() const  { return m_orbitCenter; }
 float  TangibleDynamics::getOrbitRadius() const  { return m_orbitRadius; }
+float  TangibleDynamics::getOrbitAngle() const   { return m_orbitAngle; }
 
 //===================================================================
 // HOVER (terrain-following with bob)
@@ -720,8 +725,12 @@ void TangibleDynamics::updatePushForce(float elapsedTime)
 
 void TangibleDynamics::updateSpinForce(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual rotation is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearSpinForce();
+		return;
+	}
 
 	if (m_spinDuration >= 0.0f)
 	{
@@ -733,9 +742,26 @@ void TangibleDynamics::updateSpinForce(float elapsedTime)
 		}
 	}
 
-	// Note: Transform rotation is intentionally NOT applied server-side
-	// to prevent choppy updates. Client receives spin params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Server-side rotation update - keep rotation in sync with client
+	Transform ownerTransform = owner->getTransform_o2w();
+
+	// Apply yaw rotation (most common)
+	if (fabs(m_spinAngular.y) > 0.001f)
+	{
+		ownerTransform.yaw_l(m_spinAngular.y * elapsedTime);
+	}
+	// Apply pitch rotation
+	if (fabs(m_spinAngular.x) > 0.001f)
+	{
+		ownerTransform.pitch_l(m_spinAngular.x * elapsedTime);
+	}
+	// Apply roll rotation
+	if (fabs(m_spinAngular.z) > 0.001f)
+	{
+		ownerTransform.roll_l(m_spinAngular.z * elapsedTime);
+	}
+
+	owner->setTransform_o2w(ownerTransform);
 }
 
 //-------------------------------------------------------------------
@@ -767,8 +793,12 @@ void TangibleDynamics::updateBreathingEffect(float elapsedTime)
 
 void TangibleDynamics::updateBounceEffect(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual bounce physics is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearBounceEffect();
+		return;
+	}
 
 	if (m_bounceDuration >= 0.0f)
 	{
@@ -780,13 +810,19 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 		}
 	}
 
-	// Track velocity decay for auto-clear detection
+	// Apply gravity to velocity
 	m_bounceVerticalVelocity -= m_bounceGravity * elapsedTime;
 
-	// Simulate floor collision for timing (no actual position change)
-	if (m_bounceVerticalVelocity < -m_bounceGravity)
+	// Get current position
+	Vector pos = owner->getPosition_w();
+	pos.y += m_bounceVerticalVelocity * elapsedTime;
+
+	// Floor collision
+	if (pos.y <= m_bounceFloorY)
 	{
+		pos.y = m_bounceFloorY;
 		m_bounceVerticalVelocity = -m_bounceVerticalVelocity * m_bounceElasticity;
+
 		if (fabs(m_bounceVerticalVelocity) < s_bounceMinVelocity)
 		{
 			clearBounceEffect();
@@ -794,17 +830,20 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 		}
 	}
 
-	// Note: Position changes are intentionally NOT applied server-side
-	// to prevent choppy updates. Client receives bounce params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Set the position - this keeps the server in sync
+	owner->setPosition_w(pos);
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual position wobble is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearWobbleEffect();
+		return;
+	}
 
 	if (m_wobbleDuration >= 0.0f)
 	{
@@ -816,20 +855,30 @@ void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 		}
 	}
 
-	// Update phase for sync tracking
+	// Update phase
 	m_wobblePhase += elapsedTime;
 
-	// Note: Position changes are intentionally NOT applied server-side
-	// to prevent choppy updates. Client receives wobble params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Server-side position update - keep position in sync with client
+	float const ease = computeEaseFactor(m_easeType, m_wobbleElapsed, m_wobbleDuration, m_easeDuration);
+
+	float const ox = m_wobbleAmplitude.x * sin(m_wobbleFrequency.x * m_wobblePhase * PI_TIMES_2) * ease;
+	float const oy = m_wobbleAmplitude.y * sin(m_wobbleFrequency.y * m_wobblePhase * PI_TIMES_2) * ease;
+	float const oz = m_wobbleAmplitude.z * sin(m_wobbleFrequency.z * m_wobblePhase * PI_TIMES_2) * ease;
+
+	Vector const basePos = m_wobbleOrigin;
+	owner->setPosition_w(Vector(basePos.x + ox, basePos.y + oy, basePos.z + oz));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual orbit position is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearOrbitEffect();
+		return;
+	}
 
 	if (m_orbitDuration >= 0.0f)
 	{
@@ -841,21 +890,29 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 		}
 	}
 
-	// Update angle for sync tracking
+	// Update angle
 	float const ease = computeEaseFactor(m_easeType, m_orbitElapsed, m_orbitDuration, m_easeDuration);
 	m_orbitAngle += m_orbitSpeed * elapsedTime * ease;
 
-	// Note: Position changes are intentionally NOT applied server-side
-	// to prevent choppy updates. Client receives orbit params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Server-side position update - keep position in sync with client
+	// Calculate position on circular orbit around center
+	float const newX = m_orbitCenter.x + m_orbitRadius * cos(m_orbitAngle);
+	float const newZ = m_orbitCenter.z + m_orbitRadius * sin(m_orbitAngle);
+
+	// Set the position - Y stays at orbit center height
+	owner->setPosition_w(Vector(newX, m_orbitCenter.y, newZ));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateHoverEffect(float elapsedTime)
 {
-	// Server-side: Only track timing for duration expiration
-	// Client handles all visual updates for smooth rendering
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearHoverEffect();
+		return;
+	}
 
 	if (m_hoverDuration >= 0.0f)
 	{
@@ -867,16 +924,43 @@ void TangibleDynamics::updateHoverEffect(float elapsedTime)
 		}
 	}
 
-	// Update phase for sync (client uses this for bob calculation)
+	// Update phase for bob calculation
 	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
+
+	// Server-side position update - keep position in sync with client
+	Vector const ownerPos = owner->getPosition_w();
+
+	// Get terrain height at current position
+	float terrainHeight = ownerPos.y;
+	TerrainObject const * const terrain = TerrainObject::getConstInstance();
+	if (terrain)
+	{
+		Vector queryPos(ownerPos.x, 0.0f, ownerPos.z);
+		terrain->getHeight(queryPos, terrainHeight);
+	}
+
+	// Calculate hover position (no bob on server - let client do smooth visual bob)
+	float const desiredY = terrainHeight + m_hoverHeight;
+
+	// Smooth vertical interpolation
+	float const smoothFactor = 5.0f;
+	float const lerpFactor = 1.0f - exp(-smoothFactor * elapsedTime);
+	float const newY = ownerPos.y + (desiredY - ownerPos.y) * lerpFactor;
+
+	// Set the position - this keeps the server in sync
+	owner->setPosition_w(Vector(ownerPos.x, newY, ownerPos.z));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 {
-	// Server-side: Only track timing and validate target exists
-	// Client handles all visual updates for smooth rendering
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearFollowTargetEffect();
+		return;
+	}
 
 	// Duration check
 	if (m_followDuration >= 0.0f)
@@ -903,8 +987,59 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 		return;
 	}
 
-	// Update phase for sync (client uses this for bob calculation)
+	// Update phase for bob calculation
 	m_followBobPhase += elapsedTime * 1.0f;
+
+	// Server-side position calculation - keep position in sync with client
+	// This ensures getLocation() returns the correct position for Java scripts
+	Vector const targetPos = target->getPosition_w();
+	Vector const ownerPos = owner->getPosition_w();
+
+	// Get target's facing direction
+	Transform const & targetTransform = target->getTransform_o2w();
+	Vector const targetFacing = targetTransform.getLocalFrameK_p();
+
+	// Calculate desired position behind the target at follow distance
+	Vector desiredPos;
+	desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
+	desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
+
+	// Apply hover height (no bob on server - let client do the visual smoothing)
+	desiredPos.y = targetPos.y + m_followHoverHeight;
+
+	// Use smooth exponential interpolation matching client
+	float const positionSmoothFactor = 5.0f;
+	float const posLerpFactor = 1.0f - exp(-positionSmoothFactor * elapsedTime);
+
+	// Smooth position interpolation
+	Vector newPos;
+	newPos.x = ownerPos.x + (desiredPos.x - ownerPos.x) * posLerpFactor;
+	newPos.y = ownerPos.y + (desiredPos.y - ownerPos.y) * posLerpFactor;
+	newPos.z = ownerPos.z + (desiredPos.z - ownerPos.z) * posLerpFactor;
+
+	// Set the position - this keeps the server in sync
+	owner->setPosition_w(newPos);
+
+	// Update rotation to face same direction as target (simpler than client - no lerp needed server-side)
+	float const rotationSmoothFactor = 8.0f;
+	float const rotLerpFactor = 1.0f - exp(-rotationSmoothFactor * elapsedTime);
+
+	Transform ownerTransform = owner->getTransform_o2w();
+	Vector const currentFacing = ownerTransform.getLocalFrameK_p();
+
+	Vector newFacing;
+	newFacing.x = currentFacing.x + (targetFacing.x - currentFacing.x) * rotLerpFactor;
+	newFacing.y = 0.0f;
+	newFacing.z = currentFacing.z + (targetFacing.z - currentFacing.z) * rotLerpFactor;
+
+	float const facingMag = sqrt(newFacing.x * newFacing.x + newFacing.z * newFacing.z);
+	if (facingMag > 0.001f)
+	{
+		newFacing.x /= facingMag;
+		newFacing.z /= facingMag;
+		ownerTransform.setLocalFrameKJ_p(newFacing, Vector::unitY);
+		owner->setTransform_o2w(ownerTransform);
+	}
 }
 
 //===================================================================

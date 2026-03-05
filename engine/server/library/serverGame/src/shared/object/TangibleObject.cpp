@@ -67,6 +67,7 @@
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/DynamicVariable.h"
 #include "sharedFoundation/DynamicVariableList.h"
+#include "sharedFoundation/FloatMath.h"
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedFoundation/Os.h"
 #include "sharedGame/Command.h"
@@ -1928,6 +1929,176 @@ void TangibleObject::updateHockeyPuckPhysics(float elapsedTime)
 //-----------------------------------------------------------------------
 
 /**
+ * Updates position for dynamics effects that move the object (follow target, hover, orbit, wobble).
+ * This ensures the server's authoritative position stays in sync with the dynamics simulation.
+ * Called during alter() when the object has active dynamics that affect position.
+ *
+ * @param elapsedTime  Time since last alter
+ */
+void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
+{
+	// Only process if we have dynamics condition
+	if (!hasCondition(C_magicTangibleDynamic))
+		return;
+
+	TangibleDynamics * const td = dynamic_cast<TangibleDynamics *>(getDynamics());
+	if (!td)
+		return;
+
+	// --- Follow Target ---
+	if (td->isForceActive(TangibleDynamics::FM_followTarget))
+	{
+		uint64 const followTargetId = td->getFollowTargetId();
+		if (followTargetId != 0)
+		{
+			Object const * const target = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(followTargetId)));
+			if (target)
+			{
+				Vector const targetPos = target->getPosition_w();
+				Vector const ownerPos = getPosition_w();
+
+				// Get target's facing direction
+				Transform const & targetTransform = target->getTransform_o2w();
+				Vector const targetFacing = targetTransform.getLocalFrameK_p();
+
+				// Calculate desired position behind the target at follow distance
+				float const followDistance = td->getFollowDistance();
+				float const followSpeed = td->getFollowSpeed();
+				float const followHoverHeight = td->getFollowHoverHeight();
+
+				Vector desiredPos;
+				desiredPos.x = targetPos.x - targetFacing.x * followDistance;
+				desiredPos.z = targetPos.z - targetFacing.z * followDistance;
+
+				// Apply hover height
+				desiredPos.y = targetPos.y + followHoverHeight;
+
+				// Smooth exponential interpolation
+				float const positionSmoothFactor = 5.0f;
+				float const posLerpFactor = 1.0f - exp(-positionSmoothFactor * elapsedTime);
+
+				Vector newPos;
+				newPos.x = ownerPos.x + (desiredPos.x - ownerPos.x) * posLerpFactor;
+				newPos.y = ownerPos.y + (desiredPos.y - ownerPos.y) * posLerpFactor;
+				newPos.z = ownerPos.z + (desiredPos.z - ownerPos.z) * posLerpFactor;
+
+				// Set the server's authoritative position
+				setPosition_w(newPos);
+
+				// Update rotation to face same direction as target
+				float const rotationSmoothFactor = 8.0f;
+				float const rotLerpFactor = 1.0f - exp(-rotationSmoothFactor * elapsedTime);
+
+				Transform ownerTransform = getTransform_o2w();
+				Vector const currentFacing = ownerTransform.getLocalFrameK_p();
+
+				Vector newFacing;
+				newFacing.x = currentFacing.x + (targetFacing.x - currentFacing.x) * rotLerpFactor;
+				newFacing.y = 0.0f;
+				newFacing.z = currentFacing.z + (targetFacing.z - currentFacing.z) * rotLerpFactor;
+
+				float const facingMag = sqrt(newFacing.x * newFacing.x + newFacing.z * newFacing.z);
+				if (facingMag > 0.001f)
+				{
+					newFacing.x /= facingMag;
+					newFacing.z /= facingMag;
+					ownerTransform.setLocalFrameKJ_p(newFacing, Vector::unitY);
+					setTransform_o2w(ownerTransform);
+				}
+			}
+		}
+	}
+
+	// --- Hover ---
+	else if (td->isForceActive(TangibleDynamics::FM_hover))
+	{
+		Vector const ownerPos = getPosition_w();
+		float const hoverHeight = td->getHoverHeight();
+
+		// Get terrain height at current position
+		float terrainHeight = ownerPos.y;
+		TerrainObject const * const terrain = TerrainObject::getConstInstance();
+		if (terrain)
+		{
+			Vector queryPos(ownerPos.x, 0.0f, ownerPos.z);
+			terrain->getHeight(queryPos, terrainHeight);
+		}
+
+		// Calculate hover position
+		float const desiredY = terrainHeight + hoverHeight;
+
+		// Smooth vertical interpolation
+		float const smoothFactor = 5.0f;
+		float const lerpFactor = 1.0f - exp(-smoothFactor * elapsedTime);
+		float const newY = ownerPos.y + (desiredY - ownerPos.y) * lerpFactor;
+
+		// Set the server's authoritative position
+		setPosition_w(Vector(ownerPos.x, newY, ownerPos.z));
+	}
+
+	// --- Orbit ---
+	else if (td->isForceActive(TangibleDynamics::FM_orbit))
+	{
+		Vector const center = td->getOrbitCenter();
+		float const radius = td->getOrbitRadius();
+
+		// Get current orbit angle from dynamics - it updates this internally
+		// We need to calculate position from angle
+		// Note: The dynamics already increments the angle, so we query current state
+		float const angle = td->getOrbitAngle();
+
+		float const newX = center.x + radius * cos(angle);
+		float const newZ = center.z + radius * sin(angle);
+
+		// Set the server's authoritative position
+		setPosition_w(Vector(newX, center.y, newZ));
+	}
+
+	// --- Wobble ---
+	else if (td->isForceActive(TangibleDynamics::FM_wobble))
+	{
+		Vector const amplitude = td->getWobbleAmplitude();
+		Vector const frequency = td->getWobbleFrequency();
+		float const phase = td->getWobblePhase();
+
+		// Get wobble origin - stored when wobble was first applied
+		Vector const origin = td->getWobbleOrigin();
+
+		// Calculate wobble offsets
+		float const ox = amplitude.x * sin(frequency.x * phase * PI_TIMES_2);
+		float const oy = amplitude.y * sin(frequency.y * phase * PI_TIMES_2);
+		float const oz = amplitude.z * sin(frequency.z * phase * PI_TIMES_2);
+
+		// Set the server's authoritative position
+		setPosition_w(Vector(origin.x + ox, origin.y + oy, origin.z + oz));
+	}
+
+	// --- Bounce ---
+	else if (td->isForceActive(TangibleDynamics::FM_bounce))
+	{
+		// Bounce position is calculated in the dynamics, query current state
+		// The dynamics tracks vertical velocity and floor Y
+		Vector pos = getPosition_w();
+		float const floorY = td->getBounceFloorY();
+		float const verticalVelocity = td->getBounceVerticalVelocity();
+
+		// Apply velocity
+		pos.y += verticalVelocity * elapsedTime;
+
+		// Floor collision
+		if (pos.y <= floorY)
+		{
+			pos.y = floorY;
+		}
+
+		// Set the server's authoritative position
+		setPosition_w(pos);
+	}
+}
+
+//-----------------------------------------------------------------------
+
+/**
  * Gets all the equipped items corresponding to a combat skeleton "bone".
  *
  * @param combatBone		the bone we want equipment for
@@ -1998,6 +2169,7 @@ float TangibleObject::alter(real time)
 		updateTangibleDynamicsFromObjvars();
 		checkTangibleDynamicsCollision(time);
 		updateHockeyPuckPhysics(time);
+		updateTangibleDynamicsPosition(time);
 
 		// Determine the combat state of the object
 		{

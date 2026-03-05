@@ -100,6 +100,8 @@ public:
 	void  clearBounceEffect();
 	float getBounceGravity() const;
 	float getBounceElasticity() const;
+	float getBounceFloorY() const;
+	float getBounceVerticalVelocity() const;
 
 	// --- Wobble (sinusoidal position oscillation) ---
 
@@ -107,6 +109,8 @@ public:
 	void   clearWobbleEffect();
 	Vector getWobbleAmplitude() const;
 	Vector getWobbleFrequency() const;
+	float  getWobblePhase() const;
+	Vector getWobbleOrigin() const;
 
 	// --- Orbit (circular motion) ---
 
@@ -114,6 +118,7 @@ public:
 	void   clearOrbitEffect();
 	Vector getOrbitCenter() const;
 	float  getOrbitRadius() const;
+	float  getOrbitAngle() const;
 
 	// --- Hover (terrain-following with slight bob) ---
 
