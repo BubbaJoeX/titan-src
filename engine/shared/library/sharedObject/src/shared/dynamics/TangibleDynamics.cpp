@@ -854,14 +854,9 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 
 void TangibleDynamics::updateHoverEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearHoverEffect();
-		return;
-	}
+	// Server-side: Only track timing for duration expiration
+	// Client handles all visual updates for smooth rendering
 
-	// Duration check
 	if (m_hoverDuration >= 0.0f)
 	{
 		m_hoverElapsed += elapsedTime;
@@ -872,42 +867,16 @@ void TangibleDynamics::updateHoverEffect(float elapsedTime)
 		}
 	}
 
-	// Update bob phase
+	// Update phase for sync (client uses this for bob calculation)
 	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
-
-	// Server-side: Update position periodically (every ~0.25s) for authority
-	// Client handles smooth interpolation between server updates
-	m_hoverUpdateAccumulator += elapsedTime;
-
-	if (m_hoverUpdateAccumulator >= 0.25f)
-	{
-		m_hoverUpdateAccumulator = 0.0f;
-
-		Vector pos = owner->getPosition_w();
-		TerrainObject const * const terrain = TerrainObject::getConstInstance();
-		if (terrain)
-		{
-			float terrainHeight = pos.y;
-			if (terrain->getHeight(pos, terrainHeight))
-			{
-				float const bob = m_hoverBobAmplitude * sin(m_hoverBobPhase * PI * 2.0f);
-				pos.y = terrainHeight + m_hoverHeight + bob;
-				owner->setPosition_w(pos);
-			}
-		}
-	}
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearFollowTargetEffect();
-		return;
-	}
+	// Server-side: Only track timing and validate target exists
+	// Client handles all visual updates for smooth rendering
 
 	// Duration check
 	if (m_followDuration >= 0.0f)
@@ -934,52 +903,8 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 		return;
 	}
 
-	// Update bob phase
+	// Update phase for sync (client uses this for bob calculation)
 	m_followBobPhase += elapsedTime * 1.0f;
-
-	// Server-side: Update position periodically (every ~0.2s) for authority
-	// Client handles smooth interpolation between server updates
-	m_followUpdateAccumulator += elapsedTime;
-
-	if (m_followUpdateAccumulator >= 0.2f)
-	{
-		m_followUpdateAccumulator = 0.0f;
-
-		// Get positions
-		Vector const targetPos = target->getPosition_w();
-		Vector const ownerPos = owner->getPosition_w();
-
-		// Get target's facing direction
-		Transform const & targetTransform = target->getTransform_o2w();
-		Vector const targetFacing = targetTransform.getLocalFrameK_p();
-
-		// Calculate desired position behind the target at follow distance
-		Vector desiredPos;
-		desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
-		desiredPos.y = targetPos.y + m_followHoverHeight;
-		desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
-
-		// Add bob effect
-		float const bob = m_followBobAmplitude * sin(m_followBobPhase * PI * 2.0f);
-		desiredPos.y += bob;
-
-		// Move toward desired position (larger step since we update less often)
-		Vector delta = desiredPos - ownerPos;
-		float const deltaMagnitude = delta.magnitude();
-
-		if (deltaMagnitude > 0.1f)
-		{
-			// Move a percentage of the way there for smoother catch-up
-			float const catchupFactor = 0.5f;  // Move 50% of the way each update
-			Vector newPos = ownerPos + delta * catchupFactor;
-			owner->setPosition_w(newPos);
-		}
-
-		// Match rotation to face same direction as target
-		Transform ownerTransform = owner->getTransform_o2w();
-		ownerTransform.setLocalFrameKJ_p(targetFacing, Vector::unitY);
-		owner->setTransform_o2w(ownerTransform);
-	}
 }
 
 //===================================================================
