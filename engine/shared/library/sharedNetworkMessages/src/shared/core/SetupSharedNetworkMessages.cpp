@@ -273,6 +273,24 @@ namespace SetupSharedNetworkMessagesNamespace
 
 	//----------------------------------------------------------------------
 
+	void packGenericStringMessage(const MessageQueue::Data * data, Archive::ByteStream & target)
+	{
+		MessageQueueGenericValueType<std::string> const * const msg = safe_cast<MessageQueueGenericValueType<std::string> const *>(data);
+		if (msg)
+			Archive::put(target, msg->getValue());
+	}
+
+	//----------------------------------------------------------------------
+
+	MessageQueue::Data* unpackGenericStringMessage(Archive::ReadIterator & source)
+	{
+		std::string v;
+		Archive::get(source, v);
+		return new MessageQueueGenericValueType<std::string>(v);
+	}
+
+	//----------------------------------------------------------------------
+
 	void packNetworkIdMessage(const MessageQueue::Data * data, Archive::ByteStream & target)
 	{
 		const MessageQueueGenericValueType<NetworkId> * const msg = dynamic_cast<const MessageQueueGenericValueType<NetworkId> *>(data);
@@ -419,6 +437,9 @@ void SetupSharedNetworkMessages::install ()
 	ControllerMessageFactory::registerControllerMessageHandler(CM_ratingFinished, packInt, unpackInt, true);
 	ControllerMessageFactory::registerControllerMessageHandler(CM_abandonPlayerQuest, packNetworkIdMessage, unpackNetworkIdMessage, true);
 	ControllerMessageFactory::registerControllerMessageHandler(CM_openRecipe, packNetworkIdMessage, unpackNetworkIdMessage, true);
+
+	// TangibleDynamics: register handler for dynamics data messages (string payload)
+	ControllerMessageFactory::registerControllerMessageHandler(CM_tangibleDynamicsData, packGenericStringMessage, unpackGenericStringMessage);
 
 	g_installed = true;
 	ExitChain::add (SetupSharedNetworkMessages::remove, "SetupSharedNetworkMessages");
