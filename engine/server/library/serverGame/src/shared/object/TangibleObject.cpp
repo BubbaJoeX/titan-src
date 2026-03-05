@@ -1494,8 +1494,8 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 	}
 
 	// --- Follow Target ---
-	int64 followTargetId = 0;
-	if (getObjVars().getItem("dynamics.follow.targetId", followTargetId))
+	NetworkId followTargetNetworkId;
+	if (getObjVars().getItem("dynamics.follow.targetId", followTargetNetworkId))
 	{
 		float followDistance = 2.0f, followSpeed = 3.0f, followHoverHeight = 1.0f, followBobAmplitude = 0.05f, followDuration = -1.0f;
 		getObjVars().getItem("dynamics.follow.distance", followDistance);
@@ -1505,7 +1505,7 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 		getObjVars().getItem("dynamics.follow.duration", followDuration);
 
 		if (!td->isForceActive(TangibleDynamics::FM_followTarget))
-			td->setFollowTargetEffect(static_cast<uint64>(followTargetId), followDistance, followSpeed, followHoverHeight, followBobAmplitude, followDuration);
+			td->setFollowTargetEffect(static_cast<uint64>(followTargetNetworkId.getValue()), followDistance, followSpeed, followHoverHeight, followBobAmplitude, followDuration);
 	}
 
 	// --- Easing ---
