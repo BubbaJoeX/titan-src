@@ -15,6 +15,7 @@
 #include "sharedObject/Object.h"
 #include "sharedObject/AlterResult.h"
 #include "sharedObject/NetworkIdManager.h"
+#include "sharedFoundation/NetworkId.h"
 #include "sharedMath/Transform.h"
 
 #include <cmath>
@@ -889,7 +890,7 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 	// Validate target still exists
 	if (m_followTargetId != 0)
 	{
-		Object const * const target = NetworkIdManager::getObjectById(NetworkId(m_followTargetId));
+		Object const * const target = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(m_followTargetId)));
 		if (!target)
 		{
 			// Target no longer exists, clear the effect
