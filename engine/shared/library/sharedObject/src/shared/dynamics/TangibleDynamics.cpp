@@ -99,6 +99,7 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_hoverBobPhase(0.0f),
 	m_hoverDuration(-1.0f),
 	m_hoverElapsed(0.0f),
+	m_hoverUpdateAccumulator(0.0f),
 	m_hoverEffectActive(false),
 	// Follow Target
 	m_followTargetId(0),
@@ -109,6 +110,7 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_followBobPhase(0.0f),
 	m_followDuration(-1.0f),
 	m_followElapsed(0.0f),
+	m_followUpdateAccumulator(0.0f),
 	m_followTargetEffectActive(false),
 	// Easing
 	m_easeType(ET_none),
@@ -873,24 +875,23 @@ void TangibleDynamics::updateHoverEffect(float elapsedTime)
 	// Update bob phase
 	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
 
-	// Get current position
-	Vector pos = owner->getPosition_w();
+	// Server-side: Update position periodically (every ~0.25s) for authority
+	// Client handles smooth interpolation between server updates
+	m_hoverUpdateAccumulator += elapsedTime;
 
-	// Get terrain height at current XZ position
-	TerrainObject const * const terrain = TerrainObject::getConstInstance();
-	if (terrain)
+	if (m_hoverUpdateAccumulator >= 0.25f)
 	{
-		float terrainHeight = pos.y;
-		if (terrain->getHeight(pos, terrainHeight))
-		{
-			// Calculate target Y with hover height and bob
-			float const bob = m_hoverBobAmplitude * sin(m_hoverBobPhase * PI * 2.0f);
-			float const targetY = terrainHeight + m_hoverHeight + bob;
+		m_hoverUpdateAccumulator = 0.0f;
 
-			// Only update if position changed significantly
-			if (fabs(pos.y - targetY) > 0.01f)
+		Vector pos = owner->getPosition_w();
+		TerrainObject const * const terrain = TerrainObject::getConstInstance();
+		if (terrain)
+		{
+			float terrainHeight = pos.y;
+			if (terrain->getHeight(pos, terrainHeight))
 			{
-				pos.y = targetY;
+				float const bob = m_hoverBobAmplitude * sin(m_hoverBobPhase * PI * 2.0f);
+				pos.y = terrainHeight + m_hoverHeight + bob;
 				owner->setPosition_w(pos);
 			}
 		}
@@ -936,53 +937,49 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 	// Update bob phase
 	m_followBobPhase += elapsedTime * 1.0f;
 
-	// Get positions
-	Vector const targetPos = target->getPosition_w();
-	Vector const ownerPos = owner->getPosition_w();
+	// Server-side: Update position periodically (every ~0.2s) for authority
+	// Client handles smooth interpolation between server updates
+	m_followUpdateAccumulator += elapsedTime;
 
-	// Get target's facing direction
-	Transform const & targetTransform = target->getTransform_o2w();
-	Vector const targetFacing = targetTransform.getLocalFrameK_p();
-
-	// Calculate desired position behind the target at follow distance
-	Vector desiredPos;
-	desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
-	desiredPos.y = targetPos.y + m_followHoverHeight;  // Hover above target's Y
-	desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
-
-	// Add bob effect
-	float const bob = m_followBobAmplitude * sin(m_followBobPhase * PI * 2.0f);
-	desiredPos.y += bob;
-
-	// Calculate movement toward desired position
-	Vector delta = desiredPos - ownerPos;
-	float const deltaMagnitude = delta.magnitude();
-
-	if (deltaMagnitude > 0.05f)  // Only move if we're not already there
+	if (m_followUpdateAccumulator >= 0.2f)
 	{
-		float const moveDistance = m_followSpeed * elapsedTime;
-		Vector newPos;
+		m_followUpdateAccumulator = 0.0f;
 
-		if (deltaMagnitude <= moveDistance)
+		// Get positions
+		Vector const targetPos = target->getPosition_w();
+		Vector const ownerPos = owner->getPosition_w();
+
+		// Get target's facing direction
+		Transform const & targetTransform = target->getTransform_o2w();
+		Vector const targetFacing = targetTransform.getLocalFrameK_p();
+
+		// Calculate desired position behind the target at follow distance
+		Vector desiredPos;
+		desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
+		desiredPos.y = targetPos.y + m_followHoverHeight;
+		desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
+
+		// Add bob effect
+		float const bob = m_followBobAmplitude * sin(m_followBobPhase * PI * 2.0f);
+		desiredPos.y += bob;
+
+		// Move toward desired position (larger step since we update less often)
+		Vector delta = desiredPos - ownerPos;
+		float const deltaMagnitude = delta.magnitude();
+
+		if (deltaMagnitude > 0.1f)
 		{
-			// Close enough, snap to position
-			newPos = desiredPos;
-		}
-		else
-		{
-			// Move toward target at follow speed
-			delta *= (moveDistance / deltaMagnitude);
-			newPos = ownerPos + delta;
+			// Move a percentage of the way there for smoother catch-up
+			float const catchupFactor = 0.5f;  // Move 50% of the way each update
+			Vector newPos = ownerPos + delta * catchupFactor;
+			owner->setPosition_w(newPos);
 		}
 
-		// Update position
-		owner->setPosition_w(newPos);
+		// Match rotation to face same direction as target
+		Transform ownerTransform = owner->getTransform_o2w();
+		ownerTransform.setLocalFrameKJ_p(targetFacing, Vector::unitY);
+		owner->setTransform_o2w(ownerTransform);
 	}
-
-	// Match rotation to face same direction as target
-	Transform ownerTransform = owner->getTransform_o2w();
-	ownerTransform.setLocalFrameKJ_p(targetFacing, Vector::unitY);
-	owner->setTransform_o2w(ownerTransform);
 }
 
 //===================================================================

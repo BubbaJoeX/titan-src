@@ -227,6 +227,7 @@ private:
 	float  m_hoverBobPhase;
 	float  m_hoverDuration;
 	float  m_hoverElapsed;
+	float  m_hoverUpdateAccumulator;
 	bool   m_hoverEffectActive;
 
 	// --- Follow Target state ---
@@ -238,6 +239,7 @@ private:
 	float  m_followBobPhase;
 	float  m_followDuration;
 	float  m_followElapsed;
+	float  m_followUpdateAccumulator;
 	bool   m_followTargetEffectActive;
 
 	// --- Easing ---
