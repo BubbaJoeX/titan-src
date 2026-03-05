@@ -112,6 +112,42 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_followElapsed(0.0f),
 	m_followUpdateAccumulator(0.0f),
 	m_followTargetEffectActive(false),
+	// Sway
+	m_swayAngle(0.1f),
+	m_swaySpeed(1.0f),
+	m_swayDamping(0.0f),
+	m_swayPhase(0.0f),
+	m_swayCurrentAngle(0.0f),
+	m_swayDuration(-1.0f),
+	m_swayElapsed(0.0f),
+	m_swayEffectActive(false),
+	// Shake
+	m_shakeIntensity(0.1f),
+	m_shakeFrequency(10.0f),
+	m_shakeOrigin(Vector::zero),
+	m_shakeDuration(-1.0f),
+	m_shakeElapsed(0.0f),
+	m_shakePhase(0.0f),
+	m_shakeEffectActive(false),
+	// Float
+	m_floatHeight(0.5f),
+	m_floatDriftSpeed(0.5f),
+	m_floatRandomStrength(0.1f),
+	m_floatOrigin(Vector::zero),
+	m_floatDuration(-1.0f),
+	m_floatElapsed(0.0f),
+	m_floatPhase(0.0f),
+	m_floatRandomOffset(0.0f),
+	m_floatEffectActive(false),
+	// Conveyor
+	m_conveyorDirection(Vector::unitZ),
+	m_conveyorSpeed(1.0f),
+	m_conveyorWrapDistance(0.0f),
+	m_conveyorOrigin(Vector::zero),
+	m_conveyorTravelDistance(0.0f),
+	m_conveyorDuration(-1.0f),
+	m_conveyorElapsed(0.0f),
+	m_conveyorEffectActive(false),
 	// Easing
 	m_easeType(ET_none),
 	m_easeDuration(0.5f),
@@ -569,6 +605,190 @@ float  TangibleDynamics::getFollowHoverHeight() const    { return m_followHoverH
 float  TangibleDynamics::getFollowBobAmplitude() const   { return m_followBobAmplitude; }
 
 //===================================================================
+// SWAY/PENDULUM (swinging back and forth)
+//===================================================================
+
+void TangibleDynamics::setSwayEffect(float swingAngle, float swingSpeed, float damping, float duration)
+{
+	m_swayAngle = swingAngle;
+	m_swaySpeed = swingSpeed;
+	m_swayDamping = damping;
+	m_swayPhase = 0.0f;
+	m_swayCurrentAngle = 0.0f;
+	m_swayDuration = duration;
+	m_swayElapsed = 0.0f;
+	m_swayEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearSwayEffect()
+{
+	m_swayAngle = 0.1f;
+	m_swaySpeed = 1.0f;
+	m_swayDamping = 0.0f;
+	m_swayPhase = 0.0f;
+	m_swayCurrentAngle = 0.0f;
+	m_swayDuration = -1.0f;
+	m_swayElapsed = 0.0f;
+	m_swayEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+float TangibleDynamics::getSwayAngle() const    { return m_swayAngle; }
+float TangibleDynamics::getSwaySpeed() const    { return m_swaySpeed; }
+float TangibleDynamics::getSwayDamping() const  { return m_swayDamping; }
+float TangibleDynamics::getSwayPhase() const    { return m_swayPhase; }
+
+//===================================================================
+// SHAKE/VIBRATE (rapid small position offsets)
+//===================================================================
+
+void TangibleDynamics::setShakeEffect(float intensity, float frequency, float duration)
+{
+	Object* const owner = getOwner();
+
+	m_shakeIntensity = intensity;
+	m_shakeFrequency = frequency;
+	m_shakeOrigin = owner ? owner->getPosition_w() : Vector::zero;
+	m_shakeDuration = duration;
+	m_shakeElapsed = 0.0f;
+	m_shakePhase = 0.0f;
+	m_shakeEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearShakeEffect()
+{
+	Object* const owner = getOwner();
+	if (owner != NULL && m_shakeEffectActive)
+	{
+		owner->setPosition_w(m_shakeOrigin);
+	}
+
+	m_shakeIntensity = 0.1f;
+	m_shakeFrequency = 10.0f;
+	m_shakeOrigin = Vector::zero;
+	m_shakeDuration = -1.0f;
+	m_shakeElapsed = 0.0f;
+	m_shakePhase = 0.0f;
+	m_shakeEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+float  TangibleDynamics::getShakeIntensity() const  { return m_shakeIntensity; }
+float  TangibleDynamics::getShakeFrequency() const  { return m_shakeFrequency; }
+Vector TangibleDynamics::getShakeOrigin() const     { return m_shakeOrigin; }
+
+//===================================================================
+// FLOAT/LEVITATE (slow drift up and down with randomness)
+//===================================================================
+
+void TangibleDynamics::setFloatEffect(float floatHeight, float driftSpeed, float randomStrength, float duration)
+{
+	Object* const owner = getOwner();
+
+	m_floatHeight = floatHeight;
+	m_floatDriftSpeed = driftSpeed;
+	m_floatRandomStrength = randomStrength;
+	m_floatOrigin = owner ? owner->getPosition_w() : Vector::zero;
+	m_floatDuration = duration;
+	m_floatElapsed = 0.0f;
+	m_floatPhase = 0.0f;
+	m_floatRandomOffset = 0.0f;
+	m_floatEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearFloatEffect()
+{
+	Object* const owner = getOwner();
+	if (owner != NULL && m_floatEffectActive)
+	{
+		owner->setPosition_w(m_floatOrigin);
+	}
+
+	m_floatHeight = 0.5f;
+	m_floatDriftSpeed = 0.5f;
+	m_floatRandomStrength = 0.1f;
+	m_floatOrigin = Vector::zero;
+	m_floatDuration = -1.0f;
+	m_floatElapsed = 0.0f;
+	m_floatPhase = 0.0f;
+	m_floatRandomOffset = 0.0f;
+	m_floatEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+float  TangibleDynamics::getFloatHeight() const          { return m_floatHeight; }
+float  TangibleDynamics::getFloatDriftSpeed() const      { return m_floatDriftSpeed; }
+float  TangibleDynamics::getFloatRandomStrength() const  { return m_floatRandomStrength; }
+Vector TangibleDynamics::getFloatOrigin() const          { return m_floatOrigin; }
+
+//===================================================================
+// CONVEYOR (continuous linear movement with optional wrap)
+//===================================================================
+
+void TangibleDynamics::setConveyorEffect(const Vector& direction, float speed, float wrapDistance, float duration)
+{
+	Object* const owner = getOwner();
+
+	// Normalize direction
+	Vector normalizedDir = direction;
+	if (normalizedDir.normalize())
+	{
+		m_conveyorDirection = normalizedDir;
+	}
+	else
+	{
+		m_conveyorDirection = Vector::unitZ;
+	}
+
+	m_conveyorSpeed = speed;
+	m_conveyorWrapDistance = wrapDistance;
+	m_conveyorOrigin = owner ? owner->getPosition_w() : Vector::zero;
+	m_conveyorTravelDistance = 0.0f;
+	m_conveyorDuration = duration;
+	m_conveyorElapsed = 0.0f;
+	m_conveyorEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearConveyorEffect()
+{
+	m_conveyorDirection = Vector::unitZ;
+	m_conveyorSpeed = 1.0f;
+	m_conveyorWrapDistance = 0.0f;
+	m_conveyorOrigin = Vector::zero;
+	m_conveyorTravelDistance = 0.0f;
+	m_conveyorDuration = -1.0f;
+	m_conveyorElapsed = 0.0f;
+	m_conveyorEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+Vector TangibleDynamics::getConveyorDirection() const     { return m_conveyorDirection; }
+float  TangibleDynamics::getConveyorSpeed() const         { return m_conveyorSpeed; }
+float  TangibleDynamics::getConveyorWrapDistance() const  { return m_conveyorWrapDistance; }
+Vector TangibleDynamics::getConveyorOrigin() const        { return m_conveyorOrigin; }
+float  TangibleDynamics::getConveyorTravelDistance() const { return m_conveyorTravelDistance; }
+
+//===================================================================
 // EASING
 //===================================================================
 
@@ -602,6 +822,10 @@ void TangibleDynamics::clearAllForces()
 	clearOrbitEffect();
 	clearHoverEffect();
 	clearFollowTargetEffect();
+	clearSwayEffect();
+	clearShakeEffect();
+	clearFloatEffect();
+	clearConveyorEffect();
 }
 
 //===================================================================
@@ -674,6 +898,18 @@ void TangibleDynamics::realAlter(float elapsedTime)
 
 	if (m_followTargetEffectActive)
 		updateFollowTargetEffect(elapsedTime);
+
+	if (m_swayEffectActive)
+		updateSwayEffect(elapsedTime);
+
+	if (m_shakeEffectActive)
+		updateShakeEffect(elapsedTime);
+
+	if (m_floatEffectActive)
+		updateFloatEffect(elapsedTime);
+
+	if (m_conveyorEffectActive)
+		updateConveyorEffect(elapsedTime);
 }
 
 //===================================================================
@@ -725,12 +961,10 @@ void TangibleDynamics::updatePushForce(float elapsedTime)
 
 void TangibleDynamics::updateSpinForce(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearSpinForce();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Note: We DON'T call setTransform_o2w here
+	// Client handles smooth visual rotation at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
 
 	if (m_spinDuration >= 0.0f)
 	{
@@ -741,27 +975,6 @@ void TangibleDynamics::updateSpinForce(float elapsedTime)
 			return;
 		}
 	}
-
-	// Server-side rotation update - keep rotation in sync with client
-	Transform ownerTransform = owner->getTransform_o2w();
-
-	// Apply yaw rotation (most common)
-	if (fabs(m_spinAngular.y) > 0.001f)
-	{
-		ownerTransform.yaw_l(m_spinAngular.y * elapsedTime);
-	}
-	// Apply pitch rotation
-	if (fabs(m_spinAngular.x) > 0.001f)
-	{
-		ownerTransform.pitch_l(m_spinAngular.x * elapsedTime);
-	}
-	// Apply roll rotation
-	if (fabs(m_spinAngular.z) > 0.001f)
-	{
-		ownerTransform.roll_l(m_spinAngular.z * elapsedTime);
-	}
-
-	owner->setTransform_o2w(ownerTransform);
 }
 
 //-------------------------------------------------------------------
@@ -793,13 +1006,6 @@ void TangibleDynamics::updateBreathingEffect(float elapsedTime)
 
 void TangibleDynamics::updateBounceEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearBounceEffect();
-		return;
-	}
-
 	if (m_bounceDuration >= 0.0f)
 	{
 		m_bounceElapsed += elapsedTime;
@@ -810,17 +1016,16 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 		}
 	}
 
-	// Apply gravity to velocity
+	// Apply gravity to velocity (track state for server sync)
 	m_bounceVerticalVelocity -= m_bounceGravity * elapsedTime;
 
-	// Get current position
-	Vector pos = owner->getPosition_w();
-	pos.y += m_bounceVerticalVelocity * elapsedTime;
-
-	// Floor collision
-	if (pos.y <= m_bounceFloorY)
+	// Simulate floor collision for state tracking
+	// Note: We track the physics state but DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
+	if (m_bounceVerticalVelocity < -m_bounceGravity * 2.0f)
 	{
-		pos.y = m_bounceFloorY;
+		// Approximate floor hit - reverse velocity with elasticity
 		m_bounceVerticalVelocity = -m_bounceVerticalVelocity * m_bounceElasticity;
 
 		if (fabs(m_bounceVerticalVelocity) < s_bounceMinVelocity)
@@ -829,22 +1034,12 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 			return;
 		}
 	}
-
-	// Set the position - this keeps the server in sync
-	owner->setPosition_w(pos);
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearWobbleEffect();
-		return;
-	}
-
 	if (m_wobbleDuration >= 0.0f)
 	{
 		m_wobbleElapsed += elapsedTime;
@@ -855,31 +1050,17 @@ void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 		}
 	}
 
-	// Update phase
+	// Update phase for state tracking
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
 	m_wobblePhase += elapsedTime;
-
-	// Server-side position update - keep position in sync with client
-	float const ease = computeEaseFactor(m_easeType, m_wobbleElapsed, m_wobbleDuration, m_easeDuration);
-
-	float const ox = m_wobbleAmplitude.x * sin(m_wobbleFrequency.x * m_wobblePhase * PI_TIMES_2) * ease;
-	float const oy = m_wobbleAmplitude.y * sin(m_wobbleFrequency.y * m_wobblePhase * PI_TIMES_2) * ease;
-	float const oz = m_wobbleAmplitude.z * sin(m_wobbleFrequency.z * m_wobblePhase * PI_TIMES_2) * ease;
-
-	Vector const basePos = m_wobbleOrigin;
-	owner->setPosition_w(Vector(basePos.x + ox, basePos.y + oy, basePos.z + oz));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearOrbitEffect();
-		return;
-	}
-
 	if (m_orbitDuration >= 0.0f)
 	{
 		m_orbitElapsed += elapsedTime;
@@ -890,30 +1071,18 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 		}
 	}
 
-	// Update angle
+	// Update angle for state tracking
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
 	float const ease = computeEaseFactor(m_easeType, m_orbitElapsed, m_orbitDuration, m_easeDuration);
 	m_orbitAngle += m_orbitSpeed * elapsedTime * ease;
-
-	// Server-side position update - keep position in sync with client
-	// Calculate position on circular orbit around center
-	float const newX = m_orbitCenter.x + m_orbitRadius * cos(m_orbitAngle);
-	float const newZ = m_orbitCenter.z + m_orbitRadius * sin(m_orbitAngle);
-
-	// Set the position - Y stays at orbit center height
-	owner->setPosition_w(Vector(newX, m_orbitCenter.y, newZ));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateHoverEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearHoverEffect();
-		return;
-	}
-
 	if (m_hoverDuration >= 0.0f)
 	{
 		m_hoverElapsed += elapsedTime;
@@ -924,44 +1093,17 @@ void TangibleDynamics::updateHoverEffect(float elapsedTime)
 		}
 	}
 
-	// Update phase for bob calculation
+	// Update phase for bob calculation (state tracking only)
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
 	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
-
-	// Server-side position update - keep position in sync with client
-	Vector const ownerPos = owner->getPosition_w();
-
-	// Get terrain height at current position
-	float terrainHeight = ownerPos.y;
-	TerrainObject const * const terrain = TerrainObject::getConstInstance();
-	if (terrain)
-	{
-		Vector queryPos(ownerPos.x, 0.0f, ownerPos.z);
-		terrain->getHeight(queryPos, terrainHeight);
-	}
-
-	// Calculate hover position (no bob on server - let client do smooth visual bob)
-	float const desiredY = terrainHeight + m_hoverHeight;
-
-	// Smooth vertical interpolation
-	float const smoothFactor = 5.0f;
-	float const lerpFactor = 1.0f - exp(-smoothFactor * elapsedTime);
-	float const newY = ownerPos.y + (desiredY - ownerPos.y) * lerpFactor;
-
-	// Set the position - this keeps the server in sync
-	owner->setPosition_w(Vector(ownerPos.x, newY, ownerPos.z));
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearFollowTargetEffect();
-		return;
-	}
-
 	// Duration check
 	if (m_followDuration >= 0.0f)
 	{
@@ -987,58 +1129,118 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 		return;
 	}
 
-	// Update phase for bob calculation
+	// Update phase for bob calculation (state tracking only)
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
 	m_followBobPhase += elapsedTime * 1.0f;
+}
 
-	// Server-side position calculation - keep position in sync with client
-	// This ensures getLocation() returns the correct position for Java scripts
-	Vector const targetPos = target->getPosition_w();
-	Vector const ownerPos = owner->getPosition_w();
+//-------------------------------------------------------------------
 
-	// Get target's facing direction
-	Transform const & targetTransform = target->getTransform_o2w();
-	Vector const targetFacing = targetTransform.getLocalFrameK_p();
-
-	// Calculate desired position behind the target at follow distance
-	Vector desiredPos;
-	desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
-	desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
-
-	// Apply hover height (no bob on server - let client do the visual smoothing)
-	desiredPos.y = targetPos.y + m_followHoverHeight;
-
-	// Use smooth exponential interpolation matching client
-	float const positionSmoothFactor = 5.0f;
-	float const posLerpFactor = 1.0f - exp(-positionSmoothFactor * elapsedTime);
-
-	// Smooth position interpolation
-	Vector newPos;
-	newPos.x = ownerPos.x + (desiredPos.x - ownerPos.x) * posLerpFactor;
-	newPos.y = ownerPos.y + (desiredPos.y - ownerPos.y) * posLerpFactor;
-	newPos.z = ownerPos.z + (desiredPos.z - ownerPos.z) * posLerpFactor;
-
-	// Set the position - this keeps the server in sync
-	owner->setPosition_w(newPos);
-
-	// Update rotation to face same direction as target (simpler than client - no lerp needed server-side)
-	float const rotationSmoothFactor = 8.0f;
-	float const rotLerpFactor = 1.0f - exp(-rotationSmoothFactor * elapsedTime);
-
-	Transform ownerTransform = owner->getTransform_o2w();
-	Vector const currentFacing = ownerTransform.getLocalFrameK_p();
-
-	Vector newFacing;
-	newFacing.x = currentFacing.x + (targetFacing.x - currentFacing.x) * rotLerpFactor;
-	newFacing.y = 0.0f;
-	newFacing.z = currentFacing.z + (targetFacing.z - currentFacing.z) * rotLerpFactor;
-
-	float const facingMag = sqrt(newFacing.x * newFacing.x + newFacing.z * newFacing.z);
-	if (facingMag > 0.001f)
+void TangibleDynamics::updateSwayEffect(float elapsedTime)
+{
+	if (m_swayDuration >= 0.0f)
 	{
-		newFacing.x /= facingMag;
-		newFacing.z /= facingMag;
-		ownerTransform.setLocalFrameKJ_p(newFacing, Vector::unitY);
-		owner->setTransform_o2w(ownerTransform);
+		m_swayElapsed += elapsedTime;
+		if (m_swayElapsed >= m_swayDuration)
+		{
+			clearSwayEffect();
+			return;
+		}
+	}
+
+	// Update phase for pendulum motion (state tracking only)
+	// Note: We DON'T call setTransform here
+	// Client handles smooth visual updates at frame rate
+	m_swayPhase += elapsedTime * m_swaySpeed;
+
+	// Apply damping if set
+	if (m_swayDamping > 0.0f)
+	{
+		float dampingFactor = exp(-m_swayDamping * m_swayElapsed);
+		m_swayCurrentAngle = m_swayAngle * dampingFactor;
+	}
+	else
+	{
+		m_swayCurrentAngle = m_swayAngle;
+	}
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateShakeEffect(float elapsedTime)
+{
+	if (m_shakeDuration >= 0.0f)
+	{
+		m_shakeElapsed += elapsedTime;
+		if (m_shakeElapsed >= m_shakeDuration)
+		{
+			clearShakeEffect();
+			return;
+		}
+	}
+
+	// Update phase for shake calculation (state tracking only)
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	m_shakePhase += elapsedTime * m_shakeFrequency;
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateFloatEffect(float elapsedTime)
+{
+	if (m_floatDuration >= 0.0f)
+	{
+		m_floatElapsed += elapsedTime;
+		if (m_floatElapsed >= m_floatDuration)
+		{
+			clearFloatEffect();
+			return;
+		}
+	}
+
+	// Update phase for float calculation (state tracking only)
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	m_floatPhase += elapsedTime * m_floatDriftSpeed;
+
+	// Update random offset periodically for organic feel
+	// This creates subtle horizontal drift
+	if (m_floatRandomStrength > 0.0f)
+	{
+		// Simple pseudo-random based on phase
+		m_floatRandomOffset = sin(m_floatPhase * 3.7f) * m_floatRandomStrength;
+	}
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateConveyorEffect(float elapsedTime)
+{
+	if (m_conveyorDuration >= 0.0f)
+	{
+		m_conveyorElapsed += elapsedTime;
+		if (m_conveyorElapsed >= m_conveyorDuration)
+		{
+			clearConveyorEffect();
+			return;
+		}
+	}
+
+	// Update travel distance (state tracking only)
+	// Note: We DON'T call setPosition_w here
+	// Client handles smooth visual updates at frame rate
+	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
+	float const distanceDelta = m_conveyorSpeed * elapsedTime;
+	m_conveyorTravelDistance += distanceDelta;
+
+	// Handle wrap-around if wrapDistance is set
+	if (m_conveyorWrapDistance > 0.0f && m_conveyorTravelDistance >= m_conveyorWrapDistance)
+	{
+		// Reset travel distance (wraps back to origin)
+		m_conveyorTravelDistance = fmod(m_conveyorTravelDistance, m_conveyorWrapDistance);
 	}
 }
 
@@ -1058,6 +1260,10 @@ void TangibleDynamics::recalculateMode()
 	if (m_orbitEffectActive)       m_activeForceMask |= FM_orbit;
 	if (m_hoverEffectActive)       m_activeForceMask |= FM_hover;
 	if (m_followTargetEffectActive) m_activeForceMask |= FM_followTarget;
+	if (m_swayEffectActive)        m_activeForceMask |= FM_sway;
+	if (m_shakeEffectActive)       m_activeForceMask |= FM_shake;
+	if (m_floatEffectActive)       m_activeForceMask |= FM_float;
+	if (m_conveyorEffectActive)    m_activeForceMask |= FM_conveyor;
 }
 
 //===================================================================

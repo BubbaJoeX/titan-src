@@ -43,7 +43,11 @@ public:
 		FM_wobble       = (1 << 4),
 		FM_orbit        = (1 << 5),
 		FM_hover        = (1 << 6),
-		FM_followTarget = (1 << 7)
+		FM_followTarget = (1 << 7),
+		FM_sway         = (1 << 8),
+		FM_shake        = (1 << 9),
+		FM_float        = (1 << 10),
+		FM_conveyor     = (1 << 11)
 	};
 
 	enum MovementSpace
@@ -138,6 +142,42 @@ public:
 	float  getFollowSpeed() const;
 	float  getFollowHoverHeight() const;
 	float  getFollowBobAmplitude() const;
+
+	// --- Sway/Pendulum (swinging back and forth like a hanging sign) ---
+
+	void   setSwayEffect(float swingAngle, float swingSpeed, float damping = 0.0f, float duration = -1.0f);
+	void   clearSwayEffect();
+	float  getSwayAngle() const;
+	float  getSwaySpeed() const;
+	float  getSwayDamping() const;
+	float  getSwayPhase() const;
+
+	// --- Shake/Vibrate (rapid small position offsets for emphasis) ---
+
+	void   setShakeEffect(float intensity, float frequency, float duration = -1.0f);
+	void   clearShakeEffect();
+	float  getShakeIntensity() const;
+	float  getShakeFrequency() const;
+	Vector getShakeOrigin() const;
+
+	// --- Float/Levitate (slow drift up and down with slight random movement) ---
+
+	void   setFloatEffect(float floatHeight, float driftSpeed, float randomStrength = 0.1f, float duration = -1.0f);
+	void   clearFloatEffect();
+	float  getFloatHeight() const;
+	float  getFloatDriftSpeed() const;
+	float  getFloatRandomStrength() const;
+	Vector getFloatOrigin() const;
+
+	// --- Conveyor (continuous linear movement with optional wrap) ---
+
+	void   setConveyorEffect(const Vector& direction, float speed, float wrapDistance = 0.0f, float duration = -1.0f);
+	void   clearConveyorEffect();
+	Vector getConveyorDirection() const;
+	float  getConveyorSpeed() const;
+	float  getConveyorWrapDistance() const;
+	Vector getConveyorOrigin() const;
+	float  getConveyorTravelDistance() const;
 
 	// --- Easing ---
 
@@ -247,6 +287,46 @@ private:
 	float  m_followUpdateAccumulator;
 	bool   m_followTargetEffectActive;
 
+	// --- Sway state ---
+	float  m_swayAngle;
+	float  m_swaySpeed;
+	float  m_swayDamping;
+	float  m_swayPhase;
+	float  m_swayCurrentAngle;
+	float  m_swayDuration;
+	float  m_swayElapsed;
+	bool   m_swayEffectActive;
+
+	// --- Shake state ---
+	float  m_shakeIntensity;
+	float  m_shakeFrequency;
+	Vector m_shakeOrigin;
+	float  m_shakeDuration;
+	float  m_shakeElapsed;
+	float  m_shakePhase;
+	bool   m_shakeEffectActive;
+
+	// --- Float state ---
+	float  m_floatHeight;
+	float  m_floatDriftSpeed;
+	float  m_floatRandomStrength;
+	Vector m_floatOrigin;
+	float  m_floatDuration;
+	float  m_floatElapsed;
+	float  m_floatPhase;
+	float  m_floatRandomOffset;
+	bool   m_floatEffectActive;
+
+	// --- Conveyor state ---
+	Vector m_conveyorDirection;
+	float  m_conveyorSpeed;
+	float  m_conveyorWrapDistance;
+	Vector m_conveyorOrigin;
+	float  m_conveyorTravelDistance;
+	float  m_conveyorDuration;
+	float  m_conveyorElapsed;
+	bool   m_conveyorEffectActive;
+
 	// --- Easing ---
 	EaseType m_easeType;
 	float    m_easeDuration;
@@ -263,6 +343,10 @@ private:
 	void updateOrbitEffect(float elapsedTime);
 	void updateHoverEffect(float elapsedTime);
 	void updateFollowTargetEffect(float elapsedTime);
+	void updateSwayEffect(float elapsedTime);
+	void updateShakeEffect(float elapsedTime);
+	void updateFloatEffect(float elapsedTime);
+	void updateConveyorEffect(float elapsedTime);
 	void recalculateMode();
 };
 

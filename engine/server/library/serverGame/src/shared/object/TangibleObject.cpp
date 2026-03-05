@@ -2094,6 +2094,23 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 		// Set the server's authoritative position
 		setPosition_w(pos);
 	}
+
+	// --- Conveyor ---
+	else if (td->isForceActive(TangibleDynamics::FM_conveyor))
+	{
+		Vector const origin = td->getConveyorOrigin();
+		Vector const direction = td->getConveyorDirection();
+		float const travelDistance = td->getConveyorTravelDistance();
+
+		// Calculate position along conveyor path
+		Vector newPos;
+		newPos.x = origin.x + direction.x * travelDistance;
+		newPos.y = origin.y + direction.y * travelDistance;
+		newPos.z = origin.z + direction.z * travelDistance;
+
+		// Set the server's authoritative position
+		setPosition_w(newPos);
+	}
 }
 
 //-----------------------------------------------------------------------
