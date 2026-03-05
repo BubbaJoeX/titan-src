@@ -2191,12 +2191,74 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 		Vector const origin = td->getConveyorOrigin();
 		Vector const direction = td->getConveyorDirection();
 		float const travelDistance = td->getConveyorTravelDistance();
+		float const wrapDistance = td->getConveyorWrapDistance();
 
-		// Calculate position along conveyor path
-		Vector newPos;
-		newPos.x = origin.x + direction.x * travelDistance;
-		newPos.y = origin.y + direction.y * travelDistance;
-		newPos.z = origin.z + direction.z * travelDistance;
+		Vector newPos = origin;
+
+		if (wrapDistance > 0.0f)
+		{
+			// Belt geometry: forward on top, curves down, back underneath, curves up
+			float const curveRadius = 0.5f;
+			float const curveLength = PI * curveRadius;
+			float const topLength = wrapDistance;
+			float const bottomLength = wrapDistance;
+			float const totalCycleLength = topLength + curveLength + bottomLength + curveLength;
+
+			float const cyclePos = fmod(travelDistance, totalCycleLength);
+
+			if (cyclePos < topLength)
+			{
+				// Phase 1: Moving forward on top surface
+				float const t = cyclePos;
+				newPos.x += direction.x * t;
+				newPos.y += direction.y * t;
+				newPos.z += direction.z * t;
+			}
+			else if (cyclePos < topLength + curveLength)
+			{
+				// Phase 2: Curving down at far end
+				float const curveT = cyclePos - topLength;
+				float const angle = (curveT / curveLength) * PI;
+
+				newPos.x += direction.x * topLength;
+				newPos.y += direction.y * topLength;
+				newPos.z += direction.z * topLength;
+
+				newPos.y -= curveRadius * (1.0f - cos(angle));
+				float const forwardOffset = curveRadius * sin(angle);
+				newPos.x += direction.x * forwardOffset;
+				newPos.z += direction.z * forwardOffset;
+			}
+			else if (cyclePos < topLength + curveLength + bottomLength)
+			{
+				// Phase 3: Moving backward underneath
+				float const t = cyclePos - topLength - curveLength;
+				float const backwardT = bottomLength - t;
+
+				newPos.x += direction.x * backwardT;
+				newPos.y += direction.y * backwardT;
+				newPos.z += direction.z * backwardT;
+				newPos.y -= curveRadius * 2.0f;
+			}
+			else
+			{
+				// Phase 4: Curving up at origin
+				float const curveT = cyclePos - topLength - curveLength - bottomLength;
+				float const angle = (curveT / curveLength) * PI;
+
+				newPos.y -= curveRadius * (1.0f + cos(angle));
+				float const backwardOffset = curveRadius * sin(angle);
+				newPos.x -= direction.x * backwardOffset;
+				newPos.z -= direction.z * backwardOffset;
+			}
+		}
+		else
+		{
+			// No wrap - just move in direction forever
+			newPos.x += direction.x * travelDistance;
+			newPos.y += direction.y * travelDistance;
+			newPos.z += direction.z * travelDistance;
+		}
 
 		// Set the server's authoritative position
 		setPosition_w(newPos);
