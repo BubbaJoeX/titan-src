@@ -17,6 +17,7 @@
 #include "sharedObject/NetworkIdManager.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedMath/Transform.h"
+#include "sharedTerrain/TerrainObject.h"
 
 #include <cmath>
 
@@ -851,9 +852,14 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 
 void TangibleDynamics::updateHoverEffect(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual hover + bob is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearHoverEffect();
+		return;
+	}
 
+	// Duration check
 	if (m_hoverDuration >= 0.0f)
 	{
 		m_hoverElapsed += elapsedTime;
@@ -864,21 +870,45 @@ void TangibleDynamics::updateHoverEffect(float elapsedTime)
 		}
 	}
 
-	// Update bob phase for sync tracking
+	// Update bob phase
 	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
 
-	// Note: Terrain following and bob are handled client-side
-	// to prevent choppy updates. Client receives hover params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Get current position
+	Vector pos = owner->getPosition_w();
+
+	// Get terrain height at current XZ position
+	TerrainObject const * const terrain = TerrainObject::getConstInstance();
+	if (terrain)
+	{
+		float terrainHeight = pos.y;
+		if (terrain->getHeight(pos, terrainHeight))
+		{
+			// Calculate target Y with hover height and bob
+			float const bob = m_hoverBobAmplitude * sin(m_hoverBobPhase * PI * 2.0f);
+			float const targetY = terrainHeight + m_hoverHeight + bob;
+
+			// Only update if position changed significantly
+			if (fabs(pos.y - targetY) > 0.01f)
+			{
+				pos.y = targetY;
+				owner->setPosition_w(pos);
+			}
+		}
+	}
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 {
-	// Server-side: only track timing for duration expiration
-	// Actual follow + rotation matching is handled client-side for smooth visuals
+	Object* const owner = getOwner();
+	if (owner == NULL)
+	{
+		clearFollowTargetEffect();
+		return;
+	}
 
+	// Duration check
 	if (m_followDuration >= 0.0f)
 	{
 		m_followElapsed += elapsedTime;
@@ -890,23 +920,69 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 	}
 
 	// Validate target still exists
-	if (m_followTargetId != 0)
+	if (m_followTargetId == 0)
 	{
-		Object const * const target = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(m_followTargetId)));
-		if (!target)
-		{
-			// Target no longer exists, clear the effect
-			clearFollowTargetEffect();
-			return;
-		}
+		clearFollowTargetEffect();
+		return;
 	}
 
-	// Update bob phase for sync tracking
-	m_followBobPhase += elapsedTime * 1.0f;  // 1.0 Hz bob speed for follow
+	Object const * const target = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(m_followTargetId)));
+	if (!target)
+	{
+		clearFollowTargetEffect();
+		return;
+	}
 
-	// Note: Position following and rotation matching are handled client-side
-	// to prevent choppy updates. Client receives follow params via
-	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+	// Update bob phase
+	m_followBobPhase += elapsedTime * 1.0f;
+
+	// Get positions
+	Vector const targetPos = target->getPosition_w();
+	Vector const ownerPos = owner->getPosition_w();
+
+	// Get target's facing direction
+	Transform const & targetTransform = target->getTransform_o2w();
+	Vector const targetFacing = targetTransform.getLocalFrameK_p();
+
+	// Calculate desired position behind the target at follow distance
+	Vector desiredPos;
+	desiredPos.x = targetPos.x - targetFacing.x * m_followDistance;
+	desiredPos.y = targetPos.y + m_followHoverHeight;  // Hover above target's Y
+	desiredPos.z = targetPos.z - targetFacing.z * m_followDistance;
+
+	// Add bob effect
+	float const bob = m_followBobAmplitude * sin(m_followBobPhase * PI * 2.0f);
+	desiredPos.y += bob;
+
+	// Calculate movement toward desired position
+	Vector delta = desiredPos - ownerPos;
+	float const deltaMagnitude = delta.magnitude();
+
+	if (deltaMagnitude > 0.05f)  // Only move if we're not already there
+	{
+		float const moveDistance = m_followSpeed * elapsedTime;
+		Vector newPos;
+
+		if (deltaMagnitude <= moveDistance)
+		{
+			// Close enough, snap to position
+			newPos = desiredPos;
+		}
+		else
+		{
+			// Move toward target at follow speed
+			delta *= (moveDistance / deltaMagnitude);
+			newPos = ownerPos + delta;
+		}
+
+		// Update position
+		owner->setPosition_w(newPos);
+	}
+
+	// Match rotation to face same direction as target
+	Transform ownerTransform = owner->getTransform_o2w();
+	ownerTransform.setLocalFrameKJ_p(targetFacing, Vector::unitY);
+	owner->setTransform_o2w(ownerTransform);
 }
 
 //===================================================================
