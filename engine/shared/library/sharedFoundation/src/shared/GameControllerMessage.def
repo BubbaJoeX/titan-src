@@ -1035,10 +1035,12 @@ enum GameControllerMessage
 	CM_openRecipe, 
 	CM_addObjectEffect,
 	
-	CM_removeObjectEffect, // 1250
-	CM_removeAllObjectEffect, 
+        CM_removeObjectEffect, // 1250
+        CM_removeAllObjectEffect,
 
-	CM_COUNT
+        CM_tangibleDynamicsData, // 1252 - sends TangibleDynamics force parameters to client
+
+        CM_COUNT
 };
 
 #endif

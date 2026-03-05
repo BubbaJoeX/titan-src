@@ -106,6 +106,7 @@
 #include "sharedObject/SlottedContainer.h"
 #include "sharedObject/SlottedContainmentProperty.h"
 #include "sharedObject/StructureFootprint.h"
+#include "sharedObject/TangibleDynamics.h"
 #include "sharedObject/VolumeContainer.h"
 #include "sharedUtility/DataTable.h"
 #include "sharedUtility/DataTableManager.h"
@@ -345,6 +346,8 @@ const static std::string OBJVAR_BATTLEFIELD_PARTICIPANTS =            "battleDud
 static const std::string NOMOVE_SCRIPT  = "item.special.nomove";
 
 static const std::string OBJVAR_DECLINE_DUEL  = "decline_duel";
+
+//New stuff (videp p
 static const std::string OBJVAR_TEXTURE_URL = "texture.url";
 static const std::string OBJVAR_TEXTURE_MODE = "texture.mode";
 static const std::string OBJVAR_TEXTURE_MODE_IMAGE_ONLY = "IMAGE_ONLY";
@@ -1346,6 +1349,249 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 //-----------------------------------------------------------------------
 
 /**
+ * Reads TangibleDynamics objvars and creates/configures a TangibleDynamics
+ * instance on this object when CONDITION_MAGIC_TANGIBLE_DYNAMIC is set.
+ * When the condition is cleared, the dynamics are removed.
+ */
+void TangibleObject::updateTangibleDynamicsFromObjvars()
+{
+	bool const hasDynamicCondition = hasCondition(C_magicTangibleDynamic);
+
+	if (!hasDynamicCondition)
+	{
+		TangibleDynamics * const td = dynamic_cast<TangibleDynamics *>(getDynamics());
+		if (td)
+		{
+			td->clearAllForces();
+			setDynamics(NULL);
+			sendTangibleDynamicsToClient();
+		}
+		return;
+	}
+
+	TangibleDynamics * td = dynamic_cast<TangibleDynamics *>(getDynamics());
+	bool const isNew = (td == NULL);
+	if (!td)
+	{
+		td = new TangibleDynamics(this);
+		setDynamics(td);
+	}
+
+	int const oldMask = td->getActiveForceMask();
+
+	// --- Push ---
+	float pushVx = 0.0f, pushVy = 0.0f, pushVz = 0.0f;
+	if (getObjVars().getItem("dynamics.push.vx", pushVx))
+	{
+		getObjVars().getItem("dynamics.push.vy", pushVy);
+		getObjVars().getItem("dynamics.push.vz", pushVz);
+		float pushDuration = -1.0f;
+		getObjVars().getItem("dynamics.push.duration", pushDuration);
+		int pushSpace = 0;
+		getObjVars().getItem("dynamics.push.space", pushSpace);
+		float pushDrag = 0.0f;
+		getObjVars().getItem("dynamics.push.drag", pushDrag);
+
+		if (!td->isForceActive(TangibleDynamics::FM_push))
+		{
+			if (pushDrag > 0.0f)
+				td->setPushForceWithDrag(Vector(pushVx, pushVy, pushVz), pushDrag, pushDuration, static_cast<TangibleDynamics::MovementSpace>(pushSpace));
+			else
+				td->setPushForce(Vector(pushVx, pushVy, pushVz), pushDuration, static_cast<TangibleDynamics::MovementSpace>(pushSpace));
+		}
+	}
+
+	// --- Spin ---
+	float spinYaw = 0.0f;
+	if (getObjVars().getItem("dynamics.spin.yaw", spinYaw))
+	{
+		float spinPitch = 0.0f, spinRoll = 0.0f;
+		getObjVars().getItem("dynamics.spin.pitch", spinPitch);
+		getObjVars().getItem("dynamics.spin.roll", spinRoll);
+		float spinDuration = -1.0f;
+		getObjVars().getItem("dynamics.spin.duration", spinDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_spin))
+		{
+			td->setSpinForce(Vector(spinYaw, spinPitch, spinRoll), spinDuration);
+			int aroundCenter = 0;
+			if (getObjVars().getItem("dynamics.spin.aroundCenter", aroundCenter))
+				td->setSpinAroundAppearanceCenter(aroundCenter != 0);
+		}
+	}
+
+	// --- Breathing ---
+	float breathMin = 0.0f;
+	if (getObjVars().getItem("dynamics.breathing.min", breathMin))
+	{
+		float breathMax = 1.0f, breathSpeed = 1.0f, breathDuration = -1.0f;
+		getObjVars().getItem("dynamics.breathing.max", breathMax);
+		getObjVars().getItem("dynamics.breathing.speed", breathSpeed);
+		getObjVars().getItem("dynamics.breathing.duration", breathDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_breathing))
+			td->setBreathingEffect(breathMin, breathMax, breathSpeed, breathDuration);
+	}
+
+	// --- Bounce ---
+	float bounceGravity = 0.0f;
+	if (getObjVars().getItem("dynamics.bounce.gravity", bounceGravity))
+	{
+		float elasticity = 0.6f, velocity = 0.0f, bounceDuration = -1.0f;
+		getObjVars().getItem("dynamics.bounce.elasticity", elasticity);
+		getObjVars().getItem("dynamics.bounce.velocity", velocity);
+		getObjVars().getItem("dynamics.bounce.duration", bounceDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_bounce))
+			td->setBounceEffect(bounceGravity, elasticity, velocity, bounceDuration);
+	}
+
+	// --- Wobble ---
+	float wobbleAmpX = 0.0f;
+	if (getObjVars().getItem("dynamics.wobble.ampX", wobbleAmpX))
+	{
+		float ampY = 0.0f, ampZ = 0.0f, freqX = 1.0f, freqY = 1.0f, freqZ = 1.0f, wobbleDuration = -1.0f;
+		getObjVars().getItem("dynamics.wobble.ampY", ampY);
+		getObjVars().getItem("dynamics.wobble.ampZ", ampZ);
+		getObjVars().getItem("dynamics.wobble.freqX", freqX);
+		getObjVars().getItem("dynamics.wobble.freqY", freqY);
+		getObjVars().getItem("dynamics.wobble.freqZ", freqZ);
+		getObjVars().getItem("dynamics.wobble.duration", wobbleDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_wobble))
+			td->setWobbleEffect(Vector(wobbleAmpX, ampY, ampZ), Vector(freqX, freqY, freqZ), wobbleDuration);
+	}
+
+	// --- Orbit ---
+	float orbitCenterX = 0.0f;
+	if (getObjVars().getItem("dynamics.orbit.centerX", orbitCenterX))
+	{
+		float centerY = 0.0f, centerZ = 0.0f, radius = 1.0f, orbitSpeed = 1.0f, orbitDuration = -1.0f;
+		getObjVars().getItem("dynamics.orbit.centerY", centerY);
+		getObjVars().getItem("dynamics.orbit.centerZ", centerZ);
+		getObjVars().getItem("dynamics.orbit.radius", radius);
+		getObjVars().getItem("dynamics.orbit.speed", orbitSpeed);
+		getObjVars().getItem("dynamics.orbit.duration", orbitDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_orbit))
+			td->setOrbitEffect(Vector(orbitCenterX, centerY, centerZ), radius, orbitSpeed, orbitDuration);
+	}
+
+	// --- Easing ---
+	int easeType = 0;
+	if (getObjVars().getItem("dynamics.easing.type", easeType))
+	{
+		float easeDuration = 0.5f;
+		getObjVars().getItem("dynamics.easing.duration", easeDuration);
+		td->setEasing(static_cast<TangibleDynamics::EaseType>(easeType), easeDuration);
+	}
+
+	// Send to client if forces changed or this is a new dynamics instance
+	int const newMask = td->getActiveForceMask();
+	if (isNew || (newMask != oldMask))
+	{
+		sendTangibleDynamicsToClient();
+	}
+}
+
+//-----------------------------------------------------------------------
+
+/**
+ * Sends the current TangibleDynamics force parameters to all observing clients
+ * as a CM_tangibleDynamicsData controller message with packed string payload.
+ *
+ * Format: "channel:p1,p2,...|channel:p1,p2,..."
+ * Channels: P=push, S=spin, B=breathing, N=bounce, W=wobble, O=orbit, E=easing, X=clearAll
+ */
+void TangibleObject::sendTangibleDynamicsToClient()
+{
+	Controller * const controller = getController();
+	if (!controller)
+		return;
+
+	TangibleDynamics const * const td = dynamic_cast<TangibleDynamics const *>(getDynamics());
+
+	// If no dynamics, send clear
+	if (!td || !td->isActive())
+	{
+		uint32 const flags = GameControllerMessageFlags::SEND | GameControllerMessageFlags::RELIABLE
+			| GameControllerMessageFlags::DEST_AUTH_CLIENT | GameControllerMessageFlags::DEST_PROXY_CLIENT;
+		controller->appendMessage(static_cast<int>(CM_tangibleDynamicsData), 0.0f,
+			new MessageQueueGenericValueType<std::string>(std::string("X")), flags);
+		return;
+	}
+
+	// Build packed string
+	char buf[512];
+	std::string packed;
+
+	if (td->isForceActive(TangibleDynamics::FM_push))
+	{
+		Vector const v = td->getPushForce();
+		float const dur = td->getPushForceDuration();
+		float const drag = td->getPushDrag();
+		snprintf(buf, sizeof(buf), "P:%.4f,%.4f,%.4f,%.4f,0,%.4f", v.x, v.y, v.z, dur, drag);
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_spin))
+	{
+		Vector const v = td->getSpinForce();
+		float const dur = td->getSpinForceDuration();
+		snprintf(buf, sizeof(buf), "S:%.4f,%.4f,%.4f,%.4f", v.x, v.y, v.z, dur);
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_breathing))
+	{
+		snprintf(buf, sizeof(buf), "B:%.4f,%.4f,%.4f,%.4f",
+			td->getBreathingMinScale(), td->getBreathingMaxScale(),
+			td->getBreathingSpeed(), td->getBreathingDuration());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_bounce))
+	{
+		snprintf(buf, sizeof(buf), "N:%.4f,%.4f,5.0000,-1.0000",
+			td->getBounceGravity(), td->getBounceElasticity());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_wobble))
+	{
+		Vector const a = td->getWobbleAmplitude();
+		Vector const f = td->getWobbleFrequency();
+		snprintf(buf, sizeof(buf), "W:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
+			a.x, a.y, a.z, f.x, f.y, f.z);
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_orbit))
+	{
+		Vector const c = td->getOrbitCenter();
+		snprintf(buf, sizeof(buf), "O:%.4f,%.4f,%.4f,%.4f,1.0000,-1.0000",
+			c.x, c.y, c.z, td->getOrbitRadius());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (packed.empty())
+		return;
+
+	uint32 const flags = GameControllerMessageFlags::SEND | GameControllerMessageFlags::RELIABLE
+		| GameControllerMessageFlags::DEST_AUTH_CLIENT | GameControllerMessageFlags::DEST_PROXY_CLIENT;
+	controller->appendMessage(static_cast<int>(CM_tangibleDynamicsData), 0.0f,
+		new MessageQueueGenericValueType<std::string>(packed), flags);
+}
+
+//-----------------------------------------------------------------------
+
+/**
  * Gets all the equipped items corresponding to a combat skeleton "bone".
  *
  * @param combatBone		the bone we want equipment for
@@ -1413,6 +1659,7 @@ float TangibleObject::alter(real time)
 	{
 		updateRemoteTextureUrlFromObjvars();
 		updateRemoteVideoStreamFromObjvars();
+		updateTangibleDynamicsFromObjvars();
 
 		// Determine the combat state of the object
 		{

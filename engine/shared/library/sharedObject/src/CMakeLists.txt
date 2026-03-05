@@ -92,6 +92,8 @@ set(SHARED_SOURCES
 	shared/dynamics/SpringDynamics.h
 	shared/dynamics/StateDynamics.cpp
 	shared/dynamics/StateDynamics.h
+	shared/dynamics/TangibleDynamics.cpp
+	shared/dynamics/TangibleDynamics.h
 	shared/dynamics/TrackingDynamics.cpp
 	shared/dynamics/TrackingDynamics.h
 
