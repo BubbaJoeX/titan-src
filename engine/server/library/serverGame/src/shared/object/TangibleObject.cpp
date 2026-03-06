@@ -114,6 +114,7 @@
 #include "sharedTerrain/TerrainObject.h"
 #include "sharedUtility/DataTable.h"
 #include "sharedUtility/DataTableManager.h"
+#include <map>
 
 #ifdef _DEBUG
 #include "serverGame/ConsoleManager.h"
@@ -1774,8 +1775,6 @@ void TangibleObject::sendTangibleDynamicsToClient()
  */
 void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 {
-	UNREF(elapsedTime);
-
 	// Only check if we have the dynamics condition
 	if (!hasCondition(C_magicTangibleDynamic))
 		return;
@@ -1812,10 +1811,15 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 		setDynamics(td);
 	}
 
+	// Track collision cooldown per player using objvar
+	static std::map<std::pair<NetworkId, NetworkId>, float> s_collisionCooldowns;
+	float const collisionCooldown = 0.15f; // 150ms between collisions from same player
+
 	// Find the closest creature within collision range
 	ServerObject * closestCreature = nullptr;
 	float closestDistance = collisionRadius + 1.0f;
 	Vector closestCreaturePos;
+	Vector closestCreatureFacing;
 
 	for (std::vector<ServerObject *>::const_iterator it = nearbyCreatures.begin();
 		 it != nearbyCreatures.end(); ++it)
@@ -1839,12 +1843,34 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 		// Calculate distance on XZ plane (ignore Y for ground objects)
 		float const distanceXZ = myPos.magnitudeXZBetween(creaturePos);
 
+		// Check if within collision range
+		if (distanceXZ > collisionRadius)
+			continue;
+
+		// Check collision cooldown for this creature
+		std::pair<NetworkId, NetworkId> cooldownKey(getNetworkId(), creature->getNetworkId());
+		std::map<std::pair<NetworkId, NetworkId>, float>::iterator cooldownIt = s_collisionCooldowns.find(cooldownKey);
+		if (cooldownIt != s_collisionCooldowns.end())
+		{
+			// Decrement cooldown
+			cooldownIt->second -= elapsedTime;
+			if (cooldownIt->second > 0.0f)
+				continue; // Still on cooldown
+			else
+				s_collisionCooldowns.erase(cooldownIt);
+		}
+
+		// Get creature's facing direction for push calculation
+		Transform const & transform = creatureObj->getTransform_o2w();
+		Vector const facing = transform.getLocalFrameK_p();
+
 		// Track closest
 		if (distanceXZ < closestDistance)
 		{
 			closestDistance = distanceXZ;
 			closestCreature = creature;
 			closestCreaturePos = creaturePos;
+			closestCreatureFacing = facing;
 		}
 	}
 
@@ -1852,32 +1878,30 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 	if (!closestCreature || closestDistance > collisionRadius)
 		return;
 
-	// Calculate push direction (from creature to this object, on XZ plane)
+	// Add collision cooldown for this creature
+	std::pair<NetworkId, NetworkId> cooldownKey(getNetworkId(), closestCreature->getNetworkId());
+	s_collisionCooldowns[cooldownKey] = collisionCooldown;
+
+	// Calculate push direction - prefer direction from creature to puck
 	float dirX = myPos.x - closestCreaturePos.x;
 	float dirZ = myPos.z - closestCreaturePos.z;
+	float const dirMag = sqrt(dirX * dirX + dirZ * dirZ);
 
-	CreatureObject const * const creatureObj = closestCreature->asCreatureObject();
-
-	if (closestDistance < 0.2f)
+	// If creature is very close (almost on top of puck), use facing direction instead
+	if (dirMag < 0.3f)
 	{
-		// Creature is very close/on top - use creature's facing direction
-		if (creatureObj)
-		{
-			Transform const & transform = creatureObj->getTransform_o2w();
-			Vector const facing = transform.getLocalFrameK_p();
-			dirX = facing.x;
-			dirZ = facing.z;
-		}
+		// Use creature's facing direction
+		dirX = closestCreatureFacing.x;
+		dirZ = closestCreatureFacing.z;
 	}
 	else
 	{
-		// Normalize direction
-		dirX /= closestDistance;
-		dirZ /= closestDistance;
+		// Normalize the direction from creature to puck
+		dirX /= dirMag;
+		dirZ /= dirMag;
 	}
 
 	// Calculate push strength based on how close the creature is
-	// Closer = stronger push (penetration depth factor)
 	float const penetrationFactor = 1.0f + ((collisionRadius - closestDistance) / collisionRadius);
 	float const finalSpeed = pushSpeed * penetrationFactor;
 
