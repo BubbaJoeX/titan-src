@@ -1134,3 +1134,138 @@ void CreatureObject::emergencyDismountForRider()
 }
 
 // ======================================================================
+// TANGIBLE OBJECT MOUNTING
+// ======================================================================
+
+/**
+ * Mount this creature on a tangible object (for seamless movement with dynamic objects)
+ * @param tangibleObjectId NetworkId of the tangible object to mount
+ * @param offsetX Seat offset X
+ * @param offsetY Seat offset Y (height above object)
+ * @param offsetZ Seat offset Z
+ * @param lockOrientation If true, player's rotation will match the mounted object
+ * @return true if mount succeeded
+ */
+bool CreatureObject::mountTangibleObject(NetworkId const & tangibleObjectId, float offsetX, float offsetY, float offsetZ, bool lockOrientation)
+{
+	if (!isAuthoritative())
+	{
+		WARNING(true, ("CreatureObject::mountTangibleObject called on non-authoritative object"));
+		return false;
+	}
+
+	if (!tangibleObjectId.isValid())
+	{
+		WARNING(true, ("CreatureObject::mountTangibleObject called with invalid tangibleObjectId"));
+		return false;
+	}
+
+	// Store the mounted object ID as an objvar
+	setObjVarItem("mountedTangibleObject", tangibleObjectId);
+	setObjVarItem("mountedTangibleOffsetX", offsetX);
+	setObjVarItem("mountedTangibleOffsetY", offsetY);
+	setObjVarItem("mountedTangibleOffsetZ", offsetZ);
+	setObjVarItem("mountedTangibleLockOrientation", lockOrientation ? 1 : 0);
+
+	// Send message to client to lock position to the tangible object
+	sendMountTangibleObjectToClient(true, tangibleObjectId, offsetX, offsetY, offsetZ, lockOrientation);
+
+	LOG("tangible-mount", ("Creature %s mounted on tangible object %s (lockOrientation=%s)",
+		getNetworkId().getValueString().c_str(), tangibleObjectId.getValueString().c_str(),
+		lockOrientation ? "true" : "false"));
+
+	return true;
+}
+
+/**
+ * Dismount this creature from a tangible object
+ * @return true if dismount succeeded
+ */
+bool CreatureObject::dismountTangibleObject()
+{
+	if (!isAuthoritative())
+	{
+		WARNING(true, ("CreatureObject::dismountTangibleObject called on non-authoritative object"));
+		return false;
+	}
+
+	if (!isMountedOnTangibleObject())
+	{
+		return false;
+	}
+
+	NetworkId const tangibleObjectId = getMountedTangibleObjectId();
+
+	// Remove the objvars
+	removeObjVarItem("mountedTangibleObject");
+	removeObjVarItem("mountedTangibleOffsetX");
+	removeObjVarItem("mountedTangibleOffsetY");
+	removeObjVarItem("mountedTangibleOffsetZ");
+	removeObjVarItem("mountedTangibleLockOrientation");
+
+	// Send message to client to unlock position
+	sendMountTangibleObjectToClient(false, tangibleObjectId, 0.0f, 0.0f, 0.0f, true);
+
+	LOG("tangible-mount", ("Creature %s dismounted from tangible object %s", getNetworkId().getValueString().c_str(), tangibleObjectId.getValueString().c_str()));
+
+	return true;
+}
+
+/**
+ * Get the NetworkId of the tangible object this creature is mounted on
+ * @return NetworkId of the mounted tangible object, or invalid if not mounted
+ */
+NetworkId CreatureObject::getMountedTangibleObjectId() const
+{
+	NetworkId result;
+	if (getObjVars().getItem("mountedTangibleObject", result))
+	{
+		return result;
+	}
+	return NetworkId::cms_invalid;
+}
+
+/**
+ * Check if this creature is mounted on a tangible object
+ * @return true if mounted on a tangible object
+ */
+bool CreatureObject::isMountedOnTangibleObject() const
+{
+	return getMountedTangibleObjectId().isValid();
+}
+
+/**
+ * Send mount/dismount message to the client for seamless position locking
+ * @param mount true to mount, false to dismount
+ * @param tangibleObjectId NetworkId of the tangible object
+ * @param offsetX Seat offset X
+ * @param offsetY Seat offset Y
+ * @param offsetZ Seat offset Z
+ * @param lockOrientation If true, player's rotation will match the mounted object
+ */
+void CreatureObject::sendMountTangibleObjectToClient(bool mount, NetworkId const & tangibleObjectId, float offsetX, float offsetY, float offsetZ, bool lockOrientation)
+{
+	Controller * const controller = getController();
+	if (!controller)
+		return;
+
+	// Build message string: "M:objectId,offsetX,offsetY,offsetZ,lockOrientation" for mount, "D" for dismount
+	char buf[256];
+	if (mount)
+	{
+		snprintf(buf, sizeof(buf), "M:%s,%.4f,%.4f,%.4f,%d",
+			tangibleObjectId.getValueString().c_str(), offsetX, offsetY, offsetZ, lockOrientation ? 1 : 0);
+	}
+	else
+	{
+		snprintf(buf, sizeof(buf), "D");
+	}
+
+	uint32 const flags = GameControllerMessageFlags::SEND | GameControllerMessageFlags::RELIABLE
+		| GameControllerMessageFlags::DEST_AUTH_CLIENT;
+
+	controller->appendMessage(static_cast<int>(CM_mountTangibleObject), 0.0f,
+		new MessageQueueGenericValueType<std::string>(std::string(buf)), flags);
+}
+
+// ======================================================================

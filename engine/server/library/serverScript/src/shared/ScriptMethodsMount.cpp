@@ -44,6 +44,11 @@ namespace ScriptMethodsMountNamespace
 	jint         JNICALL couldObjectTemplateBeMadeMountable(JNIEnv *env, jobject self, jstring serverObjectTemplateName, jfloat objectScale);
 	void         JNICALL makeContainerStateInconsistentTestOnly(JNIEnv *env, jobject self, jlong containedObjectId);
 	jboolean     JNICALL doesMountHaveRoom(JNIEnv * env, jobject self, jlong mountId);
+
+	// Tangible Object Mounting
+	jboolean     JNICALL mountTangibleObject(JNIEnv *env, jobject self, jlong playerId, jlong tangibleObjectId, jfloat offsetX, jfloat offsetY, jfloat offsetZ, jboolean lockOrientation);
+	jboolean     JNICALL dismountTangibleObject(JNIEnv *env, jobject self, jlong playerId);
+	jboolean     JNICALL isMountedOnTangibleObject(JNIEnv *env, jobject self, jlong playerId);
 }
 
 
@@ -67,6 +72,9 @@ const JNINativeMethod NATIVES[] = {
 	JF("couldObjectTemplateBeMadeMountable", "(Ljava/lang/String;F)I", couldObjectTemplateBeMadeMountable),
 	JF("_makeContainerStateInconsistentTestOnly", "(J)V", makeContainerStateInconsistentTestOnly),
 	JF("_doesMountHaveRoom", "(J)Z", doesMountHaveRoom),
+	JF("_mountTangibleObject", "(JJFFFZ)Z", mountTangibleObject),
+	JF("_dismountTangibleObject", "(J)Z", dismountTangibleObject),
+	JF("_isMountedOnTangibleObject", "(J)Z", isMountedOnTangibleObject),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -457,6 +465,65 @@ jboolean JNICALL ScriptMethodsMountNamespace::doesMountHaveRoom(JNIEnv * env, jo
 	}
 
 	return static_cast<jboolean>(mountObject->isMountableAndHasRoomForAnother());
+}
+
+// ======================================================================
+// TANGIBLE OBJECT MOUNTING
+// ======================================================================
+
+jboolean JNICALL ScriptMethodsMountNamespace::mountTangibleObject(JNIEnv *env, jobject self, jlong playerId, jlong tangibleObjectId, jfloat offsetX, jfloat offsetY, jfloat offsetZ, jboolean lockOrientation)
+{
+	UNREF(self);
+
+	//-- Get the creature object (player)
+	CreatureObject * const playerObject = JavaLibrary::getCreatureThrow(env, playerId, "mountTangibleObject(): error in playerId arg");
+	if (!playerObject)
+		return JNI_FALSE;
+
+	//-- Verify the tangible object exists
+	NetworkId const tangibleNetworkId(tangibleObjectId);
+	if (!tangibleNetworkId.isValid())
+	{
+		JavaLibrary::throwInternalScriptError("mountTangibleObject(): invalid tangibleObjectId");
+		return JNI_FALSE;
+	}
+
+	//-- Mount the player on the tangible object
+	bool const success = playerObject->mountTangibleObject(tangibleNetworkId, offsetX, offsetY, offsetZ, lockOrientation == JNI_TRUE);
+
+	return static_cast<jboolean>(success ? JNI_TRUE : JNI_FALSE);
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsMountNamespace::dismountTangibleObject(JNIEnv *env, jobject self, jlong playerId)
+{
+	UNREF(self);
+
+	//-- Get the creature object (player)
+	CreatureObject * const playerObject = JavaLibrary::getCreatureThrow(env, playerId, "dismountTangibleObject(): error in playerId arg");
+	if (!playerObject)
+		return JNI_FALSE;
+
+	//-- Dismount the player
+	bool const success = playerObject->dismountTangibleObject();
+
+	return static_cast<jboolean>(success ? JNI_TRUE : JNI_FALSE);
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsMountNamespace::isMountedOnTangibleObject(JNIEnv *env, jobject self, jlong playerId)
+{
+	UNREF(self);
+
+	//-- Get the creature object (player)
+	bool const throwIfNotOnServer = false;
+	CreatureObject const * const playerObject = JavaLibrary::getCreatureThrow(env, playerId, "isMountedOnTangibleObject(): error in playerId arg", throwIfNotOnServer);
+	if (!playerObject)
+		return JNI_FALSE;
+
+	return static_cast<jboolean>(playerObject->isMountedOnTangibleObject() ? JNI_TRUE : JNI_FALSE);
 }
 
 // ======================================================================

@@ -1562,6 +1562,24 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 			td->setConveyorEffect(Vector(conveyorDirX, conveyorDirY, conveyorDirZ), conveyorSpeed, conveyorWrapDistance, conveyorDuration);
 	}
 
+	// --- Carousel ---
+	float carouselCenterX = 0.0f;
+	if (getObjVars().getItem("dynamics.carousel.centerX", carouselCenterX))
+	{
+		float centerY = 0.0f, centerZ = 0.0f, radius = 3.0f, rotationSpeed = 1.0f;
+		float verticalAmplitude = 0.0f, verticalSpeed = 1.0f, carouselDuration = -1.0f;
+		getObjVars().getItem("dynamics.carousel.centerY", centerY);
+		getObjVars().getItem("dynamics.carousel.centerZ", centerZ);
+		getObjVars().getItem("dynamics.carousel.radius", radius);
+		getObjVars().getItem("dynamics.carousel.rotationSpeed", rotationSpeed);
+		getObjVars().getItem("dynamics.carousel.verticalAmplitude", verticalAmplitude);
+		getObjVars().getItem("dynamics.carousel.verticalSpeed", verticalSpeed);
+		getObjVars().getItem("dynamics.carousel.duration", carouselDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_carousel))
+			td->setCarouselEffect(Vector(carouselCenterX, centerY, centerZ), radius, rotationSpeed, verticalAmplitude, verticalSpeed, carouselDuration);
+	}
+
 	// --- Easing ---
 	int easeType = 0;
 	if (getObjVars().getItem("dynamics.easing.type", easeType))
@@ -1718,6 +1736,17 @@ void TangibleObject::sendTangibleDynamicsToClient()
 		Vector const dir = td->getConveyorDirection();
 		snprintf(buf, sizeof(buf), "C:%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
 			dir.x, dir.y, dir.z, td->getConveyorSpeed(), td->getConveyorWrapDistance());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_carousel))
+	{
+		// R = Carousel: centerX, centerY, centerZ, radius, rotationSpeed, verticalAmplitude, verticalSpeed, duration
+		Vector const center = td->getCarouselCenter();
+		snprintf(buf, sizeof(buf), "R:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
+			center.x, center.y, center.z, td->getCarouselRadius(), td->getCarouselRotationSpeed(),
+			td->getCarouselVerticalAmplitude(), td->getCarouselVerticalSpeed());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2284,6 +2313,29 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 	else if (td->isForceActive(TangibleDynamics::FM_sway))
 	{
 		// Sway is rotation-based, primarily client-side for smooth visuals
+	}
+
+	// --- Carousel ---
+	else if (td->isForceActive(TangibleDynamics::FM_carousel))
+	{
+		Vector const center = td->getCarouselCenter();
+		float const radius = td->getCarouselRadius();
+		float const angle = td->getCarouselAngle();
+		float const vertAmp = td->getCarouselVerticalAmplitude();
+
+		// Calculate position on rotating platform
+		float const newX = center.x + radius * cos(angle);
+		float const newZ = center.z + radius * sin(angle);
+
+		// Add vertical oscillation (ferris wheel effect)
+		float newY = center.y;
+		if (vertAmp > 0.0f)
+		{
+			// Use angle for vertical position - object goes up as it rotates
+			newY += vertAmp * sin(angle);
+		}
+
+		setPosition_w(Vector(newX, newY, newZ));
 	}
 }
 

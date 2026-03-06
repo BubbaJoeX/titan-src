@@ -1039,6 +1039,7 @@ enum GameControllerMessage
         CM_removeAllObjectEffect,
 
         CM_tangibleDynamicsData, // 1252 - sends TangibleDynamics force parameters to client
+        CM_mountTangibleObject, // 1253 - mount/dismount player on tangible object for seamless movement
 
         CM_COUNT
 };

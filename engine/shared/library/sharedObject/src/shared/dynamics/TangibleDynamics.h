@@ -47,7 +47,8 @@ public:
 		FM_sway         = (1 << 8),
 		FM_shake        = (1 << 9),
 		FM_float        = (1 << 10),
-		FM_conveyor     = (1 << 11)
+		FM_conveyor     = (1 << 11),
+		FM_carousel     = (1 << 12)
 	};
 
 	enum MovementSpace
@@ -178,6 +179,17 @@ public:
 	float  getConveyorWrapDistance() const;
 	Vector getConveyorOrigin() const;
 	float  getConveyorTravelDistance() const;
+
+	// --- Carousel (rotating platform with vertical oscillation) ---
+
+	void   setCarouselEffect(const Vector& center, float radius, float rotationSpeed, float verticalAmplitude = 0.0f, float verticalSpeed = 1.0f, float duration = -1.0f);
+	void   clearCarouselEffect();
+	Vector getCarouselCenter() const;
+	float  getCarouselRadius() const;
+	float  getCarouselRotationSpeed() const;
+	float  getCarouselAngle() const;
+	float  getCarouselVerticalAmplitude() const;
+	float  getCarouselVerticalSpeed() const;
 
 	// --- Easing ---
 
@@ -327,6 +339,18 @@ private:
 	float  m_conveyorElapsed;
 	bool   m_conveyorEffectActive;
 
+	// --- Carousel state ---
+	Vector m_carouselCenter;
+	float  m_carouselRadius;
+	float  m_carouselRotationSpeed;
+	float  m_carouselAngle;
+	float  m_carouselVerticalAmplitude;
+	float  m_carouselVerticalSpeed;
+	float  m_carouselVerticalPhase;
+	float  m_carouselDuration;
+	float  m_carouselElapsed;
+	bool   m_carouselEffectActive;
+
 	// --- Easing ---
 	EaseType m_easeType;
 	float    m_easeDuration;
@@ -347,6 +371,7 @@ private:
 	void updateShakeEffect(float elapsedTime);
 	void updateFloatEffect(float elapsedTime);
 	void updateConveyorEffect(float elapsedTime);
+	void updateCarouselEffect(float elapsedTime);
 	void recalculateMode();
 };
 

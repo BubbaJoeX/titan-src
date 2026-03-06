@@ -441,6 +441,9 @@ void SetupSharedNetworkMessages::install ()
 	// TangibleDynamics: register handler for dynamics data messages (string payload)
 	ControllerMessageFactory::registerControllerMessageHandler(CM_tangibleDynamicsData, packGenericStringMessage, unpackGenericStringMessage);
 
+	// MountTangibleObject: register handler for mount/dismount messages (string payload: "M:objectId" or "D")
+	ControllerMessageFactory::registerControllerMessageHandler(CM_mountTangibleObject, packGenericStringMessage, unpackGenericStringMessage);
+
 	g_installed = true;
 	ExitChain::add (SetupSharedNetworkMessages::remove, "SetupSharedNetworkMessages");
 }

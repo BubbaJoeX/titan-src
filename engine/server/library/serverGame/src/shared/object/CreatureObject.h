@@ -499,6 +499,16 @@ public:
 	void                                   emergencyDismountForRider();
 
 	// ======
+	// Tangible Object Mounting: PUBLIC
+	// ======
+
+	bool                                   mountTangibleObject(NetworkId const & tangibleObjectId, float offsetX, float offsetY, float offsetZ, bool lockOrientation = true);
+	bool                                   dismountTangibleObject();
+	NetworkId                              getMountedTangibleObjectId() const;
+	bool                                   isMountedOnTangibleObject() const;
+	void                                   sendMountTangibleObjectToClient(bool mount, NetworkId const & tangibleObjectId, float offsetX, float offsetY, float offsetZ, bool lockOrientation = true);
+
+	// ======
 	// Ships: PUBLIC: implemented in CreatureObject_Ships.cpp
 	// ======
 

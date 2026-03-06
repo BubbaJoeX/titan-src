@@ -148,6 +148,17 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_conveyorDuration(-1.0f),
 	m_conveyorElapsed(0.0f),
 	m_conveyorEffectActive(false),
+	// Carousel
+	m_carouselCenter(Vector::zero),
+	m_carouselRadius(3.0f),
+	m_carouselRotationSpeed(1.0f),
+	m_carouselAngle(0.0f),
+	m_carouselVerticalAmplitude(0.0f),
+	m_carouselVerticalSpeed(1.0f),
+	m_carouselVerticalPhase(0.0f),
+	m_carouselDuration(-1.0f),
+	m_carouselElapsed(0.0f),
+	m_carouselEffectActive(false),
 	// Easing
 	m_easeType(ET_none),
 	m_easeDuration(0.5f),
@@ -789,6 +800,66 @@ Vector TangibleDynamics::getConveyorOrigin() const        { return m_conveyorOri
 float  TangibleDynamics::getConveyorTravelDistance() const { return m_conveyorTravelDistance; }
 
 //===================================================================
+// CAROUSEL (rotating platform with vertical oscillation like ferris wheel)
+//===================================================================
+
+void TangibleDynamics::setCarouselEffect(const Vector& center, float radius, float rotationSpeed, float verticalAmplitude, float verticalSpeed, float duration)
+{
+	Object* const owner = getOwner();
+
+	m_carouselCenter = center;
+	m_carouselRadius = radius;
+	m_carouselRotationSpeed = rotationSpeed;
+	m_carouselVerticalAmplitude = verticalAmplitude;
+	m_carouselVerticalSpeed = verticalSpeed;
+
+	// Calculate initial angle from object's current position
+	if (owner)
+	{
+		Vector const pos = owner->getPosition_w();
+		float const dx = pos.x - center.x;
+		float const dz = pos.z - center.z;
+		m_carouselAngle = atan2(dz, dx);
+	}
+	else
+	{
+		m_carouselAngle = 0.0f;
+	}
+
+	m_carouselVerticalPhase = 0.0f;
+	m_carouselDuration = duration;
+	m_carouselElapsed = 0.0f;
+	m_carouselEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearCarouselEffect()
+{
+	m_carouselCenter = Vector::zero;
+	m_carouselRadius = 3.0f;
+	m_carouselRotationSpeed = 1.0f;
+	m_carouselAngle = 0.0f;
+	m_carouselVerticalAmplitude = 0.0f;
+	m_carouselVerticalSpeed = 1.0f;
+	m_carouselVerticalPhase = 0.0f;
+	m_carouselDuration = -1.0f;
+	m_carouselElapsed = 0.0f;
+	m_carouselEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+Vector TangibleDynamics::getCarouselCenter() const            { return m_carouselCenter; }
+float  TangibleDynamics::getCarouselRadius() const            { return m_carouselRadius; }
+float  TangibleDynamics::getCarouselRotationSpeed() const     { return m_carouselRotationSpeed; }
+float  TangibleDynamics::getCarouselAngle() const             { return m_carouselAngle; }
+float  TangibleDynamics::getCarouselVerticalAmplitude() const { return m_carouselVerticalAmplitude; }
+float  TangibleDynamics::getCarouselVerticalSpeed() const     { return m_carouselVerticalSpeed; }
+
+//===================================================================
 // EASING
 //===================================================================
 
@@ -826,6 +897,7 @@ void TangibleDynamics::clearAllForces()
 	clearShakeEffect();
 	clearFloatEffect();
 	clearConveyorEffect();
+	clearCarouselEffect();
 }
 
 //===================================================================
@@ -910,6 +982,9 @@ void TangibleDynamics::realAlter(float elapsedTime)
 
 	if (m_conveyorEffectActive)
 		updateConveyorEffect(elapsedTime);
+
+	if (m_carouselEffectActive)
+		updateCarouselEffect(elapsedTime);
 }
 
 //===================================================================
@@ -1244,6 +1319,30 @@ void TangibleDynamics::updateConveyorEffect(float elapsedTime)
 	}
 }
 
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateCarouselEffect(float elapsedTime)
+{
+	if (m_carouselDuration >= 0.0f)
+	{
+		m_carouselElapsed += elapsedTime;
+		if (m_carouselElapsed >= m_carouselDuration)
+		{
+			clearCarouselEffect();
+			return;
+		}
+	}
+
+	// Update rotation angle (state tracking)
+	m_carouselAngle += m_carouselRotationSpeed * elapsedTime;
+
+	// Update vertical phase for ferris wheel oscillation
+	if (m_carouselVerticalAmplitude > 0.0f)
+	{
+		m_carouselVerticalPhase += m_carouselVerticalSpeed * elapsedTime;
+	}
+}
+
 //===================================================================
 // RECALCULATE
 //===================================================================
@@ -1264,6 +1363,7 @@ void TangibleDynamics::recalculateMode()
 	if (m_shakeEffectActive)       m_activeForceMask |= FM_shake;
 	if (m_floatEffectActive)       m_activeForceMask |= FM_float;
 	if (m_conveyorEffectActive)    m_activeForceMask |= FM_conveyor;
+	if (m_carouselEffectActive)    m_activeForceMask |= FM_carousel;
 }
 
 //===================================================================
