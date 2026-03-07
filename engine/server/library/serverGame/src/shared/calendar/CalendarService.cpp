@@ -181,15 +181,18 @@ void CalendarService::getEventsForPlayer(NetworkId const & playerId, int32 year,
 {
 	outEvents.clear();
 
+	if (!playerId.isValid())
+		return;
+
 	// Get player's guild and city
 	int32 playerGuildId = 0;
 	int32 playerCityId = 0;
 
 	ServerObject * playerObj = ServerWorld::findObjectByNetworkId(playerId);
-	if (playerObj)
+	if (playerObj != nullptr)
 	{
 		CreatureObject * creature = playerObj->asCreatureObject();
-		if (creature)
+		if (creature != nullptr)
 		{
 			playerGuildId = GuildInterface::getGuildId(creature->getNetworkId());
 			std::vector<int> const & cityIds = CityInterface::getCitizenOfCityId(creature->getNetworkId());

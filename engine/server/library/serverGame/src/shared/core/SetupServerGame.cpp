@@ -13,6 +13,7 @@
 #include "serverGame/AuthTransferTracker.h"
 #include "serverGame/BiographyManager.h"
 #include "serverGame/BuffManager.h"
+#include "serverGame/calendar/CalendarService.h"
 #include "serverGame/CombatTracker.h"
 #include "serverGame/CommandCppFuncs.h"
 #include "serverGame/ConfigServerGame.h"
@@ -85,12 +86,14 @@ void SetupServerGame::install()
 	ServerBuildoutManager::install();
 	ExpertiseManager::install();
 	LevelManager::install();
+	CalendarService::install();
 }
 
 // ----------------------------------------------------------------------
 
 void SetupServerGame::remove()
 {
+	CalendarService::remove();
 	ServerSecureTradeManager::remove();
 	DraftSchematicObject::remove();
 	PlayerCreationManagerServer::remove();
