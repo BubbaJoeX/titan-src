@@ -8,7 +8,7 @@
 // ======================================================================
 
 #include "serverGame/FirstServerGame.h"
-#include "serverGame/CalendarService.h"
+#include "serverGame/calendar/CalendarService.h"
 
 #include "serverGame/Client.h"
 #include "serverGame/CreatureObject.h"

@@ -103,6 +103,9 @@ set(SHARED_SOURCES
 	shared/city/PgcRatingInfo.cpp
 	shared/city/PgcRatingInfo.h
 
+	shared/calendar/CalendarService.cpp
+	shared/calendar/CalendarService.h
+
 	shared/collision/CollisionCallbacks.cpp
 	shared/collision/CollisionCallbacks.h
 

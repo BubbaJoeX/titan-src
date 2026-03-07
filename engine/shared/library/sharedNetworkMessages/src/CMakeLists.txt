@@ -193,6 +193,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/CancelLiveAuctionMessage.h
 	shared/clientGameServer/CancelLiveAuctionResponseMessage.cpp
 	shared/clientGameServer/CancelLiveAuctionResponseMessage.h
+	shared/clientGameServer/CalendarMessages.cpp
+	shared/clientGameServer/CalendarMessages.h
 	shared/clientGameServer/CharacterSheetResponseMessage.cpp
 	shared/clientGameServer/CharacterSheetResponseMessage.h
 	shared/clientGameServer/ClientCentralMessages.cpp
