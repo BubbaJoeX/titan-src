@@ -13,10 +13,12 @@
 // ======================================================================
 
 #include "sharedNetworkMessages/GameNetworkMessage.h"
+#include "Archive/AutoByteStream.h"
 #include "sharedFoundation/NetworkId.h"
 #include "Unicode.h"
 
 #include <string>
+#include <vector>
 
 // ======================================================================
 
@@ -152,6 +154,112 @@ private:
 	Archive::AutoVariable<int32> m_srcW;
 	Archive::AutoVariable<int32> m_srcH;
 	Archive::AutoVariable<NetworkId> m_modifiedBy;
+};
+
+// ======================================================================
+
+/**
+ * Message sent from the game server to the database server to request loading all calendar events.
+ */
+class RequestLoadCalendarEventsMessage : public GameNetworkMessage
+{
+public:
+	RequestLoadCalendarEventsMessage();
+	explicit RequestLoadCalendarEventsMessage(Archive::ReadIterator & source);
+	~RequestLoadCalendarEventsMessage();
+
+private:
+	RequestLoadCalendarEventsMessage(RequestLoadCalendarEventsMessage const &);
+	RequestLoadCalendarEventsMessage & operator=(RequestLoadCalendarEventsMessage const &);
+};
+
+// ======================================================================
+
+/**
+ * Message sent from the database server back to the game server with loaded calendar events.
+ */
+
+struct CalendarEventRow
+{
+	std::string eventId;
+	std::string title;
+	std::string description;
+	int32 eventType;
+	int32 year;
+	int32 month;
+	int32 day;
+	int32 hour;
+	int32 minute;
+	int32 duration;
+	int32 guildId;
+	int32 cityId;
+	std::string serverEventKey;
+	bool recurring;
+	int32 recurrenceType;
+	bool broadcastStart;
+	bool active;
+	NetworkId creatorId;
+
+	CalendarEventRow();
+};
+
+namespace Archive
+{
+	void get(ReadIterator & source, CalendarEventRow & target);
+	void put(ByteStream & target, CalendarEventRow const & source);
+}
+
+class LoadCalendarEventsMessage : public GameNetworkMessage
+{
+public:
+	LoadCalendarEventsMessage(std::vector<CalendarEventRow> const & events);
+	explicit LoadCalendarEventsMessage(Archive::ReadIterator & source);
+	~LoadCalendarEventsMessage();
+
+	std::vector<CalendarEventRow> const & getEvents() const { return m_events.get(); }
+
+private:
+	LoadCalendarEventsMessage();
+	LoadCalendarEventsMessage(LoadCalendarEventsMessage const &);
+	LoadCalendarEventsMessage & operator=(LoadCalendarEventsMessage const &);
+
+	Archive::AutoArray<CalendarEventRow> m_events;
+};
+
+// ======================================================================
+
+/**
+ * Message sent from the database server back to the game server with loaded calendar settings.
+ */
+class LoadCalendarSettingsMessage : public GameNetworkMessage
+{
+public:
+	LoadCalendarSettingsMessage(
+		std::string const & bgTexture,
+		int32 srcX,
+		int32 srcY,
+		int32 srcW,
+		int32 srcH
+	);
+	explicit LoadCalendarSettingsMessage(Archive::ReadIterator & source);
+	~LoadCalendarSettingsMessage();
+
+	std::string const & getBgTexture() const { return m_bgTexture.get(); }
+	int32 getSrcX() const { return m_srcX.get(); }
+	int32 getSrcY() const { return m_srcY.get(); }
+	int32 getSrcW() const { return m_srcW.get(); }
+	int32 getSrcH() const { return m_srcH.get(); }
+
+private:
+	LoadCalendarSettingsMessage();
+	LoadCalendarSettingsMessage(LoadCalendarSettingsMessage const &);
+	LoadCalendarSettingsMessage & operator=(LoadCalendarSettingsMessage const &);
+
+	Archive::AutoVariable<std::string> m_bgTexture;
+	Archive::AutoVariable<int32> m_srcX;
+	Archive::AutoVariable<int32> m_srcY;
+	Archive::AutoVariable<int32> m_srcW;
+	Archive::AutoVariable<int32> m_srcH;
 };
 
 // ======================================================================

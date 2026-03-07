@@ -125,6 +125,14 @@ set(SHARED_SOURCES
 	shared/TaskSaveSnapshot.h
 	shared/TaskSetBiography.cpp
 	shared/TaskSetBiography.h
+	shared/CalendarEventQueries.cpp
+	shared/CalendarEventQueries.h
+	shared/TaskSaveCalendarEvent.cpp
+	shared/TaskSaveCalendarEvent.h
+	shared/TaskDeleteCalendarEvent.cpp
+	shared/TaskDeleteCalendarEvent.h
+	shared/TaskLoadCalendarEvents.cpp
+	shared/TaskLoadCalendarEvents.h
 	shared/UniverseLocator.cpp
 	shared/UniverseLocator.h
 	shared/UnloadCharacterCustomPersistStep.cpp

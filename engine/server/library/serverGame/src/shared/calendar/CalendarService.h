@@ -15,6 +15,7 @@
 
 #include "sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
+#include "sharedMessageDispatch/Receiver.h"
 
 #include <map>
 #include <vector>
@@ -25,10 +26,12 @@
 class Client;
 class ServerObject;
 class CreatureObject;
+class LoadCalendarEventsMessage;
+class LoadCalendarSettingsMessage;
 
 // ======================================================================
 
-class CalendarService
+class CalendarService : public MessageDispatch::Receiver
 {
 public:
 	// Event types
@@ -84,6 +87,13 @@ public:
 	void handleDeleteEventRequest(Client const & client, std::string const & eventId);
 	void handleGetSettingsRequest(Client const & client);
 	void handleApplySettingsRequest(Client const & client, std::string const & bgTexture, int32 srcX, int32 srcY, int32 srcW, int32 srcH);
+
+	// MessageDispatch::Receiver
+	void receiveMessage(MessageDispatch::Emitter const & source, MessageDispatch::MessageBase const & message);
+
+	// Handlers for data loaded from database
+	void handleLoadedEvents(LoadCalendarEventsMessage const & msg);
+	void handleLoadedSettings(LoadCalendarSettingsMessage const & msg);
 
 private:
 	CalendarService();

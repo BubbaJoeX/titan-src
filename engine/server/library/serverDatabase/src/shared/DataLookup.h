@@ -26,6 +26,8 @@ namespace DB
 
 class VerifyNameRequest;
 class GameNetworkMessage;
+class SaveCalendarEventMessage;
+class SaveCalendarSettingsMessage;
 
 // ======================================================================
 
@@ -90,6 +92,10 @@ private:
 	void getBiography                     (const NetworkId &owner, uint32 requestingProcess);
 	void setBiography                     (const NetworkId &owner, const Unicode::String &bio);
 	void getStructuresForPurge            (StationId account, bool warnOnly);
+	void saveCalendarEvent                (SaveCalendarEventMessage const & msg);
+	void deleteCalendarEvent              (std::string const & eventId);
+	void saveCalendarSettings             (SaveCalendarSettingsMessage const & msg);
+	void loadCalendarEvents               (uint32 requestingProcess);
 
   private:
 	DataLookup();

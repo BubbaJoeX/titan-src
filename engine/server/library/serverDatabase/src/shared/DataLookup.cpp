@@ -16,7 +16,12 @@
 #include "serverDatabase/TaskGetStructuresForPurge.h"
 #include "serverDatabase/TaskGetBiography.h"
 #include "serverDatabase/TaskSetBiography.h"
+#include "serverDatabase/TaskSaveCalendarEvent.h"
+#include "serverDatabase/TaskDeleteCalendarEvent.h"
+#include "serverDatabase/TaskLoadCalendarEvents.h"
+#include "serverDatabase/CalendarEventQueries.h"
 #include "serverNetworkMessages/BiographyMessage.h"
+#include "serverNetworkMessages/CalendarEventMessage.h"
 #include "serverNetworkMessages/CentralGameServerMessages.h"
 #include "serverNetworkMessages/RequestBiographyMessage.h"
 #include "serverNetworkMessages/RetrievedItemLoadMessage.h"
@@ -66,6 +71,10 @@ DataLookup::DataLookup() :
 	connectToMessage("RequestBiographyMessage");
 	connectToMessage("VerifyNameRequest");
 	connectToMessage("WarnStructuresAboutPurgeMessage");
+	connectToMessage("SaveCalendarEventMessage");
+	connectToMessage("DeleteCalendarEventMessage");
+	connectToMessage("SaveCalendarSettingsMessage");
+	connectToMessage("RequestLoadCalendarEventsMessage");
 }
 
 //-----------------------------------------------------------------------
@@ -153,6 +162,34 @@ void DataLookup::receiveMessage(const MessageDispatch::Emitter &source, const Me
 			GenericValueTypeMessage<StationId> msg(ri);
 
 			getStructuresForPurge(msg.getValue(), true);
+			break;
+		}
+		case constcrc("SaveCalendarEventMessage") :
+		{
+			Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+			SaveCalendarEventMessage msg(ri);
+			saveCalendarEvent(msg);
+			break;
+		}
+		case constcrc("DeleteCalendarEventMessage") :
+		{
+			Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+			DeleteCalendarEventMessage msg(ri);
+			deleteCalendarEvent(msg.getEventId());
+			break;
+		}
+		case constcrc("SaveCalendarSettingsMessage") :
+		{
+			Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+			SaveCalendarSettingsMessage msg(ri);
+			saveCalendarSettings(msg);
+			break;
+		}
+		case constcrc("RequestLoadCalendarEventsMessage") :
+		{
+			const GameServerConnection *conn = dynamic_cast<const GameServerConnection*>(&source);
+			if (conn)
+				loadCalendarEvents(conn->getProcessId());
 			break;
 		}
 		default :
@@ -564,6 +601,74 @@ bool DataLookup::isIdle()
 void DataLookup::getStructuresForPurge(StationId account, bool warnOnly)
 {
 	TaskGetStructuresForPurge *task = new TaskGetStructuresForPurge(account, warnOnly);
+	taskQueue->asyncRequest(task);
+}
+
+// ----------------------------------------------------------------------
+
+void DataLookup::saveCalendarEvent(SaveCalendarEventMessage const & msg)
+{
+	NOT_NULL(taskQueue);
+	TaskSaveCalendarEvent *task = new TaskSaveCalendarEvent(
+		msg.getEventId(), msg.getTitle(), msg.getDescription(),
+		msg.getEventType(), msg.getYear(), msg.getMonth(), msg.getDay(),
+		msg.getHour(), msg.getMinute(), msg.getDuration(),
+		msg.getGuildId(), msg.getCityId(), msg.getServerEventKey(),
+		msg.getRecurring(), msg.getRecurrenceType(),
+		msg.getBroadcastStart(), msg.getActive(),
+		msg.getCreatorId()
+	);
+	taskQueue->asyncRequest(task);
+}
+
+// ----------------------------------------------------------------------
+
+void DataLookup::deleteCalendarEvent(std::string const & eventId)
+{
+	NOT_NULL(taskQueue);
+	TaskDeleteCalendarEvent *task = new TaskDeleteCalendarEvent(eventId);
+	taskQueue->asyncRequest(task);
+}
+
+// ----------------------------------------------------------------------
+
+void DataLookup::saveCalendarSettings(SaveCalendarSettingsMessage const & msg)
+{
+	NOT_NULL(taskQueue);
+
+	class TaskSaveCalSettings : public DB::TaskRequest
+	{
+	public:
+		std::string bgTexture;
+		int srcX, srcY, srcW, srcH;
+		NetworkId modifiedBy;
+
+		TaskSaveCalSettings(std::string const & bg, int x, int y, int w, int h, NetworkId const & mod) :
+			bgTexture(bg), srcX(x), srcY(y), srcW(w), srcH(h), modifiedBy(mod) {}
+		virtual ~TaskSaveCalSettings() {}
+
+		virtual bool process(DB::Session *session)
+		{
+			DBQuery::SaveCalendarSettingsQuery qry(bgTexture, srcX, srcY, srcW, srcH, modifiedBy);
+			bool rval = session->exec(&qry);
+			qry.done();
+			return rval;
+		}
+		virtual void onComplete() {}
+	};
+
+	TaskSaveCalSettings *task = new TaskSaveCalSettings(
+		msg.getBgTexture(), msg.getSrcX(), msg.getSrcY(), msg.getSrcW(), msg.getSrcH(), msg.getModifiedBy()
+	);
+	taskQueue->asyncRequest(task);
+}
+
+// ----------------------------------------------------------------------
+
+void DataLookup::loadCalendarEvents(uint32 requestingProcess)
+{
+	NOT_NULL(taskQueue);
+	TaskLoadCalendarEvents *task = new TaskLoadCalendarEvents(requestingProcess);
 	taskQueue->asyncRequest(task);
 }
 

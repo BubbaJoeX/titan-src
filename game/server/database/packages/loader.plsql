@@ -1314,7 +1314,6 @@ procedure verify_character (p_station_id in number, p_character_id in number, p_
 	begin
 		open result_cursor for
 			select
-				setting_id,
 				bg_texture,
 				src_x,
 				src_y,

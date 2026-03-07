@@ -181,4 +181,160 @@ SaveCalendarSettingsMessage::~SaveCalendarSettingsMessage()
 }
 
 // ======================================================================
+// RequestLoadCalendarEventsMessage
+// ======================================================================
+
+RequestLoadCalendarEventsMessage::RequestLoadCalendarEventsMessage() :
+	GameNetworkMessage("RequestLoadCalendarEventsMessage")
+{
+}
+
+RequestLoadCalendarEventsMessage::RequestLoadCalendarEventsMessage(Archive::ReadIterator & source) :
+	GameNetworkMessage("RequestLoadCalendarEventsMessage")
+{
+	unpack(source);
+}
+
+RequestLoadCalendarEventsMessage::~RequestLoadCalendarEventsMessage()
+{
+}
+
+// ======================================================================
+// CalendarEventRow
+// ======================================================================
+
+CalendarEventRow::CalendarEventRow() :
+	eventId(),
+	title(),
+	description(),
+	eventType(0),
+	year(0),
+	month(0),
+	day(0),
+	hour(0),
+	minute(0),
+	duration(0),
+	guildId(0),
+	cityId(0),
+	serverEventKey(),
+	recurring(false),
+	recurrenceType(0),
+	broadcastStart(false),
+	active(false),
+	creatorId()
+{
+}
+
+namespace Archive
+{
+	void get(ReadIterator & source, CalendarEventRow & target)
+	{
+		get(source, target.eventId);
+		get(source, target.title);
+		get(source, target.description);
+		get(source, target.eventType);
+		get(source, target.year);
+		get(source, target.month);
+		get(source, target.day);
+		get(source, target.hour);
+		get(source, target.minute);
+		get(source, target.duration);
+		get(source, target.guildId);
+		get(source, target.cityId);
+		get(source, target.serverEventKey);
+		get(source, target.recurring);
+		get(source, target.recurrenceType);
+		get(source, target.broadcastStart);
+		get(source, target.active);
+		get(source, target.creatorId);
+	}
+
+	void put(ByteStream & target, CalendarEventRow const & source)
+	{
+		put(target, source.eventId);
+		put(target, source.title);
+		put(target, source.description);
+		put(target, source.eventType);
+		put(target, source.year);
+		put(target, source.month);
+		put(target, source.day);
+		put(target, source.hour);
+		put(target, source.minute);
+		put(target, source.duration);
+		put(target, source.guildId);
+		put(target, source.cityId);
+		put(target, source.serverEventKey);
+		put(target, source.recurring);
+		put(target, source.recurrenceType);
+		put(target, source.broadcastStart);
+		put(target, source.active);
+		put(target, source.creatorId);
+	}
+}
+
+// ======================================================================
+// LoadCalendarEventsMessage
+// ======================================================================
+
+LoadCalendarEventsMessage::LoadCalendarEventsMessage(std::vector<CalendarEventRow> const & events) :
+	GameNetworkMessage("LoadCalendarEventsMessage"),
+	m_events()
+{
+	addVariable(m_events);
+	m_events.set(events);
+}
+
+LoadCalendarEventsMessage::LoadCalendarEventsMessage(Archive::ReadIterator & source) :
+	GameNetworkMessage("LoadCalendarEventsMessage"),
+	m_events()
+{
+	addVariable(m_events);
+	unpack(source);
+}
+
+LoadCalendarEventsMessage::~LoadCalendarEventsMessage()
+{
+}
+
+// ======================================================================
+// LoadCalendarSettingsMessage
+// ======================================================================
+
+LoadCalendarSettingsMessage::LoadCalendarSettingsMessage(
+	std::string const & bgTexture,
+	int32 srcX,
+	int32 srcY,
+	int32 srcW,
+	int32 srcH
+) :
+	GameNetworkMessage("LoadCalendarSettingsMessage"),
+	m_bgTexture(bgTexture),
+	m_srcX(srcX),
+	m_srcY(srcY),
+	m_srcW(srcW),
+	m_srcH(srcH)
+{
+	addVariable(m_bgTexture);
+	addVariable(m_srcX);
+	addVariable(m_srcY);
+	addVariable(m_srcW);
+	addVariable(m_srcH);
+}
+
+LoadCalendarSettingsMessage::LoadCalendarSettingsMessage(Archive::ReadIterator & source) :
+	GameNetworkMessage("LoadCalendarSettingsMessage")
+{
+	addVariable(m_bgTexture);
+	addVariable(m_srcX);
+	addVariable(m_srcY);
+	addVariable(m_srcW);
+	addVariable(m_srcH);
+	unpack(source);
+}
+
+LoadCalendarSettingsMessage::~LoadCalendarSettingsMessage()
+{
+}
+
+// ======================================================================
 

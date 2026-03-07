@@ -20,6 +20,7 @@
 #include "serverGame/ServerWorld.h"
 #include "serverGame/Chat.h"
 #include "serverNetworkMessages/CalendarEventMessage.h"
+#include "sharedFoundation/CrcConstexpr.hpp"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
@@ -831,9 +832,107 @@ void CalendarService::saveToClusterData()
 
 void CalendarService::loadFromClusterData()
 {
-	// Events are loaded via the loader package on server startup
-	// The database sends LoadCalendarEventsMessage which is handled elsewhere
-	LOG("CalendarService", ("Calendar events will be loaded from database on startup"));
+	// Request events from the database server
+	connectToMessage("LoadCalendarEventsMessage");
+	connectToMessage("LoadCalendarSettingsMessage");
+
+	RequestLoadCalendarEventsMessage msg;
+	GameServer::getInstance().sendToDatabaseServer(msg);
+
+	LOG("CalendarService", ("Requested calendar events from database server"));
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::receiveMessage(MessageDispatch::Emitter const & source, MessageDispatch::MessageBase const & message)
+{
+	UNREF(source);
+
+	uint32 const messageType = message.getType();
+
+	switch (messageType)
+	{
+		case constcrc("LoadCalendarEventsMessage") :
+		{
+			Archive::ReadIterator ri = static_cast<GameNetworkMessage const &>(message).getByteStream().begin();
+			LoadCalendarEventsMessage msg(ri);
+			handleLoadedEvents(msg);
+			break;
+		}
+		case constcrc("LoadCalendarSettingsMessage") :
+		{
+			Archive::ReadIterator ri = static_cast<GameNetworkMessage const &>(message).getByteStream().begin();
+			LoadCalendarSettingsMessage msg(ri);
+			handleLoadedSettings(msg);
+			break;
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::handleLoadedEvents(LoadCalendarEventsMessage const & msg)
+{
+	std::vector<CalendarEventRow> const & rows = msg.getEvents();
+
+	m_events.clear();
+
+	uint32 maxId = 0;
+	for (std::vector<CalendarEventRow>::const_iterator it = rows.begin(); it != rows.end(); ++it)
+	{
+		CalendarEventData evt;
+		evt.eventId        = it->eventId;
+		evt.title          = it->title;
+		evt.description    = it->description;
+		evt.eventType      = it->eventType;
+		evt.year           = it->year;
+		evt.month          = it->month;
+		evt.day            = it->day;
+		evt.hour           = it->hour;
+		evt.minute         = it->minute;
+		evt.duration       = it->duration;
+		evt.guildId        = it->guildId;
+		evt.cityId         = it->cityId;
+		evt.serverEventKey = it->serverEventKey;
+		evt.recurring      = it->recurring;
+		evt.recurrenceType = it->recurrenceType;
+		evt.broadcastStart = it->broadcastStart;
+		evt.active         = it->active;
+		evt.creatorId      = it->creatorId;
+
+		m_events[evt.eventId] = evt;
+
+		// Track the highest numeric event ID to avoid collisions
+		if (evt.eventId.substr(0, 4) == "evt_")
+		{
+			std::string numPart = evt.eventId.substr(4);
+			size_t underscorePos = numPart.find('_');
+			if (underscorePos != std::string::npos)
+			{
+				uint32 idNum = static_cast<uint32>(atoi(numPart.substr(0, underscorePos).c_str()));
+				if (idNum > maxId)
+					maxId = idNum;
+			}
+		}
+	}
+
+	if (maxId >= m_nextEventId)
+		m_nextEventId = maxId + 1;
+
+	LOG("CalendarService", ("Loaded %d calendar events from database", static_cast<int>(m_events.size())));
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::handleLoadedSettings(LoadCalendarSettingsMessage const & msg)
+{
+	m_bgTexture = msg.getBgTexture();
+	m_srcX = msg.getSrcX();
+	m_srcY = msg.getSrcY();
+	m_srcW = msg.getSrcW();
+	m_srcH = msg.getSrcH();
+
+	LOG("CalendarService", ("Loaded calendar settings from database (texture: %s)", m_bgTexture.c_str()));
 }
 
 // ----------------------------------------------------------------------
