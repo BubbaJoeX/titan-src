@@ -119,6 +119,9 @@ private:
 	float m_checkTimer;
 	static float const CHECK_INTERVAL;
 
+	// Deferred DB load flag
+	bool m_needsLoad;
+
 	// Helper functions
 	void        checkAndTriggerEvents();
 	void        broadcastToGuild(int32 guildId, CalendarEventNotificationMessage const & msg);

@@ -66,6 +66,7 @@ CalendarService & CalendarService::getInstance()
 // ----------------------------------------------------------------------
 
 CalendarService::CalendarService() :
+	MessageDispatch::Receiver(),
 	m_events(),
 	m_nextEventId(1),
 	m_bgTexture("ui_calendar_bg.dds"),
@@ -73,8 +74,11 @@ CalendarService::CalendarService() :
 	m_srcY(0),
 	m_srcW(512),
 	m_srcH(512),
-	m_checkTimer(0.0f)
+	m_checkTimer(0.0f),
+	m_needsLoad(true)
 {
+	connectToMessage("LoadCalendarEventsMessage");
+	connectToMessage("LoadCalendarSettingsMessage");
 }
 
 // ----------------------------------------------------------------------
@@ -87,6 +91,14 @@ CalendarService::~CalendarService()
 
 void CalendarService::update(float deltaTime)
 {
+	if (m_needsLoad)
+	{
+		m_needsLoad = false;
+		RequestLoadCalendarEventsMessage msg;
+		GameServer::getInstance().sendToDatabaseServer(msg);
+		LOG("CalendarService", ("Requested calendar events from database server"));
+	}
+
 	m_checkTimer += deltaTime;
 	if (m_checkTimer >= CHECK_INTERVAL)
 	{
@@ -832,14 +844,8 @@ void CalendarService::saveToClusterData()
 
 void CalendarService::loadFromClusterData()
 {
-	// Request events from the database server
-	connectToMessage("LoadCalendarEventsMessage");
-	connectToMessage("LoadCalendarSettingsMessage");
-
-	RequestLoadCalendarEventsMessage msg;
-	GameServer::getInstance().sendToDatabaseServer(msg);
-
-	LOG("CalendarService", ("Requested calendar events from database server"));
+	m_needsLoad = true;
+	LOG("CalendarService", ("Calendar load deferred until GameServer is ready"));
 }
 
 // ----------------------------------------------------------------------
