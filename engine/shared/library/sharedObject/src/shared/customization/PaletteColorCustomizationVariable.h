@@ -41,6 +41,18 @@ public:
 
 	void                 setClosestColor(const PackedArgb &targetColor);
 
+	// Direct color support - HTML hex codes and RGB values
+	bool                 setDirectColor(const PackedArgb &color);
+	bool                 setDirectColorHtml(const char *htmlColor);
+	bool                 hasDirectColor() const;
+	const PackedArgb    &getDirectColor() const;
+	int                  getMatchedPaletteIndex() const;
+
+	// Static helpers for special index encoding
+	static bool          isSpecialColorIndex(int index);
+	static int           encodeColorAsIndex(const PackedArgb &color);
+	static PackedArgb    decodeColorFromIndex(int specialIndex);
+
 #ifdef _DEBUG
 	virtual std::string  debugToString() const;
 #endif
@@ -56,6 +68,8 @@ private:
 
 	const PaletteArgb *const m_palette;
 	int                      m_paletteIndex;
+	bool                     m_useDirectColor;
+	mutable PackedArgb       m_directColor;
 
 };
 

@@ -306,6 +306,11 @@ namespace ScriptMethodsObjectInfoNamespace
 	jlong        JNICALL getDecoyOrigin(JNIEnv *env, jobject self, jlong creature);
 	jboolean     JNICALL openRatingWindow(JNIEnv * env, jobject self, jlong player, jstring title, jstring description);
 	void         JNICALL openExamineWindow(JNIEnv * env, jobject self, jlong player, jlong item);
+
+	// Direct color customization support
+	jboolean     JNICALL setCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName, jint r, jint g, jint b);
+	jboolean     JNICALL setCustomizationColorHtml(JNIEnv * env, jobject self, jlong target, jstring varName, jstring htmlColor);
+	jintArray    JNICALL getCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName);
 }
 
 
@@ -540,6 +545,10 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getDecoyOrigin", "(J)J", getDecoyOrigin),
 	JF("_openRatingWindow", "(JLjava/lang/String;Ljava/lang/String;)Z", openRatingWindow),
 	JF("_openExamineWindow", "(JJ)V", openExamineWindow),
+	// Direct color customization support
+	JF("_setCustomizationColorRGB", "(JLjava/lang/String;III)Z", setCustomizationColorRGB),
+	JF("_setCustomizationColorHtml", "(JLjava/lang/String;Ljava/lang/String;)Z", setCustomizationColorHtml),
+	JF("_getCustomizationColorRGB", "(JLjava/lang/String;)[I", getCustomizationColorRGB),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -6716,6 +6725,152 @@ void JNICALL ScriptMethodsObjectInfoNamespace::openExamineWindow(JNIEnv * env, j
 
 	GenericValueTypeMessage<NetworkId> const openExamineWindowMsg("OpenExamineWindow", itemObject->getNetworkId());
 	playerCreature->getClient()->send(openExamineWindowMsg, true);
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Set a customization color using RGB values.
+ * @param target  The object to set the customization on
+ * @param varName  The name of the customization variable
+ * @param r  Red component (0-255)
+ * @param g  Green component (0-255)
+ * @param b  Blue component (0-255)
+ * @return  true if successful
+ */
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName, jint r, jint g, jint b)
+{
+	UNREF(self);
+
+	TangibleObject * obj = nullptr;
+	if (!JavaLibrary::getObject(target, obj) || !obj)
+		return JNI_FALSE;
+
+	JavaStringParam varNameParam(varName);
+	std::string varNameStr;
+	if (!JavaLibrary::convert(varNameParam, varNameStr))
+		return JNI_FALSE;
+
+	CustomizationData * const cdata = obj->fetchCustomizationData();
+	if (!cdata)
+		return JNI_FALSE;
+
+	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
+
+	if (palVar)
+	{
+		PackedArgb color(255, static_cast<uint8>(r), static_cast<uint8>(g), static_cast<uint8>(b));
+		palVar->setDirectColor(color);
+		cdata->release();
+		return JNI_TRUE;
+	}
+
+	cdata->release();
+	return JNI_FALSE;
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Set a customization color using an HTML hex color string.
+ * @param target  The object to set the customization on
+ * @param varName  The name of the customization variable
+ * @param htmlColor  The HTML color string (e.g., "#FF5500")
+ * @return  true if successful
+ */
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorHtml(JNIEnv * env, jobject self, jlong target, jstring varName, jstring htmlColor)
+{
+	UNREF(self);
+
+	TangibleObject * obj = nullptr;
+	if (!JavaLibrary::getObject(target, obj) || !obj)
+		return JNI_FALSE;
+
+	JavaStringParam varNameParam(varName);
+	std::string varNameStr;
+	if (!JavaLibrary::convert(varNameParam, varNameStr))
+		return JNI_FALSE;
+
+	JavaStringParam htmlColorParam(htmlColor);
+	std::string htmlColorStr;
+	if (!JavaLibrary::convert(htmlColorParam, htmlColorStr))
+		return JNI_FALSE;
+
+	if (!PackedArgb::isValidHtmlColor(htmlColorStr.c_str()))
+		return JNI_FALSE;
+
+	CustomizationData * const cdata = obj->fetchCustomizationData();
+	if (!cdata)
+		return JNI_FALSE;
+
+	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
+
+	if (palVar)
+	{
+		palVar->setDirectColorHtml(htmlColorStr.c_str());
+		cdata->release();
+		return JNI_TRUE;
+	}
+
+	cdata->release();
+	return JNI_FALSE;
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Get the customization color as an RGB array [r, g, b, a].
+ * @param target  The object to get the customization from
+ * @param varName  The name of the customization variable
+ * @return  An int array [r, g, b, a] or null if not found
+ */
+jintArray JNICALL ScriptMethodsObjectInfoNamespace::getCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName)
+{
+	UNREF(self);
+
+	TangibleObject * obj = nullptr;
+	if (!JavaLibrary::getObject(target, obj) || !obj)
+		return nullptr;
+
+	JavaStringParam varNameParam(varName);
+	std::string varNameStr;
+	if (!JavaLibrary::convert(varNameParam, varNameStr))
+		return nullptr;
+
+	CustomizationData * const cdata = obj->fetchCustomizationData();
+	if (!cdata)
+		return nullptr;
+
+	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
+
+	if (palVar)
+	{
+		PackedArgb const & color = palVar->getDirectColor();
+
+		LocalIntArrayRefPtr result = createNewIntArray(4);
+		if (result == LocalIntArrayRef::cms_nullPtr)
+		{
+			cdata->release();
+			return nullptr;
+		}
+
+		jint values[4];
+		values[0] = static_cast<jint>(color.getR());
+		values[1] = static_cast<jint>(color.getG());
+		values[2] = static_cast<jint>(color.getB());
+		values[3] = static_cast<jint>(color.getA());
+
+		setIntArrayRegion(*result, 0, 4, values);
+
+		cdata->release();
+		return result->getReturnValue();
+	}
+
+	cdata->release();
+	return nullptr;
 }
 
 // ======================================================================
