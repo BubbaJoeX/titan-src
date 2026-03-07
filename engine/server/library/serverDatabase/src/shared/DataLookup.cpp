@@ -25,6 +25,7 @@
 #include "serverNetworkMessages/CentralGameServerMessages.h"
 #include "serverNetworkMessages/RequestBiographyMessage.h"
 #include "serverNetworkMessages/RetrievedItemLoadMessage.h"
+#include "sharedDatabaseInterface/DbSession.h"
 #include "sharedDatabaseInterface/DbTaskQueue.h"
 #include "sharedFoundation/Crc.h"
 #include "sharedFoundation/ExitChain.h"
