@@ -245,7 +245,7 @@ private:
 	Archive::AutoVariable<int32>       m_recurrenceType;
 	Archive::AutoVariable<bool>        m_broadcastStart;
 	Archive::AutoVariable<bool>        m_active;
-	Archive::AutoVariable<NetworkId>   m_creatorId;
+	Archive::AutoVariable<std::string> m_creatorId;
 };
 
 // ======================================================================

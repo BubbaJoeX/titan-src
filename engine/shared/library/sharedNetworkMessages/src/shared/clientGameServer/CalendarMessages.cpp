@@ -63,7 +63,9 @@ namespace Archive
 		get(source, target.recurrenceType);
 		get(source, target.broadcastStart);
 		get(source, target.active);
-		get(source, target.creatorId);
+		std::string creatorIdStr;
+		get(source, creatorIdStr);
+		target.creatorId = NetworkId(creatorIdStr);
 	}
 
 	void put(ByteStream & target, CalendarEventData const & source)
@@ -85,7 +87,7 @@ namespace Archive
 		put(target, source.recurrenceType);
 		put(target, source.broadcastStart);
 		put(target, source.active);
-		put(target, source.creatorId);
+		put(target, source.creatorId.getValueString());
 	}
 }
 
@@ -479,6 +481,10 @@ CalendarApplySettingsMessage::CalendarApplySettingsMessage(Archive::ReadIterator
 	addVariable(m_srcW);
 	addVariable(m_srcH);
 	unpack(source);
+}
+
+CalendarApplySettingsMessage::~CalendarApplySettingsMessage()
+{
 }
 
 // ======================================================================
