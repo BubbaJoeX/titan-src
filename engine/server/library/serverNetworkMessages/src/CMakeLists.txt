@@ -303,6 +303,8 @@ set(SHARED_SOURCES
 	shared/gameGameServer/BountyHunterTargetListMessage.h
 	shared/gameGameServer/BountyHunterTargetMessage.cpp
 	shared/gameGameServer/BountyHunterTargetMessage.h
+	shared/gameGameServer/CalendarEventMessage.cpp
+	shared/gameGameServer/CalendarEventMessage.h
 	shared/gameGameServer/CharacterNamesMessage.cpp
 	shared/gameGameServer/CharacterNamesMessage.h
 	shared/gameGameServer/CreateDynamicSpawnRegionCircleMessage.cpp
