@@ -289,7 +289,10 @@ bool PaletteColorCustomizationVariable::setDirectColor(const PackedArgb &color)
 {
 	m_directColor = color;
 	m_useDirectColor = true;
-	m_paletteIndex = m_palette->findClosestMatch(color);
+	if (m_palette)
+		m_paletteIndex = m_palette->findClosestMatch(color);
+	else
+		m_paletteIndex = 0;
 	signalVariableModified();
 	return true;
 }
