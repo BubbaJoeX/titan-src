@@ -174,7 +174,6 @@ CalendarCreateEventMessage::CalendarCreateEventMessage(CalendarEventData const &
 	addVariable(m_recurring);
 	addVariable(m_recurrenceType);
 	addVariable(m_broadcastStart);
-		eventData.title.c_str(), eventData.eventType, eventData.year, eventData.month, eventData.day, eventData.hour, eventData.minute, eventData.duration));
 }
 
 CalendarCreateEventMessage::CalendarCreateEventMessage(Archive::ReadIterator & source) :
@@ -196,7 +195,6 @@ CalendarCreateEventMessage::CalendarCreateEventMessage(Archive::ReadIterator & s
 	addVariable(m_recurrenceType);
 	addVariable(m_broadcastStart);
 	unpack(source);
-		m_title.get().c_str(), m_eventType.get(), m_year.get(), m_month.get(), m_day.get(), m_hour.get(), m_minute.get(), m_duration.get()));
 }
 
 CalendarCreateEventMessage::~CalendarCreateEventMessage()
@@ -238,7 +236,6 @@ CalendarCreateEventResponseMessage::CalendarCreateEventResponseMessage(bool succ
 	addVariable(m_success);
 	addVariable(m_eventId);
 	addVariable(m_errorMessage);
-		success ? 1 : 0, eventId.c_str(), errorMessage.c_str()));
 }
 
 CalendarCreateEventResponseMessage::CalendarCreateEventResponseMessage(Archive::ReadIterator & source) :
@@ -248,7 +245,6 @@ CalendarCreateEventResponseMessage::CalendarCreateEventResponseMessage(Archive::
 	addVariable(m_eventId);
 	addVariable(m_errorMessage);
 	unpack(source);
-		m_success.get() ? 1 : 0, m_eventId.get().c_str(), m_errorMessage.get().c_str()));
 }
 
 CalendarCreateEventResponseMessage::~CalendarCreateEventResponseMessage()
@@ -326,7 +322,7 @@ CalendarEventNotificationMessage::CalendarEventNotificationMessage(int32 type, C
 	m_recurrenceType(eventData.recurrenceType),
 	m_broadcastStart(eventData.broadcastStart),
 	m_active(eventData.active),
-	m_creatorId(eventData.creatorId)
+	m_creatorId(eventData.creatorId.getValueString())
 {
 	addVariable(m_notificationType);
 	addVariable(m_eventId);
@@ -347,7 +343,6 @@ CalendarEventNotificationMessage::CalendarEventNotificationMessage(int32 type, C
 	addVariable(m_broadcastStart);
 	addVariable(m_active);
 	addVariable(m_creatorId);
-		type, eventData.eventId.c_str(), eventData.title.c_str()));
 }
 
 CalendarEventNotificationMessage::CalendarEventNotificationMessage(Archive::ReadIterator & source) :
@@ -373,7 +368,6 @@ CalendarEventNotificationMessage::CalendarEventNotificationMessage(Archive::Read
 	addVariable(m_active);
 	addVariable(m_creatorId);
 	unpack(source);
-		m_notificationType.get(), m_eventId.get().c_str(), m_title.get().c_str()));
 }
 
 CalendarEventNotificationMessage::~CalendarEventNotificationMessage()
@@ -400,7 +394,7 @@ CalendarEventData CalendarEventNotificationMessage::getEventData() const
 	d.recurrenceType = m_recurrenceType.get();
 	d.broadcastStart = m_broadcastStart.get();
 	d.active         = m_active.get();
-	d.creatorId      = m_creatorId.get();
+	d.creatorId      = NetworkId(m_creatorId.get());
 	return d;
 }
 
@@ -440,7 +434,6 @@ CalendarSettingsResponseMessage::CalendarSettingsResponseMessage(std::string con
 	addVariable(m_srcY);
 	addVariable(m_srcW);
 	addVariable(m_srcH);
-		bgTexture.c_str(), srcX, srcY, srcW, srcH));
 }
 
 CalendarSettingsResponseMessage::CalendarSettingsResponseMessage(Archive::ReadIterator & source) :
@@ -452,7 +445,6 @@ CalendarSettingsResponseMessage::CalendarSettingsResponseMessage(Archive::ReadIt
 	addVariable(m_srcW);
 	addVariable(m_srcH);
 	unpack(source);
-		m_bgTexture.get().c_str(), m_srcX.get(), m_srcY.get(), m_srcW.get(), m_srcH.get()));
 }
 
 CalendarSettingsResponseMessage::~CalendarSettingsResponseMessage()
@@ -476,7 +468,6 @@ CalendarApplySettingsMessage::CalendarApplySettingsMessage(std::string const & b
 	addVariable(m_srcY);
 	addVariable(m_srcW);
 	addVariable(m_srcH);
-		bgTexture.c_str(), srcX, srcY, srcW, srcH));
 }
 
 CalendarApplySettingsMessage::CalendarApplySettingsMessage(Archive::ReadIterator & source) :
@@ -488,7 +479,6 @@ CalendarApplySettingsMessage::CalendarApplySettingsMessage(Archive::ReadIterator
 	addVariable(m_srcW);
 	addVariable(m_srcH);
 	unpack(source);
-		m_bgTexture.get().c_str(), m_srcX.get(), m_srcY.get(), m_srcW.get(), m_srcH.get()));
 }
 
 // ======================================================================
