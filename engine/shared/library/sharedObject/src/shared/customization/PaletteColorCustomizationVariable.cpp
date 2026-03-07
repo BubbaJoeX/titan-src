@@ -37,15 +37,7 @@ PaletteColorCustomizationVariable::PaletteColorCustomizationVariable(const Palet
 
 	int const paletteEntryCount = m_palette->getEntryCount();
 
-	// Check if this is a special color-encoded index
-	if (isSpecialColorIndex(selectedIndex))
-	{
-		m_directColor = decodeColorFromIndex(selectedIndex);
-		m_useDirectColor = true;
-		// Find closest palette match for rendering
-		m_paletteIndex = m_palette->findClosestMatch(m_directColor);
-	}
-	else if ((m_paletteIndex < 0) || (m_paletteIndex >= paletteEntryCount))
+	if ((m_paletteIndex < 0) || (m_paletteIndex >= paletteEntryCount))
 	{
 		DEBUG_WARNING(true, ("Initializing palette var for palette=[%s] with out-of-range value [%d], valid range is [0..%d], defaulting to [%d].", m_palette->getName().getString(), m_paletteIndex, paletteEntryCount - 1, paletteEntryCount - 1));
 		m_paletteIndex = paletteEntryCount - 1;
@@ -64,11 +56,8 @@ PaletteColorCustomizationVariable::~PaletteColorCustomizationVariable()
 
 int PaletteColorCustomizationVariable::getValue() const
 {
-	// If using direct color, return the special encoded index
-	if (m_useDirectColor)
-	{
-		return encodeColorAsIndex(m_directColor);
-	}
+	// Always return the palette index (closest match when using direct color).
+	// Direct color is transmitted via customization data version 3 format.
 	return m_paletteIndex;
 }
 
@@ -76,26 +65,15 @@ int PaletteColorCustomizationVariable::getValue() const
 
 bool PaletteColorCustomizationVariable::setValue(int value)
 {
-	// Check if this is a special color-encoded index
-	if (isSpecialColorIndex(value))
+	if (m_palette && (value >= 0) && (value < m_palette->getEntryCount()))
 	{
-		m_directColor = decodeColorFromIndex(value);
-		m_useDirectColor = true;
-		// Find closest palette match for rendering
-		m_paletteIndex = m_palette->findClosestMatch(m_directColor);
-		signalVariableModified();
-		return RangedIntCustomizationVariable::setValue(m_paletteIndex);
-	}
-
-	// Traditional palette index
-	if ((value >= 0) && (value < m_palette->getEntryCount()))
-	{
-		// change the value
 		m_paletteIndex = value;
 		m_useDirectColor = false;
-
-		// notify owner CustomizationData about change.
 		signalVariableModified();
+	}
+	else if (!m_palette)
+	{
+		m_paletteIndex = value;
 	}
 	else
 	{
@@ -103,7 +81,7 @@ bool PaletteColorCustomizationVariable::setValue(int value)
 		return false;
 	}
 
-	return RangedIntCustomizationVariable::setValue(value);
+	return RangedIntCustomizationVariable::setValue(m_paletteIndex);
 }
 
 // ----------------------------------------------------------------------
