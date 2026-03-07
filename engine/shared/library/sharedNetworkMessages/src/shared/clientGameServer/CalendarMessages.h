@@ -108,6 +108,8 @@ public:
 
 	CalendarEventData const & getEventData() const { return m_eventData; }
 
+	void pack(Archive::ByteStream & target) const;
+
 private:
 	CalendarCreateEventMessage();
 	CalendarCreateEventMessage(CalendarCreateEventMessage const &);
@@ -207,6 +209,8 @@ public:
 
 	int32                     getNotificationType() const { return m_notificationType.get(); }
 	CalendarEventData const & getEventData() const        { return m_eventData; }
+
+	void pack(Archive::ByteStream & target) const;
 
 private:
 	CalendarEventNotificationMessage();
