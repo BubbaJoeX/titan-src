@@ -14,7 +14,6 @@
 
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 #include "sharedFoundation/NetworkId.h"
-#include "Archive/AutoArray.h"
 #include <vector>
 #include <string>
 
