@@ -37,6 +37,11 @@ public:
 
 	virtual void         writeObjectTemplateExportString(const std::string &variablePathName, ObjectTemplateCustomizationDataWriter &writer) const;
 
+	// Persistence overrides for direct color support
+	virtual int          getPersistedDataByteCount() const;
+	virtual void         saveToByteVector(ByteVector &data) const;
+	virtual bool         restoreFromByteVector(ByteVector const &data, int startIndex, int length);
+
 	const PaletteArgb   *fetchPalette() const;
 
 	void                 setClosestColor(const PackedArgb &targetColor);
