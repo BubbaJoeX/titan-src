@@ -1403,10 +1403,10 @@ void TangibleObject::updateRtCameraVariablesFromObjvars()
 
 	// RT Camera: Active state
 	std::string activeStr;
-	bool isActive = false;
-	if (getObjVars().getItem(OBJVAR_RT_CAMERA_ACTIVE, isActive))
+	int isActiveInt = 0;
+	if (getObjVars().getItem(OBJVAR_RT_CAMERA_ACTIVE, isActiveInt))
 	{
-		activeStr = isActive ? "1" : "";
+		activeStr = (isActiveInt != 0) ? "1" : "";
 	}
 	if (m_rtCameraActive.get() != activeStr)
 		m_rtCameraActive = activeStr;
