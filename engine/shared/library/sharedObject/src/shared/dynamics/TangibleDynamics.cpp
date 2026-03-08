@@ -112,6 +112,14 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_followElapsed(0.0f),
 	m_followUpdateAccumulator(0.0f),
 	m_followTargetEffectActive(false),
+	// Lock To Parent
+	m_lockToParentId(0),
+	m_lockToParentPositionOffset(Vector::zero),
+	m_lockToParentRotationOffset(Vector::zero),
+	m_lockToParentMatchRotation(true),
+	m_lockToParentDuration(-1.0f),
+	m_lockToParentElapsed(0.0f),
+	m_lockToParentEffectActive(false),
 	// Sway
 	m_swayAngle(0.1f),
 	m_swaySpeed(1.0f),
@@ -616,6 +624,45 @@ float  TangibleDynamics::getFollowHoverHeight() const    { return m_followHoverH
 float  TangibleDynamics::getFollowBobAmplitude() const   { return m_followBobAmplitude; }
 
 //===================================================================
+// LOCK TO PARENT (rigid attachment with fixed offset)
+//===================================================================
+
+void TangibleDynamics::setLockToParentEffect(uint64 parentNetworkId, const Vector& positionOffset,
+                                             const Vector& rotationOffset, bool matchRotation, float duration)
+{
+	m_lockToParentId = parentNetworkId;
+	m_lockToParentPositionOffset = positionOffset;
+	m_lockToParentRotationOffset = rotationOffset;
+	m_lockToParentMatchRotation = matchRotation;
+	m_lockToParentDuration = duration;
+	m_lockToParentElapsed = 0.0f;
+	m_lockToParentEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearLockToParentEffect()
+{
+	m_lockToParentId = 0;
+	m_lockToParentPositionOffset = Vector::zero;
+	m_lockToParentRotationOffset = Vector::zero;
+	m_lockToParentMatchRotation = true;
+	m_lockToParentDuration = -1.0f;
+	m_lockToParentElapsed = 0.0f;
+	m_lockToParentEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+uint64 TangibleDynamics::getLockToParentId() const               { return m_lockToParentId; }
+Vector TangibleDynamics::getLockToParentPositionOffset() const   { return m_lockToParentPositionOffset; }
+Vector TangibleDynamics::getLockToParentRotationOffset() const   { return m_lockToParentRotationOffset; }
+bool   TangibleDynamics::getLockToParentMatchRotation() const    { return m_lockToParentMatchRotation; }
+bool   TangibleDynamics::isLockToParentActive() const            { return m_lockToParentEffectActive; }
+
+//===================================================================
 // SWAY/PENDULUM (swinging back and forth)
 //===================================================================
 
@@ -971,6 +1018,9 @@ void TangibleDynamics::realAlter(float elapsedTime)
 	if (m_followTargetEffectActive)
 		updateFollowTargetEffect(elapsedTime);
 
+	if (m_lockToParentEffectActive)
+		updateLockToParentEffect(elapsedTime);
+
 	if (m_swayEffectActive)
 		updateSwayEffect(elapsedTime);
 
@@ -1213,6 +1263,39 @@ void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
 
 //-------------------------------------------------------------------
 
+void TangibleDynamics::updateLockToParentEffect(float elapsedTime)
+{
+	// Duration check
+	if (m_lockToParentDuration >= 0.0f)
+	{
+		m_lockToParentElapsed += elapsedTime;
+		if (m_lockToParentElapsed >= m_lockToParentDuration)
+		{
+			clearLockToParentEffect();
+			return;
+		}
+	}
+
+	// Validate parent still exists
+	if (m_lockToParentId == 0)
+	{
+		clearLockToParentEffect();
+		return;
+	}
+
+	Object const * const parent = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(m_lockToParentId)));
+	if (!parent)
+	{
+		clearLockToParentEffect();
+		return;
+	}
+
+	// Note: Actual position/rotation update is handled in TangibleObject::updateTangibleDynamicsPosition
+	// This keeps the logic server-authoritative while allowing client-side smoothing
+}
+
+//-------------------------------------------------------------------
+
 void TangibleDynamics::updateSwayEffect(float elapsedTime)
 {
 	if (m_swayDuration >= 0.0f)
@@ -1359,6 +1442,7 @@ void TangibleDynamics::recalculateMode()
 	if (m_orbitEffectActive)       m_activeForceMask |= FM_orbit;
 	if (m_hoverEffectActive)       m_activeForceMask |= FM_hover;
 	if (m_followTargetEffectActive) m_activeForceMask |= FM_followTarget;
+	if (m_lockToParentEffectActive) m_activeForceMask |= FM_lockToParent;
 	if (m_swayEffectActive)        m_activeForceMask |= FM_sway;
 	if (m_shakeEffectActive)       m_activeForceMask |= FM_shake;
 	if (m_floatEffectActive)       m_activeForceMask |= FM_float;

@@ -1571,6 +1571,28 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 			td->setFollowTargetEffect(static_cast<uint64>(followTargetNetworkId.getValue()), followDistance, followSpeed, followHoverHeight, followBobAmplitude, followDuration);
 	}
 
+	// --- Lock To Parent ---
+	NetworkId lockParentNetworkId;
+	if (getObjVars().getItem("dynamics.lockParent.parentId", lockParentNetworkId))
+	{
+		float offsetX = 0.0f, offsetY = 0.0f, offsetZ = 0.0f;
+		float rotYaw = 0.0f, rotPitch = 0.0f, rotRoll = 0.0f;
+		bool matchRotation = true;
+		float lockDuration = -1.0f;
+		getObjVars().getItem("dynamics.lockParent.offsetX", offsetX);
+		getObjVars().getItem("dynamics.lockParent.offsetY", offsetY);
+		getObjVars().getItem("dynamics.lockParent.offsetZ", offsetZ);
+		getObjVars().getItem("dynamics.lockParent.rotYaw", rotYaw);
+		getObjVars().getItem("dynamics.lockParent.rotPitch", rotPitch);
+		getObjVars().getItem("dynamics.lockParent.rotRoll", rotRoll);
+		getObjVars().getItem("dynamics.lockParent.matchRotation", matchRotation);
+		getObjVars().getItem("dynamics.lockParent.duration", lockDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_lockToParent))
+			td->setLockToParentEffect(static_cast<uint64>(lockParentNetworkId.getValue()),
+				Vector(offsetX, offsetY, offsetZ), Vector(rotPitch, rotYaw, rotRoll), matchRotation, lockDuration);
+	}
+
 	// --- Sway ---
 	float swayAngle = 0.0f;
 	if (getObjVars().getItem("dynamics.sway.swingAngle", swayAngle))
@@ -2156,6 +2178,60 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 	TangibleDynamics * const td = dynamic_cast<TangibleDynamics *>(getDynamics());
 	if (!td)
 		return;
+
+	// --- Lock To Parent (rigid attachment - takes priority) ---
+	if (td->isForceActive(TangibleDynamics::FM_lockToParent))
+	{
+		uint64 const parentId = td->getLockToParentId();
+		if (parentId != 0)
+		{
+			Object const * const parent = NetworkIdManager::getObjectById(NetworkId(static_cast<NetworkId::NetworkIdType>(parentId)));
+			if (parent)
+			{
+				Vector const posOffset = td->getLockToParentPositionOffset();
+				Vector const rotOffset = td->getLockToParentRotationOffset();
+				bool const matchRotation = td->getLockToParentMatchRotation();
+
+				Transform const & parentTransform = parent->getTransform_o2w();
+				Vector const parentPos = parent->getPosition_w();
+
+				if (matchRotation)
+				{
+					// Calculate world position from parent's local offset
+					Vector worldOffset;
+					worldOffset = parentTransform.rotate_l2p(posOffset);
+					Vector const newPos = parentPos + worldOffset;
+
+					// Copy parent's rotation and apply rotation offset
+					Transform newTransform = parentTransform;
+					newTransform.setPosition_p(newPos);
+
+					// Apply rotation offset (yaw, pitch, roll in degrees)
+					if (rotOffset.x != 0.0f || rotOffset.y != 0.0f || rotOffset.z != 0.0f)
+					{
+						float const yawRad = rotOffset.y * (PI / 180.0f);
+						float const pitchRad = rotOffset.x * (PI / 180.0f);
+						float const rollRad = rotOffset.z * (PI / 180.0f);
+						newTransform.yaw_l(yawRad);
+						newTransform.pitch_l(pitchRad);
+						newTransform.roll_l(rollRad);
+					}
+
+					setTransform_o2w(newTransform);
+				}
+				else
+				{
+					// Only lock position, keep our own rotation
+					Vector worldOffset;
+					worldOffset = parentTransform.rotate_l2p(posOffset);
+					Vector const newPos = parentPos + worldOffset;
+					setPosition_w(newPos);
+				}
+			}
+		}
+		// Lock To Parent takes priority, skip other dynamics
+		return;
+	}
 
 	// --- Follow Target ---
 	if (td->isForceActive(TangibleDynamics::FM_followTarget))

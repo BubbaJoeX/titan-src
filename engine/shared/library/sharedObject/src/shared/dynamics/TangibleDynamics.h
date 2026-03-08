@@ -48,7 +48,8 @@ public:
 		FM_shake        = (1 << 9),
 		FM_float        = (1 << 10),
 		FM_conveyor     = (1 << 11),
-		FM_carousel     = (1 << 12)
+		FM_carousel     = (1 << 12),
+		FM_lockToParent = (1 << 13)
 	};
 
 	enum MovementSpace
@@ -143,6 +144,17 @@ public:
 	float  getFollowSpeed() const;
 	float  getFollowHoverHeight() const;
 	float  getFollowBobAmplitude() const;
+
+	// --- Lock To Parent (rigid attachment to parent object with fixed offset) ---
+
+	void   setLockToParentEffect(uint64 parentNetworkId, const Vector& positionOffset,
+	                             const Vector& rotationOffset, bool matchRotation = true, float duration = -1.0f);
+	void   clearLockToParentEffect();
+	uint64 getLockToParentId() const;
+	Vector getLockToParentPositionOffset() const;
+	Vector getLockToParentRotationOffset() const;
+	bool   getLockToParentMatchRotation() const;
+	bool   isLockToParentActive() const;
 
 	// --- Sway/Pendulum (swinging back and forth like a hanging sign) ---
 
@@ -299,6 +311,15 @@ private:
 	float  m_followUpdateAccumulator;
 	bool   m_followTargetEffectActive;
 
+	// --- Lock To Parent state ---
+	uint64 m_lockToParentId;
+	Vector m_lockToParentPositionOffset;
+	Vector m_lockToParentRotationOffset;
+	bool   m_lockToParentMatchRotation;
+	float  m_lockToParentDuration;
+	float  m_lockToParentElapsed;
+	bool   m_lockToParentEffectActive;
+
 	// --- Sway state ---
 	float  m_swayAngle;
 	float  m_swaySpeed;
@@ -367,6 +388,7 @@ private:
 	void updateOrbitEffect(float elapsedTime);
 	void updateHoverEffect(float elapsedTime);
 	void updateFollowTargetEffect(float elapsedTime);
+	void updateLockToParentEffect(float elapsedTime);
 	void updateSwayEffect(float elapsedTime);
 	void updateShakeEffect(float elapsedTime);
 	void updateFloatEffect(float elapsedTime);
