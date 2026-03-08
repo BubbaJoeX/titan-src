@@ -116,10 +116,22 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 	}
 
 	// Check for flatten permission (rank 3+)
-	if (modType == CityTerrainModificationType::MT_FLATTEN && cityRank < 3)
+	if (modType == CityTerrainModificationType::MT_FLATTEN)
 	{
-		sendResponse(client, false, "", "City must be rank 3 or higher to flatten terrain.");
-		return;
+		if (cityRank < 3)
+		{
+			sendResponse(client, false, "", "City must be rank 3 or higher to flatten terrain.");
+			return;
+		}
+		// Allow flatten radius up to city radius
+		int cityRadius = cityInfo.getRadius();
+		if (radius > static_cast<float>(cityRadius))
+		{
+			char buf[128];
+			snprintf(buf, sizeof(buf), "Flatten radius cannot exceed city radius (%d meters).", cityRadius);
+			sendResponse(client, false, "", buf);
+			return;
+		}
 	}
 
 	// Generate region ID
