@@ -306,6 +306,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jlong        JNICALL getDecoyOrigin(JNIEnv *env, jobject self, jlong creature);
 	jboolean     JNICALL openRatingWindow(JNIEnv * env, jobject self, jlong player, jstring title, jstring description);
 	void         JNICALL openExamineWindow(JNIEnv * env, jobject self, jlong player, jlong item);
+	void         JNICALL openCityTerrainPainter(JNIEnv * env, jobject self, jlong player, jint cityId);
 
 	// Direct color customization support
 	jboolean     JNICALL setCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName, jint r, jint g, jint b);
@@ -545,6 +546,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getDecoyOrigin", "(J)J", getDecoyOrigin),
 	JF("_openRatingWindow", "(JLjava/lang/String;Ljava/lang/String;)Z", openRatingWindow),
 	JF("_openExamineWindow", "(JJ)V", openExamineWindow),
+	JF("_openCityTerrainPainter", "(JI)V", openCityTerrainPainter),
 	// Direct color customization support
 	JF("_setCustomizationColorRGB", "(JLjava/lang/String;III)Z", setCustomizationColorRGB),
 	JF("_setCustomizationColorHtml", "(JLjava/lang/String;Ljava/lang/String;)Z", setCustomizationColorHtml),
@@ -6725,6 +6727,28 @@ void JNICALL ScriptMethodsObjectInfoNamespace::openExamineWindow(JNIEnv * env, j
 
 	GenericValueTypeMessage<NetworkId> const openExamineWindowMsg("OpenExamineWindow", itemObject->getNetworkId());
 	playerCreature->getClient()->send(openExamineWindowMsg, true);
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Open the city terrain painter UI on a player's client.
+ * @param player  The player to open the UI for
+ * @param cityId  The city ID for the terrain painter
+ */
+void JNICALL ScriptMethodsObjectInfoNamespace::openCityTerrainPainter(JNIEnv * env, jobject self, jlong player, jint cityId)
+{
+	UNREF(env);
+	UNREF(self);
+
+	CreatureObject const * playerCreature = nullptr;
+	if (!JavaLibrary::getObject(player, playerCreature) || !playerCreature || !playerCreature->getClient())
+	{
+		return;
+	}
+
+	GenericValueTypeMessage<int32> const msg("OpenCityTerrainPainterMessage", static_cast<int32>(cityId));
+	playerCreature->getClient()->send(msg, true);
 }
 
 // ----------------------------------------------------------------------
