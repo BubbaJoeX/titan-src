@@ -86,16 +86,24 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 		return;
 	}
 
-	// Check radius limits based on city rank
-	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
-	int cityRank = 1;
-	if (cityInfo.exists())
+	// Check radius limits based on city rank (use citizen count as proxy for rank)
+	if (!CityInterface::cityExists(cityId))
 	{
-		cityRank = cityInfo.getCityRank();
-		if (cityRank < 1 || cityRank >= NUM_RANKS)
-		{
-			cityRank = 1;
-		}
+		sendResponse(client, false, "", "City does not exist.");
+		return;
+	}
+
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	int citizenCount = cityInfo.getCitizenCount();
+	int cityRank = 1;
+	if (citizenCount >= 50) cityRank = 5;
+	else if (citizenCount >= 35) cityRank = 4;
+	else if (citizenCount >= 20) cityRank = 3;
+	else if (citizenCount >= 10) cityRank = 2;
+
+	if (cityRank < 1 || cityRank >= NUM_RANKS)
+	{
+		cityRank = 1;
 	}
 
 	int maxRadius = MAX_RADIUS_BY_RANK[cityRank];
@@ -160,20 +168,25 @@ void CityTerrainService::handleSyncRequest(Client const & client, CityTerrainSyn
 
 bool CityTerrainService::validateMayorPermission(Client const & client, int32 cityId)
 {
-	CreatureObject * const playerCreature = client.getCreatureObject();
+	ServerObject * const playerObject = client.getCharacterObject();
+	if (!playerObject)
+		return false;
+
+	CreatureObject * const playerCreature = playerObject->asCreatureObject();
 	if (!playerCreature)
 		return false;
 
 	// Check if player is god mode
-	if (playerCreature->getClient() && playerCreature->getClient()->isGod())
+	if (client.isGod())
 		return true;
+
+	// Check if city exists
+	if (!CityInterface::cityExists(cityId))
+		return false;
 
 	// Check if player is mayor
 	NetworkId const & playerId = playerCreature->getNetworkId();
 	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
-
-	if (!cityInfo.exists())
-		return false;
 
 	return cityInfo.getLeaderId() == playerId;
 }
@@ -182,15 +195,17 @@ bool CityTerrainService::validateMayorPermission(Client const & client, int32 ci
 
 bool CityTerrainService::validateCityBounds(int32 cityId, float x, float z, float radius)
 {
-	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
-	if (!cityInfo.exists())
+	if (!CityInterface::cityExists(cityId))
 		return false;
 
-	Vector const & cityCenter = cityInfo.getLocation();
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+
+	float cityCenterX = static_cast<float>(cityInfo.getX());
+	float cityCenterZ = static_cast<float>(cityInfo.getZ());
 	int cityRadius = cityInfo.getRadius();
 
-	float dx = x - cityCenter.x;
-	float dz = z - cityCenter.z;
+	float dx = x - cityCenterX;
+	float dz = z - cityCenterZ;
 	float dist = std::sqrt(dx * dx + dz * dz);
 
 	return (dist + radius) <= static_cast<float>(cityRadius);
@@ -214,13 +229,17 @@ void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::strin
 {
 	CityTerrainModifyMessage const msg(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
 
-	// Get city info to find players in range
-	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
-	if (!cityInfo.exists())
+	// Check if city exists
+	if (!CityInterface::cityExists(cityId))
 		return;
 
-	Vector const & cityCenter = cityInfo.getLocation();
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+
+	float cityCenterX = static_cast<float>(cityInfo.getX());
+	float cityCenterZ = static_cast<float>(cityInfo.getZ());
 	int cityRadius = cityInfo.getRadius();
+
+	Vector cityCenter(cityCenterX, 0.0f, cityCenterZ);
 
 	// Find all objects in range and send to player clients
 	std::vector<ServerObject *> objectsInRange;
