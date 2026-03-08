@@ -1048,6 +1048,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("CityTerrainPaintRequestMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CityTerrainPaintRequestMessage const paintMsg(ri);
+                CityTerrainService::handlePaintRequest(*this, paintMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("ConGenericMessage") : {
 
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
