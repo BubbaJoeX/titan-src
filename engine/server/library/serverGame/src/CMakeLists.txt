@@ -100,6 +100,8 @@ set(SHARED_SOURCES
 	shared/city/CityStringParser.h
 	shared/city/CityStructureInfo.cpp
 	shared/city/CityStructureInfo.h
+	shared/city/CityTerrainService.cpp
+	shared/city/CityTerrainService.h
 	shared/city/PgcRatingInfo.cpp
 	shared/city/PgcRatingInfo.h
 
