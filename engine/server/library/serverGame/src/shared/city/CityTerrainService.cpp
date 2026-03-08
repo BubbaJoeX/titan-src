@@ -229,9 +229,15 @@ void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::strin
 {
 	CityTerrainModifyMessage const msg(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
 
+	LOG("CityTerrain", ("broadcastToCity: cityId=%d modType=%d regionId=%s shader=%s",
+		cityId, modType, regionId.c_str(), shader.c_str()));
+
 	// Check if city exists
 	if (!CityInterface::cityExists(cityId))
+	{
+		LOG("CityTerrain", ("broadcastToCity: city %d does not exist", cityId));
 		return;
+	}
 
 	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
 
@@ -245,6 +251,7 @@ void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::strin
 	std::vector<ServerObject *> objectsInRange;
 	ServerWorld::findObjectsInRange(cityCenter, static_cast<float>(cityRadius + 100), objectsInRange);
 
+	int sentCount = 0;
 	for (std::vector<ServerObject *>::const_iterator it = objectsInRange.begin(); it != objectsInRange.end(); ++it)
 	{
 		if (*it == 0)
@@ -254,8 +261,11 @@ void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::strin
 		if (creature && creature->isPlayerControlled() && creature->getClient())
 		{
 			creature->getClient()->send(msg, true);
+			sentCount++;
 		}
 	}
+
+	LOG("CityTerrain", ("broadcastToCity: sent to %d clients", sentCount));
 }
 
 // ----------------------------------------------------------------------
