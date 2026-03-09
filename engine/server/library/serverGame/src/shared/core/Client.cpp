@@ -1059,6 +1059,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("CityTerrainRemoveRequestMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CityTerrainRemoveRequestMessage const removeMsg(ri);
+                CityTerrainService::handleRemoveRequest(*this, removeMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("ConGenericMessage") : {
 
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
