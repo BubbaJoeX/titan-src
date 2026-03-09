@@ -403,12 +403,11 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, std::v
 	DynamicVariableList const & objVars = cityHall->getObjVars();
 
 	// Look for all objvars under TERRAIN_OBJVAR_ROOT
-	DynamicVariableList::NestedList const nested = objVars.getNestedList(TERRAIN_OBJVAR_ROOT);
-	DynamicVariableList::NestedList::const_iterator it;
-	for (it = nested.begin(); it != nested.end(); ++it)
+	DynamicVariableList::NestedList const nested(objVars, TERRAIN_OBJVAR_ROOT);
+	for (DynamicVariableList::NestedList::const_iterator it(nested.begin()); it != nested.end(); ++it)
 	{
 		std::string value;
-		if (objVars.getItem(TERRAIN_OBJVAR_ROOT + "." + it.getName(), value))
+		if (nested.getItem(it.getName(), value))
 		{
 			outRegionData.push_back(value);
 		}
