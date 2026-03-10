@@ -128,6 +128,7 @@ private:
 									  float height, float blendDist,
 									  NetworkId const & creatorId, std::string const & creatorName);
 	static void removeRegionFromCityHall(int32 cityId, std::string const & regionId);
+	static void removeAllRegionsFromCityHall(int32 cityId);
 	static void loadRegionsFromCityHall(ServerObject * cityHall, int32 cityId);
 
 	// Helper math functions

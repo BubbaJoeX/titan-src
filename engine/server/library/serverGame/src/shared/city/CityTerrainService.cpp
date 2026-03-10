@@ -659,6 +659,36 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 		return;
 	}
 
+	// Handle clear all request - resets terrain to defaults
+	if (modType == CityTerrainModificationType::MT_CLEAR_ALL)
+	{
+		LOG("CityTerrain", ("handlePaintRequest: MT_CLEAR_ALL - removing all regions for city %d", cityId));
+
+		// Remove all regions from memory for this city
+		std::vector<std::string> regionsToRemove;
+		for (RegionMap::const_iterator it = s_regions.begin(); it != s_regions.end(); ++it)
+		{
+			if (it->second.cityId == cityId)
+			{
+				regionsToRemove.push_back(it->first);
+			}
+		}
+
+		for (std::vector<std::string>::const_iterator it = regionsToRemove.begin(); it != regionsToRemove.end(); ++it)
+		{
+			removeRegionFromMemory(*it);
+		}
+
+		// Clear objvars from city hall
+		removeAllRegionsFromCityHall(cityId);
+
+		// Broadcast clear to all clients in city
+		broadcastToCity(cityId, CityTerrainModificationType::MT_CLEAR_ALL, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+		sendResponse(client, true, "", "");
+		return;
+	}
+
 	if (!validateCityBounds(cityId, centerX, centerZ, radius))
 	{
 		sendResponse(client, false, "", "Terrain modification extends outside city boundaries.");
@@ -1177,6 +1207,74 @@ void CityTerrainService::removeRegionFromCityHall(int32 cityId, std::string cons
 
 	LOG("CityTerrain", ("removeRegionFromCityHall: removed region %s (count now %d)",
 		regionId.c_str(), static_cast<int>(remainingIds.size())));
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::removeAllRegionsFromCityHall(int32 cityId)
+{
+	if (!CityInterface::cityExists(cityId))
+	{
+		LOG("CityTerrain", ("removeAllRegionsFromCityHall: city %d does not exist", cityId));
+		return;
+	}
+
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	NetworkId const & cityHallId = cityInfo.getCityHallId();
+	ServerObject * const cityHall = ServerWorld::findObjectByNetworkId(cityHallId);
+	if (!cityHall)
+	{
+		LOG("CityTerrain", ("removeAllRegionsFromCityHall: city hall not found for city %d", cityId));
+		return;
+	}
+
+	DynamicVariableList const & objVars = cityHall->getObjVars();
+	std::string const regionIdsVar = TERRAIN_OBJVAR_ROOT + ".region_ids";
+
+	// First collect all region IDs
+	std::vector<std::string> regionIds;
+	for (int i = 0; i < 100; ++i)
+	{
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
+		std::string existingId;
+		if (objVars.getItem(indexVar.str(), existingId))
+		{
+			regionIds.push_back(existingId);
+			cityHall->removeObjVarItem(indexVar.str());
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	// Remove objvars for each region
+	for (std::vector<std::string>::const_iterator it = regionIds.begin(); it != regionIds.end(); ++it)
+	{
+		std::string const & regionId = *it;
+		std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
+		cityHall->removeObjVarItem(regionBase + ".type");
+		cityHall->removeObjVarItem(regionBase + ".type_id");
+		cityHall->removeObjVarItem(regionBase + ".shader_name");
+		cityHall->removeObjVarItem(regionBase + ".center_x");
+		cityHall->removeObjVarItem(regionBase + ".center_z");
+		cityHall->removeObjVarItem(regionBase + ".radius");
+		cityHall->removeObjVarItem(regionBase + ".end_x");
+		cityHall->removeObjVarItem(regionBase + ".end_z");
+		cityHall->removeObjVarItem(regionBase + ".width");
+		cityHall->removeObjVarItem(regionBase + ".height");
+		cityHall->removeObjVarItem(regionBase + ".blend_dist");
+		cityHall->removeObjVarItem(regionBase + ".creator_id");
+		cityHall->removeObjVarItem(regionBase + ".creator_name");
+		cityHall->removeObjVarItem(regionBase + ".timestamp");
+	}
+
+	// Reset the region count
+	cityHall->setObjVarItem(TERRAIN_OBJVAR_COUNT, 0);
+
+	LOG("CityTerrain", ("removeAllRegionsFromCityHall: removed %d regions from city %d",
+		static_cast<int>(regionIds.size()), cityId));
 }
 
 // ----------------------------------------------------------------------
