@@ -1068,6 +1068,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("CityTerrainSyncRequestMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CityTerrainSyncRequestMessage const syncMsg(ri);
+                CityTerrainService::handleSyncRequest(*this, syncMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("ConGenericMessage") : {
 
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
