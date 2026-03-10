@@ -11,6 +11,7 @@
 #include "serverGame/BuildingController.h"
 #include "serverGame/CellObject.h"
 #include "serverGame/CityInterface.h"
+#include "serverGame/CityTerrainService.h"
 #include "serverGame/Client.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ContainerInterface.h"
@@ -279,6 +280,13 @@ void BuildingObject::endBaselines()
 void BuildingObject::onLoadedFromDatabase()
 {
 	TangibleObject::onLoadedFromDatabase();
+
+	// Check if this building is a city hall and load terrain regions
+	int const cityId = CityInterface::findCityByCityHall(getNetworkId());
+	if (cityId > 0)
+	{
+		CityTerrainService::onCityHallLoaded(this, cityId);
+	}
 
 	// We need to run through the set of banned and allowed players
 	// and make sure the data is "good".

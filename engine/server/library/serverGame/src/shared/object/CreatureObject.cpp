@@ -23,6 +23,7 @@
 #include "serverGame/CitizenInfo.h"
 #include "serverGame/CityInfo.h"
 #include "serverGame/CityInterface.h"
+#include "serverGame/CityTerrainService.h"
 #include "serverGame/Client.h"
 #include "serverGame/CommandCppFuncs.h"
 #include "serverGame/CommandQueue.h"
@@ -7593,6 +7594,17 @@ void CreatureObject::onClientReady(Client *c)
 		if (ConfigServerGame::getAccountFeatureIdForTcgBetaAnnouncement() > 0)
 			VeteranRewardManager::announceSwgTcgBeta(*this);
 	}
+
+	// Send terrain modifications for all nearby cities to prevent buildings from appearing to float
+	// This syncs terrain BEFORE the player can see the buildings, avoiding visual artifacts
+	Client const * const terrainSyncClient = getClient();
+	if (terrainSyncClient && isInWorldCell())
+	{
+		Vector const pos = getPosition_w();
+		// Sync terrain for cities within 1500m - this covers typical view distance
+		CityTerrainService::sendNearbyCitiesTerrainSync(*terrainSyncClient, pos.x, pos.z, 1500.0f);
+	}
+
 	// Make sure our player has the server's speed maximum
 	PlayerCreatureController const * playerController = safe_cast<PlayerCreatureController const *>(getCreatureController());
 	if(playerController)
@@ -8785,6 +8797,12 @@ void CreatureObject::setLocatedInCityId(int newCityId)
 			params.addParam(oldCityId);
 			params.addParam(newCityId);
 			IGNORE_RETURN(getScriptObject()->trigAllScripts(Scripting::TRIG_CITY_CHANGED, params));
+		}
+
+		// When player enters a city, sync terrain modifications
+		if (newCityId > 0 && isPlayerControlled() && getClient())
+		{
+			CityTerrainService::sendTerrainSyncToClient(*getClient(), newCityId);
 		}
 	}
 }
