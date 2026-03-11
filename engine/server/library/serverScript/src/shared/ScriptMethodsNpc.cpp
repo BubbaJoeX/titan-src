@@ -18,6 +18,9 @@
 #include "sharedGame/OutOfBandPackager.h"
 #include "sharedGame/ProsePackage.h"
 #include "sharedFoundation/Crc.h"
+#include "sharedFoundation/GameControllerMessage.h"
+#include "sharedNetworkMessages/MessageQueueNpcConversationCameraCommand.h"
+#include "sharedObject/Controller.h"
 #include "sharedObject/ObjectTemplateList.h"
 #include "UnicodeUtils.h"
 
@@ -64,6 +67,9 @@ namespace ScriptMethodsNpcNamespace
 	jboolean     JNICALL npcRemoveConversationResponse(JNIEnv *env, jobject self, jlong player, jobject response);
 	jboolean     JNICALL isInNpcConversation(JNIEnv *env, jobject self, jlong creature);
 	jlongArray   JNICALL getNpcConversants(JNIEnv *env, jobject self, jlong creature);
+	jboolean     JNICALL npcConversationCameraLookAtTarget(JNIEnv *env, jobject self, jlong player, jlong target, jfloat holdTime, jfloat transitionDuration);
+	jboolean     JNICALL npcConversationCameraLookAtPosition(JNIEnv *env, jobject self, jlong player, jfloat x, jfloat y, jfloat z, jfloat holdTime, jfloat transitionDuration);
+	jboolean     JNICALL npcConversationCameraReturnToSpeaker(JNIEnv *env, jobject self, jlong player);
 	jstring      JNICALL generateRandomNameByTemplate(JNIEnv *env, jobject self, jstring templateName);
 	jstring      JNICALL generateRandomNameByTable(JNIEnv *env, jobject self, jstring directory, jstring table);
 	jboolean     JNICALL isNameReserved(JNIEnv *env, jobject self, jstring name);
@@ -92,6 +98,9 @@ const JNINativeMethod NATIVES[] = {
 	JF("_npcRemoveConversationResponse",  "(JLscript/string_id;)Z",                     npcRemoveConversationResponse),
 	JF("_isInNpcConversation",            "(J)Z",                                       isInNpcConversation	),
 	JF("_getNpcConversants",              "(J)[J",                        getNpcConversants),
+	JF("_npcConversationCameraLookAtTarget",   "(JJFF)Z",                               npcConversationCameraLookAtTarget),
+	JF("_npcConversationCameraLookAtPosition", "(JFFFFF)Z",                             npcConversationCameraLookAtPosition),
+	JF("_npcConversationCameraReturnToSpeaker", "(J)Z",                                 npcConversationCameraReturnToSpeaker),
 	JF("generateRandomName",            "(Ljava/lang/String;)Ljava/lang/String;",                   generateRandomNameByTemplate),
 	JF("generateRandomName",            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;", generateRandomNameByTable),
 	JF("isNameReserved",                "(Ljava/lang/String;)Z", isNameReserved),
@@ -674,3 +683,146 @@ jboolean     JNICALL ScriptMethodsNpcNamespace::setNpcDifficulty(JNIEnv *env, jo
 	
 	return JNI_TRUE;
 }
+
+//----------------------------------------------------------------------
+
+/**
+ * Sends a cinematic camera command to look at a specific target object.
+ *
+ * @param env               Java environment
+ * @param self              class calling this function
+ * @param player            player in conversation
+ * @param target            the object to look at
+ * @param holdTime          how long to look at the target (0 = permanent)
+ * @param transitionDuration duration of camera transition
+ *
+ * @return JNI_TRUE on success, JNI_FALSE on fail
+ */
+jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtTarget(JNIEnv *env, jobject self, jlong player, jlong target, jfloat holdTime, jfloat transitionDuration)
+{
+	UNREF(self);
+
+	TangibleObject * playerObject = nullptr;
+	if (!JavaLibrary::getObject(player, playerObject))
+		return JNI_FALSE;
+
+	if (!playerObject->isInNpcConversation())
+		return JNI_FALSE;
+
+	NetworkId targetId(target);
+	if (targetId == NetworkId::cms_invalid)
+		return JNI_FALSE;
+
+	Controller * const controller = playerObject->getController();
+	if (!controller)
+		return JNI_FALSE;
+
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtTarget);
+	msg->setTargetId(targetId);
+	msg->setHoldTime(holdTime);
+	msg->setTransitionDuration(transitionDuration);
+
+	controller->appendMessage(
+		CM_npcConversationCameraCommand,
+		0.0f,
+		msg,
+		GameControllerMessageFlags::SEND |
+		GameControllerMessageFlags::RELIABLE |
+		GameControllerMessageFlags::DEST_AUTH_CLIENT
+	);
+
+	return JNI_TRUE;
+}
+
+//----------------------------------------------------------------------
+
+/**
+ * Sends a cinematic camera command to look at world coordinates.
+ *
+ * @param env               Java environment
+ * @param self              class calling this function
+ * @param player            player in conversation
+ * @param x                 world X coordinate
+ * @param y                 world Y coordinate
+ * @param z                 world Z coordinate
+ * @param holdTime          how long to look at the position (0 = permanent)
+ * @param transitionDuration duration of camera transition
+ *
+ * @return JNI_TRUE on success, JNI_FALSE on fail
+ */
+jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtPosition(JNIEnv *env, jobject self, jlong player, jfloat x, jfloat y, jfloat z, jfloat holdTime, jfloat transitionDuration)
+{
+	UNREF(self);
+
+	TangibleObject * playerObject = nullptr;
+	if (!JavaLibrary::getObject(player, playerObject))
+		return JNI_FALSE;
+
+	if (!playerObject->isInNpcConversation())
+		return JNI_FALSE;
+
+	Controller * const controller = playerObject->getController();
+	if (!controller)
+		return JNI_FALSE;
+
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtPosition);
+	msg->setPosition(x, y, z);
+	msg->setHoldTime(holdTime);
+	msg->setTransitionDuration(transitionDuration);
+
+	controller->appendMessage(
+		CM_npcConversationCameraCommand,
+		0.0f,
+		msg,
+		GameControllerMessageFlags::SEND |
+		GameControllerMessageFlags::RELIABLE |
+		GameControllerMessageFlags::DEST_AUTH_CLIENT
+	);
+
+	return JNI_TRUE;
+}
+
+//----------------------------------------------------------------------
+
+/**
+ * Sends a cinematic camera command to return the camera to the current NPC speaker.
+ *
+ * @param env               Java environment
+ * @param self              class calling this function
+ * @param player            player in conversation
+ *
+ * @return JNI_TRUE on success, JNI_FALSE on fail
+ */
+jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraReturnToSpeaker(JNIEnv *env, jobject self, jlong player)
+{
+	UNREF(self);
+
+	TangibleObject * playerObject = nullptr;
+	if (!JavaLibrary::getObject(player, playerObject))
+		return JNI_FALSE;
+
+	if (!playerObject->isInNpcConversation())
+		return JNI_FALSE;
+
+	Controller * const controller = playerObject->getController();
+	if (!controller)
+		return JNI_FALSE;
+
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_ReturnToSpeaker);
+	msg->setTransitionDuration(1.2f);
+
+	controller->appendMessage(
+		CM_npcConversationCameraCommand,
+		0.0f,
+		msg,
+		GameControllerMessageFlags::SEND |
+		GameControllerMessageFlags::RELIABLE |
+		GameControllerMessageFlags::DEST_AUTH_CLIENT
+	);
+
+	return JNI_TRUE;
+}
+

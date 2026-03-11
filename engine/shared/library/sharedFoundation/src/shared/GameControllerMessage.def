@@ -294,6 +294,7 @@ enum GameControllerMessage
 	CM_npcConversationMessage,
 	CM_npcConversationResponses,
 	CM_npcConversationSelect,
+	CM_npcConversationCameraCommand,
 
 	CM_transferItem,
 	CM_opponentInfo,
