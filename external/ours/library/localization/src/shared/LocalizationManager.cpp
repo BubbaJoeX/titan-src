@@ -460,6 +460,24 @@ LocalizationManager::StringValueCode LocalizationManager::getLocalizedStringValu
 {
 	value.clear ();
 
+	// Handle server-side conversation responses: format is "responseId|displayText"
+	// Only the displayText portion is shown to the player
+	if (id.getTable() == "convo_response")
+	{
+		std::string const & text = id.getText();
+		size_t const pipePos = text.find('|');
+		if (pipePos != std::string::npos)
+		{
+			// Display only the text after the pipe
+			value = Unicode::narrowToWide(text.substr(pipePos + 1));
+		}
+		else
+		{
+			// No pipe found - just display the text as-is (fallback)
+			value = Unicode::narrowToWide(text);
+		}
+		return SVC_ok;
+	}
 
 	// This finds the English string table if it exists, so if the table isn't found then it won't be found.
 	LocalizedStringTable * const table = fetchStringTable (id.getTable (), useEnglish);
