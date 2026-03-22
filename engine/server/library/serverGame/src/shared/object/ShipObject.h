@@ -136,6 +136,8 @@ public:
 	//-- Create a projectile from our current position (used for ai ships)
 	void fireShotNonTurretServer(int const weaponIndex, NetworkId const & targetId, ShipChassisSlotType::Type targetedComponent, float yawErrorRadians = 0.0f, float pitchErrorRadians = 0.0f);
 	void fireShotTurretServer(int const weaponIndex, NetworkId const & targetId, ShipChassisSlotType::Type targetedComponent, bool const goodShot, bool const fromAutoTurret);
+	/** Authoritative turret shot toward a world-space point (e.g. atmospheric orbital strike); does not require a target object. */
+	bool fireShotTurretAtWorldPosition(int const weaponIndex, Vector const & targetPosition_w);
 
 	void onTargetedByMissile(int const missileId);
 	

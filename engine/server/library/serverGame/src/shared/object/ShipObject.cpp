@@ -1374,6 +1374,30 @@ void ShipObject::fireShotTurretServer(int const weaponIndex, NetworkId const & t
 
 // ----------------------------------------------------------------------
 
+bool ShipObject::fireShotTurretAtWorldPosition(int const weaponIndex, Vector const & targetPosition_w)
+{
+	if (!isTurret(weaponIndex))
+		return false;
+	if (!canFireShot(weaponIndex))
+		return false;
+	if (!canTurretFireTowardsLocation_p(weaponIndex, targetPosition_w))
+		return false;
+
+	Transform const & turretTransform = getTurretTransform(weaponIndex);
+	Vector const & turretPosition_p = turretTransform.getPosition_p();
+	Vector const directionToTarget_w(targetPosition_w - turretPosition_p);
+
+	Transform shotTransform;
+	shotTransform.setPosition_p(turretPosition_p);
+	shotTransform.setLocalFrameKJ_p(directionToTarget_w, Vector::perpendicular(directionToTarget_w));
+	shotTransform.reorthonormalize();
+
+	internalHandleFireShot(0, weaponIndex, shotTransform, 0, false, NetworkId::cms_invalid, ShipChassisSlotType::SCST_invalid, false);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 int ShipObject::getNumberOfHits() const
 {
 	return m_numberOfHits;

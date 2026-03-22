@@ -15,6 +15,9 @@
 #include "serverGame/PlayerShipController.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
+#include "sharedGame/ShipChassisSlotType.h"
+#include "sharedMath/Vector.h"
+#include "sharedObject/CachedNetworkId.h"
 #include "serverGame/SpaceDockingManager.h"
 #include "serverGame/SpacePath.h"
 #include "serverGame/SpacePathManager.h"
@@ -102,6 +105,11 @@ namespace ScriptMethodsPilotNamespace
 	jboolean   JNICALL shipClearAutopilot(JNIEnv *env, jobject self, jlong shipId);
 	jboolean   JNICALL shipIsAutopilotActive(JNIEnv *env, jobject self, jlong shipId);
 	jint       JNICALL shipGetAutopilotPhase(JNIEnv *env, jobject self, jlong shipId);
+	jboolean   JNICALL shipIsWeaponTurret(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex);
+	jboolean   JNICALL shipSetTurretWeaponTarget(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex, jlong targetId);
+	jlong      JNICALL shipGetTurretWeaponTarget(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex);
+	jboolean   JNICALL shipFireTurretShotAtTarget(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex, jlong targetId, jboolean goodShot);
+	jboolean   JNICALL shipFireTurretAtWorldLocation(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex, jfloat x, jfloat y, jfloat z);
 }
 
 using namespace ScriptMethodsPilotNamespace;
@@ -171,6 +179,11 @@ const JNINativeMethod NATIVES[] = {
 	JF("_shipClearAutopilot", "(J)Z", shipClearAutopilot),
 	JF("_shipIsAutopilotActive", "(J)Z", shipIsAutopilotActive),
 	JF("_shipGetAutopilotPhase", "(J)I", shipGetAutopilotPhase),
+	JF("_shipIsWeaponTurret", "(JI)Z", shipIsWeaponTurret),
+	JF("_shipSetTurretWeaponTarget", "(JIJ)Z", shipSetTurretWeaponTarget),
+	JF("_shipGetTurretWeaponTarget", "(JI)J", shipGetTurretWeaponTarget),
+	JF("_shipFireTurretShotAtTarget", "(JIJZ)Z", shipFireTurretShotAtTarget),
+	JF("_shipFireTurretAtWorldLocation", "(JIFFF)Z", shipFireTurretAtWorldLocation),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -1797,6 +1810,74 @@ jint JNICALL ScriptMethodsPilotNamespace::shipGetAutopilotPhase(JNIEnv *env, job
 		return 0;
 
 	return static_cast<jint>(psc->getAutopilotPhase());
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipIsWeaponTurret(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jint weaponIndex)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipIsWeaponTurret(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+	return shipObject->isTurret(weaponIndex) ? JNI_TRUE : JNI_FALSE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipSetTurretWeaponTarget(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jint weaponIndex, jlong targetId)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipSetTurretWeaponTarget(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+	if (targetId == 0)
+		shipObject->setTurretTarget(weaponIndex, CachedNetworkId::cms_cachedInvalid);
+	else
+		shipObject->setTurretTarget(weaponIndex, CachedNetworkId(NetworkId(static_cast<NetworkId::NetworkIdType>(targetId))));
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jlong JNICALL ScriptMethodsPilotNamespace::shipGetTurretWeaponTarget(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jint weaponIndex)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipGetTurretWeaponTarget(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return 0;
+
+	CachedNetworkId const & tid = shipObject->getTurretTarget(weaponIndex);
+	if (!tid.isValid())
+		return 0;
+	return static_cast<jlong>(tid.getValue());
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipFireTurretShotAtTarget(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jint weaponIndex, jlong targetId, jboolean goodShot)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipFireTurretShotAtTarget(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+
+	NetworkId const nid(static_cast<NetworkId::NetworkIdType>(targetId));
+	if (!nid.isValid())
+		return JNI_FALSE;
+
+	shipObject->fireShotTurretServer(weaponIndex, nid, ShipChassisSlotType::SCST_invalid, goodShot == JNI_TRUE, false);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipFireTurretAtWorldLocation(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jint weaponIndex, jfloat x, jfloat y, jfloat z)
+{
+	if (!ServerWorld::isAtmosphericFlightScene())
+		return JNI_FALSE;
+
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipFireTurretAtWorldLocation(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+
+	return shipObject->fireShotTurretAtWorldPosition(weaponIndex, Vector(x, y, z)) ? JNI_TRUE : JNI_FALSE;
 }
 
 // ======================================================================
