@@ -21,6 +21,10 @@ class XmlTreeNode;
 
 class DataTableWriter
 {
+private:
+
+	class NamedDataTable;
+
 public:
 
 	DataTableWriter();
@@ -46,8 +50,6 @@ public:
 	bool _writeTableToTab(NamedDataTable const * ndt, const char * outputFile, bool optional) const;
 
 private:
-
-	class NamedDataTable;
 
 	typedef std::list<NamedDataTable *> NamedDataTableList;
 
