@@ -170,11 +170,22 @@ void DataTableTool::run(void)
 
 	m_inputFile = CommandLine::getOptionString(SNAME_INPUT_FILE);
 
-	//isXml = DataTableWriter::isXmlFile(m_inputFile.c_str());
+	bool const isIff = DataTableWriter::isIffFile(m_inputFile.c_str());
 
 	if (CommandLine::getOccurrenceCount(SNAME_OUTPUT_FILE))
 	{
 		m_outputFile = CommandLine::getOptionString(SNAME_OUTPUT_FILE);
+	}
+	else if (DataTableWriter::isIffFile(m_inputFile.c_str()))
+	{
+		// Decompile: default output is same path with .tab extension
+		m_outputFile = m_inputFile;
+		std::string::size_type dot = m_outputFile.find_last_of('.');
+		if (dot != std::string::npos)
+			m_outputFile.erase(dot);
+		m_outputFile.append(".tab");
+		m_outputPath = m_outputFile;
+		removeFileName(m_outputPath);
 	}
 	else
 	{
@@ -186,7 +197,10 @@ void DataTableTool::run(void)
 	testOutput = CommandLine::getOccurrenceCount(SNAME_TEST);
 
 	DataTableWriter dl;
-	dl.loadFromSpreadsheet(m_inputFile.c_str());
+	if (isIff)
+		dl.loadFromIff(m_inputFile.c_str());
+	else
+		dl.loadFromSpreadsheet(m_inputFile.c_str());
 
 	if (!m_outputFile.empty())
 	{
@@ -197,11 +211,11 @@ void DataTableTool::run(void)
 			printf("ERROR: The output file is not available for writing: %s\n\n", m_outputFile.c_str());
 		}
 
-		bool success = dl.save( m_outputFile.c_str() );
+		bool success = isIff ? dl.saveToTab(m_outputFile.c_str()) : dl.save(m_outputFile.c_str());
 
-		printf("%s creating data table: %s\n", success ? "SUCCESS" : "FAILURE", m_outputFile.c_str());
+		printf("%s %s data table: %s\n", success ? "SUCCESS" : "FAILURE", isIff ? "decompiling" : "creating", m_outputFile.c_str());
 
-		if (testOutput)
+		if (testOutput && !isIff)
 			runTest(m_outputFile.c_str());
 	}
 	else
@@ -219,6 +233,11 @@ void DataTableTool::run(void)
 
 			std::string tableFileName;
 			dl.getTableOutputFileName( tableName.c_str(), tableFileName );
+			if (isIff)
+			{
+				tableFileName.erase(tableFileName.find_last_of('.'));
+				tableFileName.append(".tab");
+			}
 
 			if (!FileNameUtils::isWritable(tableFileName))
 			{
@@ -226,9 +245,9 @@ void DataTableTool::run(void)
 				continue;
 			}
 
-			bool success = dl.saveTable( tableName.c_str(), tableFileName.c_str() );
+			bool success = isIff ? dl.saveToTab(tableFileName.c_str()) : dl.saveTable( tableName.c_str(), tableFileName.c_str() );
 
-			printf("%s creating data table: %s\n", success ? "SUCCESS" : "FAILURE", tableFileName.c_str());
+			printf("%s %s data table: %s\n", success ? "SUCCESS" : "FAILURE", isIff ? "decompiling" : "creating", tableFileName.c_str());
 			
 			if(success && doClientOutput) {
                 if(tableFileName.find("sys.shared") != std::string::npos) {
@@ -406,11 +425,10 @@ void DataTableTool::usage(void)
 	printf("DataTableTool -i <inputFileName>\n");
 	printf("Optional Parameters: \n");
 	printf("  -h print this stuff \n");
-	printf("  -o specify output file name.  (By default it uses the inputfile name but \n");
-	printf("     it replaces the dsrc directory with data and the extension with .iff)\n");
-	printf("     For XML files, this option is not valid.\n");
-	printf("  -t run diagnotic test \n");
-	printf("  -c compile sys.shared datatables to /client directory as well as /data directory  \n");
+	printf("  -o specify output file name.  (By default: spreadsheet->data+.iff, .iff->decompile to .tab)\n");
+	printf("  -t run diagnostic test (compile only)\n");
+	printf("  -c compile sys.shared datatables to /client directory as well as /data directory\n");
+	printf("Decompile: Use -i <file.iff> to decompile .iff datatables to .tab spreadsheet format.\n");
 	getchar();
 }
 

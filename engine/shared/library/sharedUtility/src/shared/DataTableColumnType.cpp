@@ -345,6 +345,48 @@ bool DataTableColumnType::lookupEnum(std::string const &label, int &result) cons
 
 // ----------------------------------------------------------------------
 
+bool DataTableColumnType::getEnumLabelForValue(int value, std::string & outLabel) const
+{
+	if (!m_enumMap)
+		return false;
+	for (StringIntMap::const_iterator i = m_enumMap->begin(); i != m_enumMap->end(); ++i)
+	{
+		if ((*i).second == value)
+		{
+			outLabel = (*i).first;
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+bool DataTableColumnType::getBitVectorLabelsForValue(int value, std::string & outLabels) const
+{
+	if (!m_enumMap)
+		return false;
+	outLabels.clear();
+	if (value == 0)
+	{
+		outLabels = "NONE";
+		return true;
+	}
+	for (StringIntMap::const_iterator i = m_enumMap->begin(); i != m_enumMap->end(); ++i)
+	{
+		int bit = (*i).second;
+		if (bit && (value & bit))
+		{
+			if (!outLabels.empty())
+				outLabels += ",";
+			outLabels += (*i).first;
+		}
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 bool DataTableColumnType::lookupBitVector(std::string const &label, int &result) const
 {
 	std::string localLabel = label;

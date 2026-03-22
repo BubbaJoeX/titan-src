@@ -189,8 +189,14 @@ void ShipClientUpdateTracker::update(float elapsedTime) // static
 
 			ShipObject * const ship = top->getShip();
 
+			// Single-seat / non-POB: pilot Client is often ship->getClient(), so the branch below was false and
+			// no ShipUpdateTransform was sent while server autopilot ran (receiveTransform ignores client input).
+			ShipController const * const shipController = (ship && ship->getController()) ? ship->getController()->asShipController() : nullptr;
+			PlayerShipController const * const playerShipController = shipController ? shipController->asPlayerShipController() : nullptr;
+			bool const serverAutopilotDriving = playerShipController && playerShipController->isAutopilotActive();
+
 			if (   ship
-			    && (client != ship->getClient() || ship->hasCondition(static_cast<int>(TangibleObject::C_docking)))
+			    && (client != ship->getClient() || ship->hasCondition(static_cast<int>(TangibleObject::C_docking)) || serverAutopilotDriving)
 			    && ship->isInWorld()
 			    && ObserveTracker::isObserving(*client, *ship))
 			{

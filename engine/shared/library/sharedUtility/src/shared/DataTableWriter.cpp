@@ -22,6 +22,21 @@
 
 // ======================================================================
 
+/** Lines starting with ## (after optional whitespace) are comments and skipped when loading. */
+static bool isTabCommentLine(char const * line)
+{
+	while (*line == ' ' || *line == '\t')
+		++line;
+	return line[0] == '#' && line[1] == '#';
+}
+
+/** Advance past the next newline; returns pointer to start of next line or 0. */
+static char const * nextLine(char const * p)
+{
+	p = strchr(p, '\n');
+	return p ? p + 1 : 0;
+}
+
 #ifdef _DEBUG
 namespace DataTableWriterNamespace
 {
@@ -185,7 +200,9 @@ std::string DataTableWriterNamespace::getTableNameFromTabFile( const char* fileN
 {
 	std::string ret(fileName);
 
-	ret.erase(ret.find_last_of('.'));
+	size_t dotPos = ret.find_last_of('.');
+	if (dotPos != std::string::npos)
+		ret.erase(dotPos);
 
 	// support both types of naming, regardless of what platform you are on.
 	size_t i = ret.find_last_of("\\/");
@@ -235,6 +252,22 @@ bool DataTableWriter::isXmlFile(const char * filename)
 
 // ----------------------------------------------------------------------
 
+bool DataTableWriter::isIffFile(const char * filename)
+{
+	NOT_NULL(filename);
+
+	const char * iffExt = ".iff";
+	const int    extLen = 4;
+	int fileLength = static_cast<int>(strlen(filename));
+
+	if (fileLength <= extLen)
+		return false;
+
+	return _strnicmp(filename + fileLength - extLen, iffExt, extLen) == 0;
+}
+
+// ----------------------------------------------------------------------
+
 void DataTableWriter::loadFromSpreadsheet(const char * filename)
 {
 	NOT_NULL(filename);
@@ -245,6 +278,89 @@ void DataTableWriter::loadFromSpreadsheet(const char * filename)
 	else
 		// XML file format
 		_loadFromSpreadsheetXml(filename);
+}
+
+// ----------------------------------------------------------------------
+
+void DataTableWriter::loadFromIff(const char * filename)
+{
+	NOT_NULL(filename);
+
+	Iff iff(filename, false);
+	DataTable dt;
+	dt.load(iff);
+
+	NamedDataTable * ndt = new NamedDataTable();
+	std::string tableName = getTableNameFromTabFile(filename);
+	ndt->setName(tableName);
+
+	// Copy columns and types
+	int numCols = dt.getNumColumns();
+	for (int c = 0; c < numCols; ++c)
+	{
+		ndt->m_columns.push_back(dt.getColumnName(c));
+		ndt->m_types.push_back(new DataTableColumnType(dt.getDataTypeForColumn(c).getTypeSpecString()));
+	}
+
+	// Copy rows
+	int numRows = dt.getNumRows();
+	for (int r = 0; r < numRows; ++r)
+	{
+		NamedDataTable::DataTableRow * newRow = new NamedDataTable::DataTableRow;
+		for (int c = 0; c < numCols; ++c)
+		{
+			char buf[16384];
+			buf[0] = '\0';
+			DataTableColumnType const & colType = ndt->getDataTypeForColumn(c);
+			switch (colType.getType())
+			{
+			case DataTableColumnType::DT_Enum:
+				{
+					std::string label;
+					if (colType.getEnumLabelForValue(dt.getIntValue(c, r), label))
+						strncpy(buf, label.c_str(), sizeof(buf) - 1);
+					else
+						snprintf(buf, sizeof(buf), "%d", dt.getIntValue(c, r));
+					buf[sizeof(buf) - 1] = '\0';
+				}
+				break;
+			case DataTableColumnType::DT_Bool:
+				snprintf(buf, sizeof(buf), "%d", dt.getIntValue(c, r));
+				break;
+			case DataTableColumnType::DT_Int:
+			case DataTableColumnType::DT_HashString:
+				snprintf(buf, sizeof(buf), "%d", dt.getIntValue(c, r));
+				break;
+			case DataTableColumnType::DT_BitVector:
+				{
+					std::string labels;
+					if (colType.getBitVectorLabelsForValue(dt.getIntValue(c, r), labels))
+						strncpy(buf, labels.c_str(), sizeof(buf) - 1);
+					else
+						snprintf(buf, sizeof(buf), "%d", dt.getIntValue(c, r));
+					buf[sizeof(buf) - 1] = '\0';
+				}
+				break;
+			case DataTableColumnType::DT_Float:
+				snprintf(buf, sizeof(buf), "%g", static_cast<double>(dt.getFloatValue(c, r)));
+				break;
+			case DataTableColumnType::DT_String:
+			case DataTableColumnType::DT_Comment:
+			default:
+				{
+					const char * s = dt.getStringValue(c, r);
+					if (s)
+						strncpy(buf, s, sizeof(buf) - 1);
+					buf[sizeof(buf) - 1] = '\0';
+				}
+				break;
+			}
+			newRow->push_back(_getNewCell(colType, buf));
+		}
+		ndt->m_rows.push_back(newRow);
+	}
+
+	m_tables.push_back(ndt);
 }
 
 // ----------------------------------------------------------------------
@@ -551,7 +667,13 @@ void DataTableWriter::_loadFromSpreadsheetTab(const char * filename)
 	// past the end of the file data
 	buffer[bytes_read] = 0;
 
-	const char* newLine = strchr(buffer, '\n');
+	const char* currentPos = buffer;
+	// Skip leading comment lines (##)
+	while (currentPos && *currentPos && isTabCommentLine(currentPos))
+		currentPos = nextLine(currentPos);
+	FATAL(!currentPos || !*currentPos, ("No column row when loading %s.", filename));
+
+	const char* newLine = strchr(currentPos, '\n');
 	FATAL(!newLine, ("No end of line while looking for column row when loading %s.", filename));
 
 	FATAL(!m_tables.empty(), ("TAB file does not support multiple tables when loading %s.", filename));
@@ -560,22 +682,31 @@ void DataTableWriter::_loadFromSpreadsheetTab(const char * filename)
 	ndt = m_tables.back();
 	ndt->setName(getTableNameFromTabFile(filename).c_str());
 
-	_loadColumnNames(ndt, buffer);
-	const char* currentPos = newLine + 1;
+	_loadColumnNames(ndt, currentPos);
+	currentPos = newLine + 1;
 
-	newLine = strchr(currentPos, '\n');
-	FATAL(!newLine, ("No end of line while looking for column row when loading %s.", filename));
+	// Skip comment lines before types row
+	while (currentPos && *currentPos && isTabCommentLine(currentPos))
+		currentPos = nextLine(currentPos);
+	newLine = currentPos ? strchr(currentPos, '\n') : 0;
+	FATAL(!newLine, ("No end of line while looking for types row when loading %s.", filename));
 
 	_loadTypes(ndt, currentPos);
 	currentPos = newLine + 1;
 
 	newLine = strchr(currentPos, '\n');
-
-	for(int count = 0; newLine; ++count)
+	for (int count = 0; newLine; )
 	{
+		// Skip comment lines in data section
+		if (isTabCommentLine(currentPos))
+		{
+			currentPos = newLine + 1;
+			newLine = strchr(currentPos, '\n');
+			continue;
+		}
 		_loadRow(ndt, currentPos, count);
+		++count;
 		currentPos = newLine + 1;
-
 		newLine = strchr(currentPos, '\n');
 	}
 	FATAL(ndt->getNumRows() < 1, ("No rows in the table when loading %s.", filename));
@@ -589,7 +720,7 @@ void DataTableWriter::_loadFromSpreadsheetTab(const char * filename)
 
 bool DataTableWriter::save(const char * outputFileName, bool optional) const
 {
-	if (!outputFileName || outputFileName[0] != '\0')
+	if (!outputFileName || outputFileName[0] == '\0')
 	{
 		DEBUG_FATAL(true, ("OutputFileName is nullptr or empty."));
 		return false;
@@ -607,8 +738,32 @@ bool DataTableWriter::save(const char * outputFileName, bool optional) const
 		return false;
 	}
 
-
 	return _writeTable( m_tables.front(), outputFileName, optional );
+}
+
+// ----------------------------------------------------------------------
+
+bool DataTableWriter::saveToTab(const char * outputFileName, bool optional) const
+{
+	if (!outputFileName || outputFileName[0] == '\0')
+	{
+		DEBUG_FATAL(true, ("OutputFileName is nullptr or empty."));
+		return false;
+	}
+
+	if (m_tables.size() > 1)
+	{
+		DEBUG_FATAL(true, ("saveToTab not supported on DataTableWriter with multiple tables."));
+		return false;
+	}
+
+	if (m_tables.size() == 0)
+	{
+		DEBUG_FATAL(true, ("DataTableWriter is empty."));
+		return false;
+	}
+
+	return _writeTableToTab( m_tables.front(), outputFileName, optional );
 }
 
 // ----------------------------------------------------------------------
@@ -735,6 +890,7 @@ DataTableCell *DataTableWriter::_getNewCell(DataTableColumnType const &columnTyp
 		break;
 	case DataTableColumnType::DT_String:
 	case DataTableColumnType::DT_Comment:
+	case DataTableColumnType::DT_Unknown:
 		return new DataTableCell(value.c_str());
 		break;
 	default:
@@ -811,6 +967,111 @@ void DataTableWriter::_loadRow(NamedDataTable * ndt, const char* row, int index)
 		newRow->push_back(_getNewCell(ndt->getDataTypeForColumn(i+oldSize), buf));
 	}
 	ndt->m_rows.push_back(newRow);
+}
+
+// ----------------------------------------------------------------------
+
+namespace
+{
+	void writeTabCell(FILE * f, DataTableColumnType const & colType, DataTableCell const * cell)
+	{
+		if (!cell)
+			return;
+		std::string val;
+		switch (colType.getBasicType())
+		{
+		case DataTableColumnType::DT_Int:
+			val = std::to_string(cell->getIntValue());
+			break;
+		case DataTableColumnType::DT_Float:
+			{
+				char buf[64];
+				snprintf(buf, sizeof(buf), "%g", static_cast<double>(cell->getFloatValue()));
+				val = buf;
+			}
+			break;
+		case DataTableColumnType::DT_String:
+		case DataTableColumnType::DT_Comment:
+		default:
+			val = cell->getStringValue() ? cell->getStringValue() : "";
+			// Escape: wrap in quotes if contains tab/newline, double internal quotes
+			if (val.find('\t') != std::string::npos || val.find('\n') != std::string::npos || val.find('"') != std::string::npos)
+			{
+				std::string escaped;
+				escaped.reserve(val.size() + 4);
+				escaped += '"';
+				for (size_t i = 0; i < val.size(); ++i)
+				{
+					if (val[i] == '"')
+						escaped += "\"\"";
+					else
+						escaped += val[i];
+				}
+				escaped += '"';
+				val = escaped;
+			}
+			break;
+		}
+		fprintf(f, "%s", val.c_str());
+	}
+}
+
+bool DataTableWriter::_writeTableToTab(NamedDataTable const * ndt, const char * outputFile, bool optional) const
+{
+	NOT_NULL(ndt);
+
+	if (!FileNameUtils::isWritable(outputFile))
+	{
+		FATAL(!optional, ("ERROR: The output file is not available for writing: %s", outputFile));
+		WARNING(true, ("ERROR: The output file is not available for writing: %s", outputFile));
+		return false;
+	}
+
+	FILE * f = fopen(outputFile, "w");
+	if (!f)
+	{
+		FATAL(!optional, ("ERROR: Could not open for writing: %s", outputFile));
+		return false;
+	}
+
+	// Column names row
+	for (int c = 0; c < ndt->getNumColumns(); ++c)
+	{
+		if (c > 0)
+			fprintf(f, "\t");
+		fprintf(f, "%s", ndt->getColumnName(c).c_str());
+	}
+	fprintf(f, "\n");
+
+	// Types row
+	for (int c = 0; c < ndt->getNumColumns(); ++c)
+	{
+		if (c > 0)
+			fprintf(f, "\t");
+		std::string typeStr = ndt->getDataTypeForColumn(c).getTypeSpecString();
+		if (typeStr.find('\t') != std::string::npos)
+			fprintf(f, "\"%s\"", typeStr.c_str());
+		else
+			fprintf(f, "%s", typeStr.c_str());
+	}
+	fprintf(f, "\n");
+
+	// Data rows
+	for (int r = 0; r < ndt->getNumRows(); ++r)
+	{
+		NamedDataTable::DataTableRow const * row = ndt->m_rows[static_cast<size_t>(r)];
+		for (int c = 0; c < ndt->getNumColumns(); ++c)
+		{
+			if (c > 0)
+				fprintf(f, "\t");
+			DataTableCell const * cell = (*row)[static_cast<size_t>(c)];
+			writeTabCell(f, ndt->getDataTypeForColumn(c), cell);
+		}
+		fprintf(f, "\n");
+	}
+
+	fclose(f);
+	return true;
 }
 
 // ----------------------------------------------------------------------

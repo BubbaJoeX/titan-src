@@ -56,7 +56,9 @@ public:
 	virtual void addAiTargetingMe(NetworkId const & unit);
 	bool isTeleporting() const;
 
-	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude);
+	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise = false);
+	/** While autopilot is active, move horizontal goal without resetting climb/cruise phase (atmospheric follow). */
+	void updateAutopilotTargetXZ(float x, float z);
 	void clearAutopilot();
 	bool isAutopilotActive() const;
 	int  getAutopilotPhase() const;
@@ -115,6 +117,7 @@ private:
 	float m_autopilotLandingAltitude;
 	int   m_autopilotPhase;
 	float m_autopilotDesiredY;
+	bool  m_autopilotHoldCruise;
 };
 
 // ======================================================================

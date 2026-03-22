@@ -53,6 +53,8 @@ namespace PlayerShipControllerNamespace
 	void remove();
 
 	float const s_targetedByAiExpireTime = 20.0f;
+	/** Meters per second vertical climb/descent during atmospheric autopilot (ascend/descend phases). */
+	float const s_autopilotElevatorSpeed = 60.0f;
 
 	int syncStampLongDeltaTime(uint32 stamp1, uint32 stamp2)
 	{
@@ -132,7 +134,8 @@ PlayerShipController::PlayerShipController(ShipObject * const owner) :
 	m_autopilotTakeoffAltitude(500.0f),
 	m_autopilotLandingAltitude(200.0f),
 	m_autopilotPhase(AP_NONE),
-	m_autopilotDesiredY(0.0f)
+	m_autopilotDesiredY(0.0f),
+	m_autopilotHoldCruise(false)
 {
 	preventMovementUpdates();
 }
@@ -515,6 +518,12 @@ float PlayerShipController::realAlter(float const elapsedTime)
 					m_pitchPosition = 0.0f;
 					m_rollPosition = 0.0f;
 
+					if (m_autopilotHoldCruise && horizDist <= 35.0f)
+					{
+						m_throttlePosition = 0.0f;
+						break;
+					}
+
 					if (horizDist > 80.0f)
 						m_throttlePosition = 1.0f;
 					else if (horizDist > 30.0f)
@@ -577,7 +586,7 @@ float PlayerShipController::realAlter(float const elapsedTime)
 
 		if (m_autopilotActive && (m_autopilotPhase == AP_ASCENDING || m_autopilotPhase == AP_DESCENDING))
 		{
-			float const elevatorSpeed = 30.0f;
+			float const elevatorSpeed = s_autopilotElevatorSpeed;
 			Vector pos = shipTransform.getPosition_p();
 			if (m_autopilotPhase == AP_ASCENDING)
 			{
@@ -1034,12 +1043,13 @@ void PlayerShipController::addAiTargetingMe(NetworkId const & unit)
 
 // ----------------------------------------------------------------------
 
-void PlayerShipController::setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude)
+void PlayerShipController::setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise)
 {
 	m_autopilotActive = true;
 	m_autopilotTarget = target;
 	m_autopilotTakeoffAltitude = takeoffAltitude;
 	m_autopilotLandingAltitude = landingAltitude;
+	m_autopilotHoldCruise = holdCruise;
 	m_autopilotPhase = AP_ASCENDING;
 
 	ShipObject * const ship = getShipOwner();
@@ -1076,12 +1086,23 @@ void PlayerShipController::setAutopilotTarget(Vector const & target, float takeo
 
 // ----------------------------------------------------------------------
 
+void PlayerShipController::updateAutopilotTargetXZ(float const x, float const z)
+{
+	if (!m_autopilotActive)
+		return;
+	m_autopilotTarget.x = x;
+	m_autopilotTarget.z = z;
+}
+
+// ----------------------------------------------------------------------
+
 void PlayerShipController::clearAutopilot()
 {
 	m_autopilotActive = false;
 	m_autopilotTarget = Vector::zero;
 	m_autopilotPhase = AP_NONE;
 	m_autopilotDesiredY = 0.0f;
+	m_autopilotHoldCruise = false;
 
 	if (m_shipDynamicsModel)
 	{
