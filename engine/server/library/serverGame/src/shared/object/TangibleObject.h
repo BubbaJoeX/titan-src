@@ -216,6 +216,8 @@ public:
 	bool                 hasCondition(int condition) const;
 	void                 setCondition(int condition);
 	void                 clearCondition(int condition);
+	/// Push texture.* objvars into m_remoteTexture* for client replication (script setObjVar, etc.).
+	void                 updateRemoteTextureUrlFromObjvars();
 	void                 rollupStructure(NetworkId const & owner, bool warnOnly);
 
 	bool                hasEncumbrances() const;
@@ -537,7 +539,6 @@ private:
 
 	void copyGuildAccessListToObjVars();
 	void readInGuildAccessListObjVars();
-	void updateRemoteTextureUrlFromObjvars();
 	void updateRemoteVideoStreamFromObjvars();
 	void updateRtCameraVariablesFromObjvars();
 	void updateTangibleDynamicsFromObjvars();

@@ -12,6 +12,7 @@
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
+#include "serverGame/TangibleObject.h"
 #include "serverUtility/ServerClock.h"
 #include "sharedFoundation/DynamicVariable.h"
 #include "sharedFoundation/DynamicVariableList.h"
@@ -19,6 +20,8 @@
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedNetworkMessages/MessageQueueGenericValueType.h"
 #include "UnicodeUtils.h"
+
+#include <cstring>
 
 using namespace JNIWrappersNamespace;
 
@@ -1369,6 +1372,11 @@ void JNICALL ScriptMethodsDynamicVariableNamespace::removeDynamicVariable(JNIEnv
 		return;
 
 	object->removeObjVarItem(buffer);
+	if (object->isAuthoritative() && std::strncmp(buffer, "texture.", 8) == 0)
+	{
+		if (TangibleObject * const tangible = object->asTangibleObject())
+			tangible->updateRemoteTextureUrlFromObjvars();
+	}
 }	// JavaLibrary::removeDynamicVariable
 
 /**
@@ -1673,7 +1681,13 @@ jboolean JNICALL ScriptMethodsDynamicVariableNamespace::setStringDynamicVariable
 
 	addSetObjvar(*object, buffer);
 
-	return object->setObjVarItem(buffer, valueString);
+	bool const ok = object->setObjVarItem(buffer, valueString);
+	if (ok && object->isAuthoritative() && std::strncmp(buffer, "texture.", 8) == 0)
+	{
+		if (TangibleObject * const tangible = object->asTangibleObject())
+			tangible->updateRemoteTextureUrlFromObjvars();
+	}
+	return ok ? JNI_TRUE : JNI_FALSE;
 }	// JavaLibrary::setStringDynamicVariable
 
 /**
