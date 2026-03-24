@@ -360,6 +360,7 @@ static const std::string OBJVAR_TEXTURE_DISPLAY_MODE = "texture.displayMode";
 static const std::string OBJVAR_TEXTURE_DISPLAY_MODE_DEFAULT = "CUBE";
 static const std::string OBJVAR_TEXTURE_SCROLL_H = "texture.scrollH";
 static const std::string OBJVAR_TEXTURE_SCROLL_V = "texture.scrollV";
+static const std::string OBJVAR_TEXTURE_MODE_TAILOR_PNG = "TAILOR_PNG";
 static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 
 static const std::string OBJVAR_STREAM_URL = "stream.url";
@@ -1223,15 +1224,30 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 	bool const hasTextureUrlObjvar = getObjVars().getItem(OBJVAR_TEXTURE_URL, textureUrl);
 	bool const hasTextureModeObjvar = getObjVars().getItem(OBJVAR_TEXTURE_MODE, textureMode);
 	bool const hasNonEmptyTextureUrl = hasTextureUrlObjvar && !textureUrl.empty();
-	bool const magicPaintingEnabled = hasMagicPaintingCondition && hasNonEmptyTextureUrl;
+	bool const isTailorPngMode = hasTextureModeObjvar && !_stricmp(textureMode.c_str(), OBJVAR_TEXTURE_MODE_TAILOR_PNG.c_str());
+	bool const tailorTextureEnabled = hasNonEmptyTextureUrl && isTailorPngMode;
+	bool const magicPaintingEnabled = hasMagicPaintingCondition && hasNonEmptyTextureUrl && !isTailorPngMode;
+	bool const remoteTextureActive = tailorTextureEnabled || magicPaintingEnabled;
 
-	if (!magicPaintingEnabled)
+	if (!remoteTextureActive)
 	{
 		textureUrl.clear();
 		textureMode.clear();
 		textureDisplayMode.clear();
 		textureScrollH.clear();
 		textureScrollV.clear();
+	}
+	else if (tailorTextureEnabled)
+	{
+		textureMode = OBJVAR_TEXTURE_MODE_TAILOR_PNG;
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_DISPLAY_MODE, textureDisplayMode) || textureDisplayMode.empty())
+			textureDisplayMode = OBJVAR_TEXTURE_DISPLAY_MODE_DEFAULT;
+
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_SCROLL_H, textureScrollH))
+			textureScrollH = "0";
+
+		if (!getObjVars().getItem(OBJVAR_TEXTURE_SCROLL_V, textureScrollV))
+			textureScrollV = "0";
 	}
 	else
 	{
