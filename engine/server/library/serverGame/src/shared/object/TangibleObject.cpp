@@ -5263,6 +5263,10 @@ void TangibleObject::setCondition(int condition)
 		{
 			scheduleForAlter();
 		}
+
+		// Objvar -> m_remoteTexture* sync normally runs in alter(); equipped wearables are often
+		// exposeWithParent and are skipped by Container::alter, so they never got a sync tick.
+		updateRemoteTextureUrlFromObjvars();
 	}
 	else
 		sendControllerMessageToAuthServer(CM_setCondition, new MessageQueueGenericValueType<int>(condition));
@@ -5273,7 +5277,10 @@ void TangibleObject::setCondition(int condition)
 void TangibleObject::clearCondition(int condition)
 {
 	if (isAuthoritative())
+	{
 		m_condition = (m_condition.get() & (~condition));
+		updateRemoteTextureUrlFromObjvars();
+	}
 	else
 		sendControllerMessageToAuthServer(CM_clearCondition, new MessageQueueGenericValueType<int>(condition));
 }
