@@ -187,6 +187,10 @@ void CreatureObject::addMembersToPackages()
 	addAuthClientServerVariable_np (m_movementPercent);
 	addAuthClientServerVariable_np (m_movementScale);
 	addAuthClientServerVariable_np (m_performanceListenTarget);
+	addAuthClientServerVariable_np (m_turretGunnerMountTurretId);
+	addAuthClientServerVariable_np (m_turretGunnerEyeOffX);
+	addAuthClientServerVariable_np (m_turretGunnerEyeOffY);
+	addAuthClientServerVariable_np (m_turretGunnerEyeOffZ);
 	addAuthClientServerVariable_np (m_runSpeed);
 	addAuthClientServerVariable_np (m_slopeModAngle);
 	addAuthClientServerVariable_np (m_slopeModPercent);

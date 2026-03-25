@@ -59,6 +59,10 @@ CreatureObject              m_modMap                 authClientServer_np  map
 CreatureObject              m_movementPercent        authClientServer_np  float
 CreatureObject              m_movementScale          authClientServer_np  float
 CreatureObject              m_performanceListenTarget authClientServer_np NetworkId
+CreatureObject              m_turretGunnerMountTurretId authClientServer_np NetworkId
+CreatureObject              m_turretGunnerEyeOffX authClientServer_np float
+CreatureObject              m_turretGunnerEyeOffY authClientServer_np float
+CreatureObject              m_turretGunnerEyeOffZ authClientServer_np float
 CreatureObject              m_runSpeed               authClientServer_np  float
 CreatureObject              m_slopeModAngle          authClientServer_np  float
 CreatureObject              m_slopeModPercent        authClientServer_np  float

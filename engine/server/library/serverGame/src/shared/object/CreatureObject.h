@@ -381,6 +381,12 @@ public:
 	void                            setPerformanceStartTime(int performanceStartTime);
 	NetworkId const &               getPerformanceListenTarget() const;
 	void                            setPerformanceListenTarget(NetworkId const &who);
+	NetworkId const &               getTurretGunnerMountTurretId() const;
+	void                            setTurretGunnerMountTurretId(NetworkId const &turretId);
+	float                           getTurretGunnerEyeOffX() const;
+	float                           getTurretGunnerEyeOffY() const;
+	float                           getTurretGunnerEyeOffZ() const;
+	void                            setTurretGunnerEyeOffsets(float x, float y, float z);
 	NetworkId const &               getPerformanceWatchTarget() const;
 	void                            setPerformanceWatchTarget(NetworkId const &who);
 	int                             getGuildId() const;
@@ -933,6 +939,10 @@ private:
 	Archive::AutoDeltaVariable<int>                  m_performanceType;
 	Archive::AutoDeltaVariable<int>                  m_performanceStartTime;
 	Archive::AutoDeltaVariable<NetworkId>            m_performanceListenTarget;
+	Archive::AutoDeltaVariable<NetworkId>            m_turretGunnerMountTurretId;
+	Archive::AutoDeltaVariable<float>              m_turretGunnerEyeOffX;
+	Archive::AutoDeltaVariable<float>              m_turretGunnerEyeOffY;
+	Archive::AutoDeltaVariable<float>              m_turretGunnerEyeOffZ;
 	Archive::AutoDeltaVariable<NetworkId>            m_performanceWatchTarget;
 
 	/// Specifies the string used by the client to determine what to do when in the Postures::SkillAnimating posture.

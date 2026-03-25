@@ -238,6 +238,9 @@ namespace ScriptMethodsObjectInfoNamespace
 	void         JNICALL setPerformanceStartTime(JNIEnv *env, jobject self, jlong target, jint performanceStartTime);
 	jlong        JNICALL getPerformanceListenTarget(JNIEnv *env, jobject self, jlong actor);
 	void         JNICALL setPerformanceListenTarget(JNIEnv *env, jobject self, jlong actor, jlong target);
+	jlong        JNICALL getTurretGunnerMountTurretId(JNIEnv *env, jobject self, jlong actor);
+	void         JNICALL setTurretGunnerMountTurretId(JNIEnv *env, jobject self, jlong actor, jlong turret);
+	void         JNICALL setTurretGunnerEyeOffsets(JNIEnv *env, jobject self, jlong actor, jfloat x, jfloat y, jfloat z);
 	jlong        JNICALL getPerformanceWatchTarget(JNIEnv *env, jobject self, jlong actor);
 	void         JNICALL setPerformanceWatchTarget(JNIEnv *env, jobject self, jlong actor, jlong target);
 	jint         JNICALL getInstrumentVisualId(JNIEnv *env, jobject self, jlong who);
@@ -475,6 +478,9 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setPerformanceStartTime", "(JI)V", setPerformanceStartTime),
 	JF("_getPerformanceListenTarget", "(J)J", getPerformanceListenTarget),
 	JF("_setPerformanceListenTarget", "(JJ)V", setPerformanceListenTarget),
+	JF("_getTurretGunnerMountTurretId", "(J)J", getTurretGunnerMountTurretId),
+	JF("_setTurretGunnerMountTurretId", "(JJ)V", setTurretGunnerMountTurretId),
+	JF("_setTurretGunnerEyeOffsets", "(JFFF)V", setTurretGunnerEyeOffsets),
 	JF("_getPerformanceWatchTarget", "(J)J", getPerformanceWatchTarget),
 	JF("_setPerformanceWatchTarget", "(JJ)V", setPerformanceWatchTarget),
 	JF("_getInstrumentVisualId", "(J)I", getInstrumentVisualId),
@@ -4301,6 +4307,42 @@ void JNICALL ScriptMethodsObjectInfoNamespace::setPerformanceListenTarget(JNIEnv
 	CreatureObject *targetCreature = 0;
 	JavaLibrary::getObject(target, targetCreature);
 	actorCreature->setPerformanceListenTarget(targetCreature ? targetCreature->getNetworkId() : NetworkId::cms_invalid);
+}
+
+//----------------------------------------------------------------------
+
+jlong JNICALL ScriptMethodsObjectInfoNamespace::getTurretGunnerMountTurretId(JNIEnv *env, jobject self, jlong actor)
+{
+	UNREF(self);
+
+	CreatureObject *actorCreature = 0;
+	if (!JavaLibrary::getObject(actor, actorCreature))
+		return 0;
+	return (actorCreature->getTurretGunnerMountTurretId()).getValue();
+}
+
+//----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsObjectInfoNamespace::setTurretGunnerMountTurretId(JNIEnv *env, jobject self, jlong actor, jlong turret)
+{
+	UNREF(self);
+
+	CreatureObject *actorCreature = 0;
+	if (!JavaLibrary::getObject(actor, actorCreature))
+		return;
+	actorCreature->setTurretGunnerMountTurretId(NetworkId(turret));
+}
+
+//----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsObjectInfoNamespace::setTurretGunnerEyeOffsets(JNIEnv *env, jobject self, jlong actor, jfloat x, jfloat y, jfloat z)
+{
+	UNREF(self);
+
+	CreatureObject *actorCreature = 0;
+	if (!JavaLibrary::getObject(actor, actorCreature))
+		return;
+	actorCreature->setTurretGunnerEyeOffsets(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
 }
 
 //----------------------------------------------------------------------

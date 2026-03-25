@@ -725,6 +725,10 @@ CreatureObject::CreatureObject(const ServerCreatureObjectTemplate* newTemplate) 
 	m_inviterForPendingGroup      (),
 	m_performanceType             (),
 	m_performanceStartTime        (),
+	m_turretGunnerMountTurretId  (NetworkId::cms_invalid),
+	m_turretGunnerEyeOffX        (0.0f),
+	m_turretGunnerEyeOffY        (0.0f),
+	m_turretGunnerEyeOffZ        (0.0f),
 	m_animatingSkillData          (),
 	m_level                       (-1),
 	m_previousLevel               (-1),
@@ -8692,6 +8696,54 @@ void CreatureObject::setPerformanceListenTarget(NetworkId const &who)
 	else
 	{
 		m_performanceListenTarget = who;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+NetworkId const &CreatureObject::getTurretGunnerMountTurretId() const
+{
+	return m_turretGunnerMountTurretId.get();
+}
+
+// ----------------------------------------------------------------------
+
+void CreatureObject::setTurretGunnerMountTurretId(NetworkId const &turretId)
+{
+	if (isAuthoritative())
+		m_turretGunnerMountTurretId = turretId;
+}
+
+// ----------------------------------------------------------------------
+
+float CreatureObject::getTurretGunnerEyeOffX() const
+{
+	return m_turretGunnerEyeOffX.get();
+}
+
+// ----------------------------------------------------------------------
+
+float CreatureObject::getTurretGunnerEyeOffY() const
+{
+	return m_turretGunnerEyeOffY.get();
+}
+
+// ----------------------------------------------------------------------
+
+float CreatureObject::getTurretGunnerEyeOffZ() const
+{
+	return m_turretGunnerEyeOffZ.get();
+}
+
+// ----------------------------------------------------------------------
+
+void CreatureObject::setTurretGunnerEyeOffsets(float x, float y, float z)
+{
+	if (isAuthoritative())
+	{
+		m_turretGunnerEyeOffX = x;
+		m_turretGunnerEyeOffY = y;
+		m_turretGunnerEyeOffZ = z;
 	}
 }
 
