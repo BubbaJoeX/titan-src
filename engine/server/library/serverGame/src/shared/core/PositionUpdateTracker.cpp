@@ -323,6 +323,10 @@ bool PositionUpdateTrackerNamespace::isContainerConsideredPersisted(ServerObject
 	// and also consider all buildout bazaar terminals (crc 0x8c525205) to be persisted to handle the case of the
 	// Restuss bazaar terminals which are buildout which are not persisted, so when a player places an item on those
 	// bazaar terminals, we need to update the database that the items are now contained inside the bazaar terminals
+	// Persisted décor in interior cells: the cell is often non-persisted buildout even though a parent structure is
+	// persisted; still send containment/position to the DB for the persisted object.
+	if (obj.isPersisted() && container.asCellObject())
+		return true;
 	return container.isPersisted() || (obj.isPlayerControlled() && container.getNetworkId() < NetworkId::cms_invalid) || (container.getObjectTemplate() && (container.getObjectTemplate()->getCrcName().getCrc() == 0x8c525205));
 }
 

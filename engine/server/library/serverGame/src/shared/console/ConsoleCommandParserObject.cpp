@@ -151,6 +151,32 @@ namespace ConsoleCommandParserObjectNamespace
 		}
 	}
 
+	/**
+	 * God-client creates are often not marked persisted when adminPersistAllCreates is off;
+	 * objects in player structures still need DB persistence like normal placed décor.
+	 */
+	bool hasPersistedContainerAncestor(ServerObject const &obj)
+	{
+		ServerObject const *o = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(obj));
+		while (o)
+		{
+			if (o->isPersisted())
+				return true;
+			o = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(*o));
+		}
+		return false;
+	}
+
+	void finalizeGodCreatedObject(ServerObject *const newObject, bool setIncludeInBuildoutIfNotPersisted)
+	{
+		if (!newObject)
+			return;
+		if (ConfigServerGame::getAdminPersistAllCreates() || hasPersistedContainerAncestor(*newObject))
+			newObject->persist();
+		else if (setIncludeInBuildoutIfNotPersisted)
+			newObject->setIncludeInBuildout(true);
+	}
+
 	typedef std::vector<std::string> StringVector;
 	typedef std::vector<std::string> StoredStrings;
 	typedef std::map<NetworkId , StoredStrings> PlayerStoredStringMap;
@@ -692,8 +718,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 			newObject->addToWorld();
 		}
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-			newObject->persist();
+		finalizeGodCreatedObject(newObject, false);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -779,14 +804,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 				newObject->addToWorld();
 			}
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-		{
-			newObject->persist();
-		}
-		else
-		{
-			newObject->setIncludeInBuildout( true );
-		}
+		finalizeGodCreatedObject(newObject, true);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -855,8 +873,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 				newObject->addToWorld();
 			}
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-			newObject->persist();
+		finalizeGodCreatedObject(newObject, false);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -954,6 +971,8 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 			newObject->addToWorld();
 
 		newObject->persist();
+		// World-placed spawners have no buildout cell parent; mark for buildout IFF export (matches old filter when persisted).
+		newObject->setIncludeInBuildout(true);
 
 		result += Unicode::narrowToWide("Ground spawner created. NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -1066,6 +1085,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 				if (!cell)
 					wpObj->addToWorld();
 				wpObj->persist();
+				wpObj->setIncludeInBuildout(true);
 			}
 		}
 		{
@@ -1079,6 +1099,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		if (!cell)
 			spawnerObj->addToWorld();
 		spawnerObj->persist();
+		spawnerObj->setIncludeInBuildout(true);
 
 		result += Unicode::narrowToWide("Patrol spawner created. NetworkId: ");
 		result += Unicode::narrowToWide(spawnerObj->getNetworkId().getValueString());
@@ -1212,8 +1233,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 			return true;
 		}
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-			newObject->persist();
+		finalizeGodCreatedObject(newObject, false);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -1277,8 +1297,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		if (cellId == NetworkId::cms_invalid)
 			newObject->addToWorld();
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-			newObject->persist();
+		finalizeGodCreatedObject(newObject, false);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
@@ -1356,14 +1375,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 				newObject->addToWorld();
 		}
 
-		if (ConfigServerGame::getAdminPersistAllCreates())
-		{
-			newObject->persist();
-		}
-		else
-		{
-			newObject->setIncludeInBuildout( true );
-		}
+		finalizeGodCreatedObject(newObject, true);
 
 		result += Unicode::narrowToWide("NetworkId: ");
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());

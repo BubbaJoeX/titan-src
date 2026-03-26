@@ -575,7 +575,21 @@ bool ServerBuildoutManagerNamespace::isNotObjectForBuildout(ServerObject const *
 			tmpObj->setIncludeInBuildout(true);
 		}
 
-		if (!obj->isInWorld() || (!obj->isPersisted() && !obj->getIncludeInBuildout()) || obj->isPlayerControlled())
+		// Contents of a buildout cell (spawners, props, etc.): parent cell already has the flag from
+		// the building chain above; inherit so export matches pre-fix behavior without pulling in
+		// unrelated DB-only objects (player housing cells are not marked includeInBuildout).
+		if (containingObject && containingObject->asCellObject() && containingObject->getIncludeInBuildout())
+		{
+			ServerObject *tmpObj = const_cast<ServerObject *>(obj);
+			tmpObj->setIncludeInBuildout(true);
+		}
+
+		// Only objects that are part of the buildout pipeline carry includeInBuildout (set when loading
+		// from buildout data, or for god creates that *fall back* to setIncludeInBuildout in open areas).
+		// DB-persisted decor (e.g. god /object in a player structure with persist()) must never be emitted
+		// into generated buildout IFFs — the old ( !persisted && !includeInBuildout ) check wrongly included
+		// any persisted object.
+		if (!obj->isInWorld() || !obj->getIncludeInBuildout() || obj->isPlayerControlled())
 		{
 			return true;
 		}
