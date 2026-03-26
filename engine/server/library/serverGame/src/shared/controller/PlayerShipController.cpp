@@ -135,7 +135,8 @@ PlayerShipController::PlayerShipController(ShipObject * const owner) :
 	m_autopilotLandingAltitude(200.0f),
 	m_autopilotPhase(AP_NONE),
 	m_autopilotDesiredY(0.0f),
-	m_autopilotHoldCruise(false)
+	m_autopilotHoldCruise(false),
+	m_autopilotFighterMode(false)
 {
 	preventMovementUpdates();
 }
@@ -518,9 +519,20 @@ float PlayerShipController::realAlter(float const elapsedTime)
 					m_pitchPosition = 0.0f;
 					m_rollPosition = 0.0f;
 
-					if (m_autopilotHoldCruise && horizDist <= 35.0f)
+					if (m_autopilotHoldCruise && !m_autopilotFighterMode && horizDist <= 35.0f)
 					{
 						m_throttlePosition = 0.0f;
+						break;
+					}
+
+					if (m_autopilotFighterMode)
+					{
+						if (horizDist > 80.0f)
+							m_throttlePosition = 1.0f;
+						else if (horizDist > 30.0f)
+							m_throttlePosition = clamp(0.2f, horizDist / 80.0f, 1.0f);
+						else
+							m_throttlePosition = clamp(0.1f, horizDist / 60.0f, 0.45f);
 						break;
 					}
 
@@ -1045,11 +1057,19 @@ void PlayerShipController::addAiTargetingMe(NetworkId const & unit)
 
 void PlayerShipController::setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise)
 {
+	setAutopilotTarget(target, takeoffAltitude, landingAltitude, holdCruise, false);
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise, bool fighterMode)
+{
 	m_autopilotActive = true;
 	m_autopilotTarget = target;
 	m_autopilotTakeoffAltitude = takeoffAltitude;
 	m_autopilotLandingAltitude = landingAltitude;
 	m_autopilotHoldCruise = holdCruise;
+	m_autopilotFighterMode = fighterMode;
 	m_autopilotPhase = AP_ASCENDING;
 
 	ShipObject * const ship = getShipOwner();
@@ -1103,6 +1123,7 @@ void PlayerShipController::clearAutopilot()
 	m_autopilotPhase = AP_NONE;
 	m_autopilotDesiredY = 0.0f;
 	m_autopilotHoldCruise = false;
+	m_autopilotFighterMode = false;
 
 	if (m_shipDynamicsModel)
 	{
@@ -1123,6 +1144,24 @@ bool PlayerShipController::isAutopilotActive() const
 int PlayerShipController::getAutopilotPhase() const
 {
 	return m_autopilotPhase;
+}
+
+// ----------------------------------------------------------------------
+
+bool PlayerShipController::fighterAutopilotBeginDescent()
+{
+	if (!m_autopilotActive || !m_autopilotFighterMode || m_autopilotPhase != AP_CRUISING)
+		return false;
+
+	TerrainObject const * const terrain = TerrainObject::getConstInstance();
+	if (terrain)
+	{
+		float terrainAtDest = 0.0f;
+		terrain->getHeightForceChunkCreation(Vector(m_autopilotTarget.x, 0.0f, m_autopilotTarget.z), terrainAtDest);
+		m_autopilotDesiredY = terrainAtDest + 20.0f;
+	}
+	m_autopilotPhase = AP_DESCENDING;
+	return true;
 }
 
 // ======================================================================

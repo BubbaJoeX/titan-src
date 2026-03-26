@@ -101,6 +101,8 @@ namespace ScriptMethodsPilotNamespace
 	void       JNICALL setShipAggroDistance(JNIEnv *env, jobject self, jlong shipId, jfloat aggroDistance);
 	jboolean   JNICALL shipSetAutopilotTarget(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt);
 	jboolean   JNICALL shipSetAutopilotTargetHold(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt, jboolean holdCruise);
+	jboolean   JNICALL shipSetAutopilotTargetFighter(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt);
+	jboolean   JNICALL shipFighterAutopilotBeginDescent(JNIEnv *env, jobject self, jlong shipId);
 	jboolean   JNICALL shipUpdateAutopilotTargetXZ(JNIEnv *env, jobject self, jlong shipId, jfloat x, jfloat z);
 	jboolean   JNICALL shipClearAutopilot(JNIEnv *env, jobject self, jlong shipId);
 	jboolean   JNICALL shipIsAutopilotActive(JNIEnv *env, jobject self, jlong shipId);
@@ -175,6 +177,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setShipAggroDistance", "(JF)V", setShipAggroDistance),
 	JF("_shipSetAutopilotTarget", "(JFFFF)Z", shipSetAutopilotTarget),
 	JF("_shipSetAutopilotTargetHold", "(JFFFFZ)Z", shipSetAutopilotTargetHold),
+	JF("_shipSetAutopilotTargetFighter", "(JFFFF)Z", shipSetAutopilotTargetFighter),
+	JF("_shipFighterAutopilotBeginDescent", "(J)Z", shipFighterAutopilotBeginDescent),
 	JF("_shipUpdateAutopilotTargetXZ", "(JFF)Z", shipUpdateAutopilotTargetXZ),
 	JF("_shipClearAutopilot", "(J)Z", shipClearAutopilot),
 	JF("_shipIsAutopilotActive", "(J)Z", shipIsAutopilotActive),
@@ -1732,6 +1736,45 @@ jboolean JNICALL ScriptMethodsPilotNamespace::shipSetAutopilotTargetHold(JNIEnv 
 
 	psc->setAutopilotTarget(Vector(targetX, 0.0f, targetZ), takeoffAlt, landingAlt, holdCruise == JNI_TRUE);
 	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipSetAutopilotTargetFighter(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipSetAutopilotTargetFighter(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+
+	ShipController * const sc = shipObject->getController() ? shipObject->getController()->asShipController() : nullptr;
+	if (!sc)
+		return JNI_FALSE;
+
+	PlayerShipController * const psc = sc->asPlayerShipController();
+	if (!psc)
+		return JNI_FALSE;
+
+	psc->setAutopilotTarget(Vector(targetX, 0.0f, targetZ), takeoffAlt, landingAlt, false, true);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipFighterAutopilotBeginDescent(JNIEnv *env, jobject /*self*/, jlong jobject_shipId)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipFighterAutopilotBeginDescent(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+
+	ShipController * const sc = shipObject->getController() ? shipObject->getController()->asShipController() : nullptr;
+	if (!sc)
+		return JNI_FALSE;
+
+	PlayerShipController * const psc = sc->asPlayerShipController();
+	if (!psc)
+		return JNI_FALSE;
+
+	return psc->fighterAutopilotBeginDescent() ? JNI_TRUE : JNI_FALSE;
 }
 
 // ----------------------------------------------------------------------

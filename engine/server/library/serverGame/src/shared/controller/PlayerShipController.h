@@ -57,9 +57,12 @@ public:
 	bool isTeleporting() const;
 
 	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise = false);
+	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise, bool fighterMode);
 	/** While autopilot is active, move horizontal goal without resetting climb/cruise phase (atmospheric follow). */
 	void updateAutopilotTargetXZ(float x, float z);
 	void clearAutopilot();
+	/** Non-POB fighter autopilot: begin elevator descent to 20m AGL at current horizontal target (script calls after stationary ticks). */
+	bool fighterAutopilotBeginDescent();
 	bool isAutopilotActive() const;
 	int  getAutopilotPhase() const;
 
@@ -118,6 +121,7 @@ private:
 	int   m_autopilotPhase;
 	float m_autopilotDesiredY;
 	bool  m_autopilotHoldCruise;
+	bool  m_autopilotFighterMode;
 };
 
 // ======================================================================
