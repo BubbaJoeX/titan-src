@@ -13,8 +13,10 @@
 #include "UnicodeUtils.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/MessageToQueue.h"
+#include "serverGame/ServerMessageForwarding.h"
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
+#include "serverNetworkMessages/ReloadScriptMessage.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptMessage.h"
 #include "serverUtility/ServerClock.h"
@@ -714,10 +716,15 @@ jboolean JNICALL ScriptMethodsScriptNamespace::reloadScriptFromScript(JNIEnv * e
 	if (!JavaLibrary::convert(localScriptName, scriptNameStdString))
 		return JNI_FALSE;
 
-	if(GameScriptObject::reloadScript(scriptNameStdString))
-	{
+	if (GameScriptObject::reloadScript(scriptNameStdString))
 		result = JNI_TRUE;
-	}
+
+	// Match ConsoleCommandParserScript / CentralCommandParserGame: fan out to other game servers in the cluster.
+	ServerMessageForwarding::beginBroadcast();
+	ReloadScriptMessage const reloadScriptMessage(scriptNameStdString);
+	ServerMessageForwarding::send(reloadScriptMessage);
+	ServerMessageForwarding::end();
+
 	return result;
 }
 
