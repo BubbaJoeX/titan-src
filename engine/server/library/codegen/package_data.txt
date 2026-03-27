@@ -313,6 +313,7 @@ PlayerObject                m_sessionActivity               server_np	   uint32
 PlayerObject                m_petId                         firstParentAuthClientServer_np  NetworkId
 PlayerObject                m_petCommandList                firstParentAuthClientServer_np  std::vector<std::string>
 PlayerObject                m_petToggledCommands            firstParentAuthClientServer_np  std::vector<std::string>
+PlayerObject                m_companionPetStanceUi          firstParentAuthClientServer_np  int8
 PlayerObject                m_collections                   shared         BitArray
 PlayerObject                m_collections2                  shared         BitArray
 PlayerObject                m_chatSpamSpatialNumCharacters  server_np      int

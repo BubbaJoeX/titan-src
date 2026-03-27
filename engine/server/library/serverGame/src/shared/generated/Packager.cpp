@@ -489,6 +489,7 @@ void PlayerObject::addMembersToPackages()
 	addFirstParentAuthClientServerVariable_np (m_petId);
 	addFirstParentAuthClientServerVariable_np (m_petCommandList);
 	addFirstParentAuthClientServerVariable_np (m_petToggledCommands);
+	addFirstParentAuthClientServerVariable_np (m_companionPetStanceUi);
 	addFirstParentAuthClientServerVariable_np (m_guildRank);
 	addFirstParentAuthClientServerVariable_np (m_citizenRank);
 	addFirstParentAuthClientServerVariable_np (m_galacticReserveDeposit);

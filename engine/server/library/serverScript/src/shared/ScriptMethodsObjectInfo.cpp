@@ -295,6 +295,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL getVisibleOnMapAndRadar(JNIEnv *env, jobject self, jlong target);
 	jlong        JNICALL getBeastmasterPet(JNIEnv *env, jobject self, jlong object);
 	jboolean     JNICALL setBeastmasterPet(JNIEnv *env, jobject self, jlong object, jlong target);
+	jboolean     JNICALL setCompanionPetStanceUi(JNIEnv *env, jobject self, jlong object, jint stance);
 	jboolean	 JNICALL isPlayerBackpackHidden(JNIEnv *env, jobject self, jlong player);
 	jboolean	 JNICALL isPlayerHelmetHidden(JNIEnv *env, jobject self, jlong player);
 	jfloat       JNICALL getDefaultScaleFromSharedObjectTemplate(JNIEnv *env, jobject self, jstring sharedObjectTemplateName);
@@ -540,6 +541,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getVisibleOnMapAndRadar", "(J)Z", getVisibleOnMapAndRadar),
 	JF("_getBeastmasterPet", "(J)J", getBeastmasterPet),
 	JF("_setBeastmasterPet", "(JJ)Z", setBeastmasterPet),
+	JF("_setCompanionPetStanceUi", "(JI)Z", setCompanionPetStanceUi),
 	JF("_isPlayerBackpackHidden", "(J)Z", isPlayerBackpackHidden),
 	JF("_isPlayerHelmetHidden", "(J)Z", isPlayerHelmetHidden),
 	JF("getDefaultScaleFromSharedObjectTemplate", "(Ljava/lang/String;)F", getDefaultScaleFromSharedObjectTemplate),
@@ -1694,7 +1696,8 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setBeastmasterPet (JNIEnv* /*
 		return JNI_FALSE;
 	}
 	NetworkId const networkId(pet);
-	
+
+	po->setCompanionPetStanceUi(-1);
 	po->setPetId(networkId);
 
 	// set the bool for being a beast on the CreatureObject.  This lets the client
@@ -1711,6 +1714,33 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setBeastmasterPet (JNIEnv* /*
 
 	}
 
+	return JNI_TRUE;
+}
+
+/**
+* Sets replicated UI stance for the beastmaster pet bar (companion combat role).
+* Valid values: -1 default pet icon, 0–2 per companion_lib.
+*/
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCompanionPetStanceUi(JNIEnv* /*env*/, jobject /*self*/, jlong object, jint stance)
+{
+	CreatureObject* creatureObject = nullptr;
+	if (!JavaLibrary::getObject(object, creatureObject))
+	{
+		WARNING(true, ("ScriptMethodsObjectInfo::setCompanionPetStanceUi() Object could not be resolved to a CreatureObject"));
+		return JNI_FALSE;
+	}
+
+	PlayerObject * const po = PlayerCreatureController::getPlayerObject(creatureObject);
+	if (!po)
+	{
+		WARNING(true, ("ScriptMethodsObjectInfo::setCompanionPetStanceUi() Object has no player object"));
+		return JNI_FALSE;
+	}
+
+	if (stance < -1 || stance > 2)
+		return JNI_FALSE;
+
+	po->setCompanionPetStanceUi(static_cast<int8>(stance));
 	return JNI_TRUE;
 }
 

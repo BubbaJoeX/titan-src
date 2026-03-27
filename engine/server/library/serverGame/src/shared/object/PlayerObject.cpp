@@ -383,6 +383,7 @@ PlayerObject::PlayerObject(const ServerPlayerObjectTemplate* newTemplate) :
 		m_petId(NetworkId::cms_invalid),
 		m_petCommandList(0),
 		m_petToggledCommands(0),
+		m_companionPetStanceUi(-1),
 		m_collections(),
 		m_collections2(),
 		m_chatSpamSpatialNumCharacters(0),
@@ -7429,6 +7430,13 @@ void PlayerObject::setPetCommandList(std::vector<std::string> const &commands)
 void PlayerObject::setPetToggledCommands(std::vector<std::string> const &commands)
 {
 	m_petToggledCommands.set(commands);
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerObject::setCompanionPetStanceUi(int8 const stance)
+{
+	m_companionPetStanceUi.set(stance);
 }
 
 // ----------------------------------------------------------------------

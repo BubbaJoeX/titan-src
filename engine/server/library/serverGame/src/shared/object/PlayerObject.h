@@ -356,6 +356,10 @@ public:
 	void setPetCommandList(std::vector<std::string> const &commands);
 	void setPetToggledCommands(std::vector<std::string> const &commands);
 
+	/// Replicated UI hint for the beastmaster pet bar: {@code companion_lib} combat stance (0–2), or -1 for default pet icon.
+	int8 getCompanionPetStanceUi() const;
+	void setCompanionPetStanceUi(int8 stance);
+
 	bool modifyCollectionSlotValue(std::string const & slotName, int64 delta);
 
 	bool getCollectionSlotValue(std::string const & slotName, unsigned long & value) const;
@@ -629,6 +633,7 @@ private:
 	Archive::AutoDeltaVector<std::string>                     m_petToggledCommands;  // These are the commands on the
 																					 // pet toolbar that should display
 																					 // visually as being toggled on
+	Archive::AutoDeltaVariable<int8>                          m_companionPetStanceUi;
 
 	// both m_collections and m_collections2 form a "contiguous" collections bit array
 	// we only break them up into multiple members because of DB storage restrictions
@@ -916,6 +921,13 @@ inline int32 PlayerObject::getKillMeter() const
 inline NetworkId const & PlayerObject::getPetId() const
 {
 	return m_petId.get();
+}
+
+// ----------------------------------------------------------------------
+
+inline int8 PlayerObject::getCompanionPetStanceUi() const
+{
+	return m_companionPetStanceUi.get();
 }
 
 // ----------------------------------------------------------------------
