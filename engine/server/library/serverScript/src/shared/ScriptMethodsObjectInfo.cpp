@@ -28,6 +28,7 @@
 #include "serverGame/ObserveTracker.h"
 #include "serverGame/PlayerCreatureController.h"
 #include "serverGame/PlayerObject.h"
+#include "serverGame/ServerObject.h"
 #include "serverGame/ServerMessageForwarding.h"
 #include "serverGame/Client.h"
 #include "serverGame/ServerObjectTemplate.h"
@@ -138,6 +139,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jlong        JNICALL getCrafter(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setCrafter(JNIEnv *env, jobject self, jlong target, jlong crafter);
 	jfloat       JNICALL getScale(JNIEnv *env, jobject self, jlong target);
+	jobject      JNICALL getScaleVector(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setScale(JNIEnv *env, jobject self, jlong target, jfloat scale);
 	jfloat       JNICALL getDefaultScaleFromObjectTemplate(JNIEnv *env, jobject self, jstring serverObjectTemplateName);
 	jboolean     JNICALL kill(JNIEnv *env, jobject self, jlong target);
@@ -378,6 +380,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getCrafter", "(J)J", getCrafter),
 	JF("_setCrafter", "(JJ)Z", setCrafter),
 	JF("_getScale", "(J)F", getScale),
+	JF("_getScaleVector", "(J)Lscript/vector;", getScaleVector),
 	JF("_setScale", "(JF)Z", setScale),
 	JF("getDefaultScaleFromObjectTemplate", "(Ljava/lang/String;)F", getDefaultScaleFromObjectTemplate),
 	JF("_getTemplateName", "(J)Ljava/lang/String;", getTemplateId),
@@ -2196,6 +2199,27 @@ jfloat JNICALL ScriptMethodsObjectInfoNamespace::getScale(JNIEnv *env, jobject s
 
 	return creature->getScaleFactor();
 }	// JavaLibrary::getScale
+
+/**
+ * Returns per-axis object scale (x, y, z) from the server object appearance.
+ * For creatures, this reflects Object::getScale() (may differ from getScale() / getScaleFactor()).
+ */
+jobject JNICALL ScriptMethodsObjectInfoNamespace::getScaleVector(JNIEnv *env, jobject self, jlong target)
+{
+	UNREF(env);
+	UNREF(self);
+
+	ServerObject *object = nullptr;
+	if (!JavaLibrary::getObject(target, object) || !object)
+		return nullptr;
+
+	Vector const &s = object->getScale();
+	LocalRefPtr vec;
+	if (!ScriptConversion::convert(s, vec))
+		return nullptr;
+
+	return vec->getReturnValue();
+}
 
 /**
  * Sets the scale of a creature.
