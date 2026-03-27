@@ -188,6 +188,9 @@ public:
 	PersistentCrcString const & getCombatAction();
 	time_t getKnockDownRecoveryTime() const;
 
+	/** Clears primary/secondary AI combat profile state (no datatable-driven weapon specials). */
+	void clearWeaponCombatProfiles();
+
 	std::string const getCombatActionsString();
 
 protected:

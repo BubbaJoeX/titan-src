@@ -2282,12 +2282,20 @@ void AICreatureController::onCreatureNameChanged(std::string const & creatureNam
 	{
 		m_primaryWeaponActions.setCombatProfile(*creatureOwner, *primaryWeaponCombatProfile);
 	}
+	else
+	{
+		m_primaryWeaponActions.clearCombatProfile();
+	}
 	
 	AiCreatureCombatProfile const * const secondaryWeaponCombatProfile = AiCreatureCombatProfile::getCombatProfile(m_aiCreatureData->m_secondarySpecials);
 
 	if (secondaryWeaponCombatProfile != nullptr)
 	{
 		m_secondaryWeaponActions.setCombatProfile(*creatureOwner, *secondaryWeaponCombatProfile);
+	}
+	else
+	{
+		m_secondaryWeaponActions.clearCombatProfile();
 	}
 
 	LOGC(AiLogManager::isLogging(creatureOwner->getNetworkId()), "debug_ai", ("AICreatureController::setCreatureName() owner(%s) creatureName(%s) level(%d) primaryWeapon(%s:%s) secondaryWeapon(%s:%s)", getDebugInformation().c_str(), creatureName.c_str(), creatureOwner->getLevel(), m_primaryWeapon.get().getValueString().c_str(), m_aiCreatureData->m_primaryWeapon.getString(), m_secondaryWeapon.get().getValueString().c_str(), m_aiCreatureData->m_secondaryWeapon.getString()));
@@ -2965,6 +2973,12 @@ time_t AICreatureController::getKnockDownRecoveryTime() const
 	AiCreatureCombatProfile const * const combatProfile = AiCreatureCombatProfile::getCombatProfile(m_aiCreatureData->m_primarySpecials);
 
 	return (combatProfile != nullptr) ? combatProfile->m_knockDownRecoveryTime : 0;
+}
+//-----------------------------------------------------------------------
+void AICreatureController::clearWeaponCombatProfiles()
+{
+	m_primaryWeaponActions.clearCombatProfile();
+	m_secondaryWeaponActions.clearCombatProfile();
 }
 //-----------------------------------------------------------------------
 std::string const AICreatureController::getCombatActionsString()

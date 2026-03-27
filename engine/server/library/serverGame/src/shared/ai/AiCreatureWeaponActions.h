@@ -32,6 +32,9 @@ public:
 
 	void reset();
 
+	/** Clears the AI combat profile and action timers; getCombatAction() stays empty until setCombatProfile(). */
+	void clearCombatProfile();
+
 	/**
 	 * Sets the combat profile which defines the actions for this weapon. This
 	 * additionally grants the actions to the owner which allows them to use

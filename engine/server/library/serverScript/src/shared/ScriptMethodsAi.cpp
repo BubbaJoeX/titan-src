@@ -61,6 +61,7 @@ namespace ScriptMethodsAiNamespace
 	float    JNICALL aiGetMovementSpeedPercent(JNIEnv * env, jobject self, jlong ai);
 	jstring  JNICALL aiGetCombatAction(JNIEnv * env, jobject self, jlong ai);
 	jint     JNICALL aiGetKnockDownRecoveryTime(JNIEnv * env, jobject self, jlong ai);
+	void     JNICALL clearAiWeaponCombatProfiles(JNIEnv * env, jobject self, jlong creature);
 	void     JNICALL pathToLocation(JNIEnv *env, jobject self, jlong mob, jobject location);
 	void     JNICALL pathToName(JNIEnv *env, jobject self, jlong objectId, jstring targetName);
 	void     JNICALL patrolToLocation(JNIEnv *env, jobject self, jlong ai, jobjectArray targets, jboolean random, jboolean flip, jboolean repeat, jint startPoint);
@@ -107,6 +108,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_aiGetMovementSpeedPercent", "(J)F", aiGetMovementSpeedPercent),
 	JF("_aiGetCombatAction", "(J)Ljava/lang/String;", aiGetCombatAction),
 	JF("_aiGetKnockDownRecoveryTime", "(J)I", aiGetKnockDownRecoveryTime),
+	JF("_clearAiWeaponCombatProfiles", "(J)V", clearAiWeaponCombatProfiles),
 	JF("_pathTo", "(JLscript/location;)V", pathToLocation),
 	JF("_pathTo", "(JLjava/lang/String;)V", pathToName),
 	JF("_patrol", "(J[Lscript/location;ZZZI)V", patrolToLocation),
@@ -811,6 +813,19 @@ jint JNICALL ScriptMethodsAiNamespace::aiGetKnockDownRecoveryTime(JNIEnv * /*env
 	}
 
 	return int(aiCreatureController->getKnockDownRecoveryTime());
+}
+
+// ----------------------------------------------------------------------
+void JNICALL ScriptMethodsAiNamespace::clearAiWeaponCombatProfiles(JNIEnv * /*env*/, jobject /*self*/, jlong creature)
+{
+	AICreatureController * const aiCreatureController = ScriptMethodsAiNamespace::getAiCreatureController(creature);
+
+	if (aiCreatureController == nullptr)
+	{
+		return;
+	}
+
+	aiCreatureController->clearWeaponCombatProfiles();
 }
 
 // ----------------------------------------------------------------------

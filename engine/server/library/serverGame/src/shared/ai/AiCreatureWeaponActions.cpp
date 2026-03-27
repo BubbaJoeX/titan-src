@@ -90,6 +90,15 @@ void AiCreatureWeaponActions::reset()
 }
 
 // ----------------------------------------------------------------------
+void AiCreatureWeaponActions::clearCombatProfile()
+{
+	m_combatProfile = nullptr;
+	m_singleUseActionList.clear();
+	m_delayRepeatActionList.clear();
+	m_instantRepeatActionList.clear();
+}
+
+// ----------------------------------------------------------------------
 PersistentCrcString const & AiCreatureWeaponActions::getCombatAction()
 {
 	// If the combat profile is nullptr, then the AI has no special actions assigned
