@@ -10,6 +10,7 @@
 #define INCLUDED_CollisionProperty_H
 
 #include "sharedCollision/SpatialDatabase.h"
+#include "sharedFoundation/StlForwardDeclaration.h"
 #include "sharedObject/Property.h"
 #include "sharedMath/Transform.h"
 #include "sharedMath/Vector.h"
