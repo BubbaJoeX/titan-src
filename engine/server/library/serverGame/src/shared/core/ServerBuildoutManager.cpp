@@ -34,6 +34,7 @@
 #include "sharedGame/SharedObjectTemplate.h"
 #include "sharedLog/Log.h"
 #include "sharedMath/Quaternion.h"
+#include "sharedMath/Vector.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedObject/ContainedByProperty.h"
 #include "sharedObject/NetworkIdManager.h"
@@ -54,7 +55,7 @@ namespace ServerBuildoutManagerNamespace
 	struct BuildoutRow
 	{
 		BuildoutRow();
-		BuildoutRow(int64 id, int64 containerId, int cellIndex, Transform const &transform_p, ServerObjectTemplate const *serverTemplate, std::string const &scripts, std::string const &objvars, std::string const & eventRequired, std::string const & requiredLoadLevel);
+		BuildoutRow(int64 id, int64 containerId, int cellIndex, Transform const &transform_p, Vector const &scale, ServerObjectTemplate const *serverTemplate, std::string const &scripts, std::string const &objvars, std::string const & eventRequired, std::string const & requiredLoadLevel);
 		BuildoutRow(BuildoutRow const &rhs);
 		~BuildoutRow();
 		BuildoutRow &operator=(BuildoutRow const &rhs);
@@ -62,6 +63,7 @@ namespace ServerBuildoutManagerNamespace
 		int64 m_id;
 		int64 m_containerId;
 		Transform m_transform_p;
+		Vector m_scale;
 		ServerObjectTemplate const *m_serverTemplate;
 		std::string m_scripts;
 		std::string m_objvars;
@@ -211,13 +213,13 @@ void ServerBuildoutManager::saveArea(std::string const &serverFileName, std::str
 	// save the table headers
 	{
 		std::string const serverHeader(
-			"server_template_crc\tcell_index\tpx\tpy\tpz\tqw\tqx\tqy\tqz\tscripts\tobjvars\n"
-			"h\ti\tf\tf\tf\tf\tf\tf\tf\ts\tp\n");
+			"server_template_crc\tcell_index\tpx\tpy\tpz\tqw\tqx\tqy\tqz\tsx\tsy\tsz\tscripts\tobjvars\n"
+			"h\ti\tf\tf\tf\tf\tf\tf\tf\tf\tf\tf\ts\tp\n");
 		serverOutputFile.write(serverHeader.length(), serverHeader.c_str());
 
 		std::string const clientHeader(
-			"shared_template_crc\tcell_index\tpx\tpy\tpz\tqw\tqx\tqy\tqz\tradius\tportal_layout_crc\n"
-			"h\ti\tf\tf\tf\tf\tf\tf\tf\tf\ti\n");
+			"shared_template_crc\tcell_index\tpx\tpy\tpz\tqw\tqx\tqy\tqz\tsx\tsy\tsz\tradius\tportal_layout_crc\n"
+			"h\ti\tf\tf\tf\tf\tf\tf\tf\tf\tf\tf\tf\ti\n");
 		clientOutputFile.write(clientHeader.length(), clientHeader.c_str());
 	}
 
@@ -232,11 +234,12 @@ void ServerBuildoutManager::saveArea(std::string const &serverFileName, std::str
 		{
 			ConstCharCrcString const &serverTemplateName = ObjectTemplateList::lookUp((*i).serverTemplateCrc);
 			char buf[512];
-			IGNORE_RETURN(snprintf(buf, sizeof(buf) - 1, "%s\t%d\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t",
+			IGNORE_RETURN(snprintf(buf, sizeof(buf) - 1, "%s\t%d\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t",
 				serverTemplateName.getString(),
 				(*i).cellIndex,
 				(*i).position.x, (*i).position.y, (*i).position.z,
-				(*i).orientation.w, (*i).orientation.x, (*i).orientation.y, (*i).orientation.z));
+				(*i).orientation.w, (*i).orientation.x, (*i).orientation.y, (*i).orientation.z,
+				(*i).scale.x, (*i).scale.y, (*i).scale.z));
 			buf[sizeof(buf) - 1] = '\0';
 			serverOutputFile.write(strlen(buf), buf);
 			serverOutputFile.write((*i).scripts.length(), (*i).scripts.c_str());
@@ -252,11 +255,12 @@ void ServerBuildoutManager::saveArea(std::string const &serverFileName, std::str
 		{
 			ConstCharCrcString const &sharedTemplateName = ObjectTemplateList::lookUp((*i).sharedTemplateCrc);
 			char buf[512];
-			IGNORE_RETURN(snprintf(buf, sizeof(buf) - 1, "%s\t%d\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%d\n",
+			IGNORE_RETURN(snprintf(buf, sizeof(buf) - 1, "%s\t%d\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%d\n",
 				sharedTemplateName.getString(),
 				(*i).cellIndex,
 				(*i).position.x, (*i).position.y, (*i).position.z,
 				(*i).orientation.w, (*i).orientation.x, (*i).orientation.y, (*i).orientation.z,
+				(*i).scale.x, (*i).scale.y, (*i).scale.z,
 				(*i).radius,
 				static_cast<int>((*i).portalLayoutCrc)));
 			buf[sizeof(buf) - 1] = '\0';
@@ -482,6 +486,7 @@ void ServerBuildoutManagerNamespace::generateBuildoutData(float x1, float z1, fl
 			serverRow.cellIndex = cellIndex;
 			serverRow.position = p;
 			serverRow.orientation = q;
+			serverRow.scale = obj->getScale();
 			serverRow.scripts = packedScriptList;
 			serverRow.objvars = obj->getPackedObjVars(std::string());
 
@@ -518,6 +523,7 @@ void ServerBuildoutManagerNamespace::generateBuildoutData(float x1, float z1, fl
 				clientRow.cellIndex = cellIndex;
 				clientRow.position = p;
 				clientRow.orientation = q;
+				clientRow.scale = serverRow.scale;
 				clientRow.radius = serverTemplate->getUpdateRanges(ServerObjectTemplate::UR_far);
 				int portalLayoutCrc = 0;
 				obj->getObjVars().getItem("portalProperty.crc", portalLayoutCrc);
@@ -681,6 +687,10 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 			int const qzColumn = areaBuildoutTable.findColumnNumber("qz");
 			int const scriptsColumn = areaBuildoutTable.findColumnNumber("scripts");
 			int const objvarsColumn = areaBuildoutTable.findColumnNumber("objvars");
+			int const sxColumn = areaBuildoutTable.findColumnNumber("sx");
+			int const syColumn = areaBuildoutTable.findColumnNumber("sy");
+			int const szColumn = areaBuildoutTable.findColumnNumber("sz");
+			bool const haveScaleColumns = (sxColumn >= 0 && syColumn >= 0 && szColumn >= 0);
 
 			if (serverTemplateCrcColumn < 0)
 			{
@@ -844,6 +854,15 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 						areaBuildoutTable.getFloatValue(pzColumn, buildoutRow));
 				}
 
+				Vector rowScale(Vector::xyz111);
+				if (haveScaleColumns)
+				{
+					rowScale.set(
+						areaBuildoutTable.getFloatValue(sxColumn, buildoutRow),
+						areaBuildoutTable.getFloatValue(syColumn, buildoutRow),
+						areaBuildoutTable.getFloatValue(szColumn, buildoutRow));
+				}
+
 				if (containerId == 0 || objects.find(containerId) != objects.end())
 				{
 					// store original ObjId from buildout table as ObjVar on item for reference in-game if needed
@@ -856,6 +875,7 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 							containerId,
 							cellIndex,
 							transform_p,
+							rowScale,
 							serverTemplate,
 							areaBuildoutTable.getStringValue(scriptsColumn, buildoutRow),
 							objVars,
@@ -1091,6 +1111,8 @@ void ServerBuildoutManagerNamespace::instantiateAreaNode(AreaInfo const &areaInf
 			newObject->setTransform_o2p(buildoutRow.m_transform_p);
 		}
 
+		newObject->setScale(buildoutRow.m_scale);
+
 		newObject->getContainedByProperty()->setContainedBy(NetworkId(static_cast<NetworkId::NetworkIdType>(containerId)));
 
 		DynamicVariableList objVars;
@@ -1214,6 +1236,7 @@ ServerBuildoutManagerNamespace::BuildoutRow::BuildoutRow() :
 	m_id(0),
 	m_containerId(0),
 	m_transform_p(),
+	m_scale(Vector::xyz111),
 	m_serverTemplate(0),
 	m_scripts(),
 	m_objvars(),
@@ -1223,10 +1246,11 @@ ServerBuildoutManagerNamespace::BuildoutRow::BuildoutRow() :
 
 // ----------------------------------------------------------------------
 
-ServerBuildoutManagerNamespace::BuildoutRow::BuildoutRow(int64 id, int64 containerId, int cellIndex, Transform const &transform_p, ServerObjectTemplate const *serverTemplate, std::string const &scripts, std::string const &objvars, std::string const & eventRequired, std::string const & requiredLoadLevel) :
+ServerBuildoutManagerNamespace::BuildoutRow::BuildoutRow(int64 id, int64 containerId, int cellIndex, Transform const &transform_p, Vector const &scale, ServerObjectTemplate const *serverTemplate, std::string const &scripts, std::string const &objvars, std::string const & eventRequired, std::string const & requiredLoadLevel) :
 	m_id(id),
 	m_containerId(containerId),
 	m_transform_p(transform_p),
+	m_scale(scale),
 	m_serverTemplate(serverTemplate),
 	m_scripts(scripts),
 	m_objvars(objvars),
@@ -1244,6 +1268,7 @@ ServerBuildoutManagerNamespace::BuildoutRow::BuildoutRow(BuildoutRow const &rhs)
 	m_id(rhs.m_id),
 	m_containerId(rhs.m_containerId),
 	m_transform_p(rhs.m_transform_p),
+	m_scale(rhs.m_scale),
 	m_serverTemplate(rhs.m_serverTemplate),
 	m_scripts(rhs.m_scripts),
 	m_objvars(rhs.m_objvars),
@@ -1272,6 +1297,7 @@ ServerBuildoutManagerNamespace::BuildoutRow &ServerBuildoutManagerNamespace::Bui
 		m_id = rhs.m_id;
 		m_containerId = rhs.m_containerId;
 		m_transform_p = rhs.m_transform_p;
+		m_scale = rhs.m_scale;
 		m_scripts = rhs.m_scripts;
 		m_objvars = rhs.m_objvars;
 		m_cellIndex = rhs.m_cellIndex;
@@ -1443,6 +1469,8 @@ void ServerBuildoutManager::onEventStarted(std::string const & eventName)
 		{
 			newObject->setTransform_o2p(buildoutRow.m_transform_p);
 		}
+
+		newObject->setScale(buildoutRow.m_scale);
 
 		newObject->getContainedByProperty()->setContainedBy(NetworkId(static_cast<NetworkId::NetworkIdType>(containerId)));
 

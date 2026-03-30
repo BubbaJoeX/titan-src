@@ -79,6 +79,7 @@ struct ServerBuildoutAreaRow
 	int         cellIndex;
 	Vector      position;
 	Quaternion  orientation;
+	Vector      scale;
 	std::string scripts;
 	std::string objvars;
 };
@@ -94,6 +95,7 @@ struct ClientBuildoutAreaRow
 	int          cellIndex;
 	Vector       position;
 	Quaternion   orientation;
+	Vector       scale;
 	float        radius;
 	uint32       portalLayoutCrc;
 };

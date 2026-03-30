@@ -491,6 +491,7 @@ void Archive::get(Archive::ReadIterator &source, ServerBuildoutAreaRow &target)
 	Archive::get(source, target.cellIndex);
 	Archive::get(source, target.position);
 	Archive::get(source, target.orientation);
+	Archive::get(source, target.scale);
 	Archive::get(source, target.scripts);
 	Archive::get(source, target.objvars);
 }
@@ -505,6 +506,7 @@ void Archive::put(Archive::ByteStream &target, ServerBuildoutAreaRow const &sour
 	Archive::put(target, source.cellIndex);
 	Archive::put(target, source.position);
 	Archive::put(target, source.orientation);
+	Archive::put(target, source.scale);
 	Archive::put(target, source.scripts);
 	Archive::put(target, source.objvars);
 }
@@ -520,6 +522,7 @@ void Archive::get(Archive::ReadIterator &source, ClientBuildoutAreaRow &target)
 	Archive::get(source, target.cellIndex);
 	Archive::get(source, target.position);
 	Archive::get(source, target.orientation);
+	Archive::get(source, target.scale);
 	Archive::get(source, target.radius);
 	Archive::get(source, target.portalLayoutCrc);
 }
@@ -535,6 +538,7 @@ void Archive::put(Archive::ByteStream &target, ClientBuildoutAreaRow const &sour
 	Archive::put(target, source.cellIndex);
 	Archive::put(target, source.position);
 	Archive::put(target, source.orientation);
+	Archive::put(target, source.scale);
 	Archive::put(target, source.radius);
 	Archive::put(target, source.portalLayoutCrc);
 }
