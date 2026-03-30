@@ -70,7 +70,8 @@ Floor::Floor( FloorMesh const * pMesh, Object const * owner, Appearance const * 
   m_spatialSubdivisionHandle(NULL),
   m_extent(NULL),
   m_extentDirty(true),
-  m_lastScale(-1.0f),
+  m_hasLastScaleVec(false),
+  m_lastScaleVec(),
   m_sphere_l(),
   m_sphere_w()
 {
