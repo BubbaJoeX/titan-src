@@ -57,6 +57,10 @@ public:
 	static bool getBuildDebugData           ( void );
 	static void setBuildDebugData           ( bool val );
 
+	// Optional: build walkable floor / collision extent from render mesh when no .fl / template extent (client tooling).
+	static bool getUseMeshGeometryCollision ( void );
+	static bool getUseMeshFloor             ( void );
+
 	static void setEnableCreatureCollision  ( bool enable );
 
 	static bool getReportStatus             ( void ); // Spam that goes to the debug window - # of objects in collision world, profiling

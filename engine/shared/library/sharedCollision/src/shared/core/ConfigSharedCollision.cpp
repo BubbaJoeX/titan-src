@@ -44,6 +44,9 @@ bool    ms_enableMountRadii         = false;
 bool    ms_buildBoxTrees            = false;
 bool    ms_buildDebugData           = false;
 
+bool    ms_useMeshGeometryCollision = false;
+bool    ms_useMeshFloor             = false;
+
 bool    ms_updateStatus             = true;
 bool    ms_reportStatus             = false;
 bool    ms_reportChanges            = false;
@@ -120,6 +123,8 @@ void ConfigSharedCollision::install ( void )
 	DebugFlags::registerFlag( ms_shoveEnabled,					"SharedCollision",    "0x4F474F67");  // hash of shoveEnabled
 	DebugFlags::registerFlag( ms_spaceAiLoggingEnabled,			"SharedCollision",    "spaceAiLoggingEnabled");
 	DebugFlags::registerFlag( ms_useOriginalAvoidanceAlgorithm,	"SharedCollision",    "useOriginalAvoidanceAlgorithm");
+	DebugFlags::registerFlag( ms_useMeshGeometryCollision,		"SharedCollision",    "useMeshGeometryCollision");
+	DebugFlags::registerFlag( ms_useMeshFloor,					"SharedCollision",    "useMeshFloor");
 	
 	// ----------
 
@@ -134,6 +139,9 @@ void ConfigSharedCollision::install ( void )
 	ms_hopHeight             = ConfigFile::getKeyFloat("SharedCollision", "hopHeight",             ms_hopHeight);
 	ms_terrainLOSMinDistance = ConfigFile::getKeyFloat("SharedCollision", "terrainLOSMinDistance", ms_terrainLOSMinDistance);
 	ms_terrainLOSMaxDistance = ConfigFile::getKeyFloat("SharedCollision", "terrainLOSMaxDistance", ms_terrainLOSMaxDistance);
+
+	ms_useMeshGeometryCollision = ConfigFile::getKeyBool("SharedCollision", "useMeshGeometryCollision", ms_useMeshGeometryCollision);
+	ms_useMeshFloor             = ConfigFile::getKeyBool("SharedCollision", "useMeshFloor",             ms_useMeshFloor);
 }
 
 // ----------------------------------------------------------------------
@@ -177,6 +185,9 @@ void ConfigSharedCollision::setBuildDebugData           (bool val)
 {
 	ms_buildDebugData = val;
 }
+
+bool ConfigSharedCollision::getUseMeshGeometryCollision ( void ) { return ms_useMeshGeometryCollision; }
+bool ConfigSharedCollision::getUseMeshFloor             ( void ) { return ms_useMeshFloor; }
 
 
 bool ConfigSharedCollision::getReportStatus             ( void ) { return ms_reportStatus; }
