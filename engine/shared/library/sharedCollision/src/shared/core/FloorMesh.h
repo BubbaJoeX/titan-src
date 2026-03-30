@@ -13,7 +13,7 @@
 #include "sharedCollision/CollisionMesh.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Tag.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/DataResource.h"
-#include "sharedFoundation/StlForwardDeclaration.h"
+#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/StlForwardDeclaration.h"
 #include "sharedCollision/CollisionEnums.h"
 
 class FloorTri;
