@@ -10,17 +10,18 @@
 
 // ======================================================================
 
+#include <vector>
+
 #include "sharedCollision/CollisionMesh.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/Tag.h"
 #include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/DataResource.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/StlForwardDeclaration.h"
 #include "sharedCollision/CollisionEnums.h"
+#include "sharedCollision/FloorTri.h"
+#include "sharedCollision/FloorLocator.h"
 
-class FloorTri;
 class ConnectedTri;
 class Iff;
 class FloorMesh;
-class FloorLocator;
 class Circle;
 class Ribbon3d;
 class DebugShapeRenderer;
@@ -33,7 +34,7 @@ class Appearance;
 template<class T>
 class DataResourceList;
 typedef DataResourceList<FloorMesh>	 FloorMeshList;
-typedef stdvector<FloorTri>::fwd     FloorTriVec;
+typedef std::vector<FloorTri>        FloorTriVec;
 typedef std::pair<int,int>           IntPair;
 
 class FloorEdgeId
@@ -48,9 +49,9 @@ public:
 	int           edgeId;
 };
 
-typedef stdvector<FloorEdgeId>::fwd FloorEdgeIdVec;
+typedef std::vector<FloorEdgeId> FloorEdgeIdVec;
 
-typedef stdvector<FloorLocator>::fwd FloorLocatorVec;
+typedef std::vector<FloorLocator> FloorLocatorVec;
 
 // ======================================================================
 
@@ -284,7 +285,7 @@ protected:
 
 	typedef std::pair<int,int> EdgeId;
 
-	typedef stdvector<EdgeId>::fwd EdgeIdVec;
+	typedef std::vector<EdgeId> EdgeIdVec;
 
 	void            findAdjacentBoundaryEdges   ( VectorVector const & polyVerts, EdgeIdVec & outIds ) const;
 

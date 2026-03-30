@@ -9,8 +9,9 @@
 #ifndef INCLUDED_CollisionProperty_H
 #define INCLUDED_CollisionProperty_H
 
+#include <vector>
+
 #include "sharedCollision/SpatialDatabase.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/StlForwardDeclaration.h"
 #include "sharedObject/Property.h"
 #include "sharedMath/Transform.h"
 #include "sharedMath/Vector.h"
@@ -29,7 +30,7 @@ class SpatialDatabase;
 class SpatialSubdivisionHandle;
 class Transform;
 
-typedef stdvector<CollisionProperty*>::fwd  ColliderList;
+typedef std::vector<CollisionProperty*>  ColliderList;
 
 // ======================================================================
 
