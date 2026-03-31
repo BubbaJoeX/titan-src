@@ -220,6 +220,11 @@ public:
 	void                 updateRemoteTextureUrlFromObjvars();
 	/// Push dynamicLight.* objvars into m_dynamicLightState for client-local light tuning (housing switches, maintenance).
 	void                 updateDynamicLightFromObjvars();
+	/// Pack hp_dyn.* objvars into m_dynamicHardpointsState for client-local attachments (appearances, lights, effects).
+	/// Slots are nested lists: hp_dyn.<slot>.kind = "app" | "light" | "fx"; hp_dyn.<slot>.hp = hardpoint name or empty/"-" for object root;
+	/// app: .path = appearance template; optional .ox .oy .oz = local offset (meters in hardpoint space); light: .r .g .b .range .intensity;
+	/// fx: .path = particle template, .ox .oy .oz .scale
+	void                 updateDynamicHardpointsFromObjvars();
 	void                 rollupStructure(NetworkId const & owner, bool warnOnly);
 
 	bool                hasEncumbrances() const;
@@ -592,6 +597,8 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_rtCameraActive;        // "1" if active, empty otherwise
 	/// packed dynamic light params for CDF point lights — synced from dynamicLight.* objvars (housing, etc.)
 	Archive::AutoDeltaVariable<std::string> m_dynamicLightState;
+	/// packed hp_dyn slots for client-only hardpoint attachments (appearance / light / fx)
+	Archive::AutoDeltaVariable<std::string> m_dynamicHardpointsState;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 

@@ -67,6 +67,7 @@
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/DynamicVariable.h"
 #include "sharedFoundation/DynamicVariableList.h"
+#include "sharedFoundation/DynamicVariableListNestedList.h"
 #include "sharedFoundation/FloatMath.h"
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedFoundation/Os.h"
@@ -82,6 +83,8 @@
 #include "sharedGame/ShipComponentData.h"
 #include "sharedLog/Log.h"
 #include "sharedMath/PackedArgb.h"
+#include <algorithm>
+#include <cstdlib>
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedNetworkMessages/IncubatorCommitMessage.h"
 #include "sharedNetworkMessages/MessageQueueCommandQueueRemove.h"
@@ -423,6 +426,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_rtCameraResolution(),
 	m_rtCameraActive(),
 	m_dynamicLightState(),
+	m_dynamicHardpointsState(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1332,6 +1336,176 @@ void TangibleObject::updateDynamicLightFromObjvars()
 	std::string const newState(buf);
 	if (m_dynamicLightState.get() != newState)
 		m_dynamicLightState = newState;
+}
+
+//-----------------------------------------------------------------------
+
+namespace TangibleObjectHpDynNamespace
+{
+	static std::string const cs_hpDynRoot("hp_dyn");
+
+	static void appendSanitizedField(std::string &pack, std::string const &field)
+	{
+		for (size_t i = 0; i < field.size(); ++i)
+		{
+			char const c = field[i];
+			if (c == '\t' || c == '\n' || c == '\r')
+				pack.push_back(' ');
+			else
+				pack.push_back(c);
+		}
+	}
+
+	static void asciiLower(std::string &s)
+	{
+		for (size_t i = 0; i < s.size(); ++i)
+		{
+			if (s[i] >= 'A' && s[i] <= 'Z')
+				s[i] = static_cast<char>(s[i] - 'A' + 'a');
+		}
+	}
+
+	static bool slotNameLess(std::string const &a, std::string const &b)
+	{
+		char *endA = 0;
+		char *endB = 0;
+		long const la = strtol(a.c_str(), &endA, 10);
+		long const lb = strtol(b.c_str(), &endB, 10);
+		if (endA && *endA == '\0' && endB && *endB == '\0')
+			return la < lb;
+		return a < b;
+	}
+}
+
+void TangibleObject::updateDynamicHardpointsFromObjvars()
+{
+	using namespace TangibleObjectHpDynNamespace;
+	DynamicVariableListNestedList const hpRoot(getObjVars(), cs_hpDynRoot);
+	if (hpRoot.empty())
+	{
+		if (!m_dynamicHardpointsState.get().empty())
+			m_dynamicHardpointsState = std::string();
+		return;
+	}
+
+	std::vector<std::string> slotNames;
+	for (DynamicVariableListNestedList::const_iterator it = hpRoot.begin(); it != hpRoot.end(); ++it)
+	{
+		if (it.getType() != DynamicVariable::LIST)
+			continue;
+		slotNames.push_back(it.getName());
+	}
+	if (slotNames.empty())
+	{
+		if (!m_dynamicHardpointsState.get().empty())
+			m_dynamicHardpointsState = std::string();
+		return;
+	}
+
+	std::sort(slotNames.begin(), slotNames.end(), slotNameLess);
+
+	std::string pack;
+	pack.reserve(512);
+	pack = "v1";
+
+	for (size_t s = 0; s < slotNames.size(); ++s)
+	{
+		DynamicVariableListNestedList const slotList(hpRoot, slotNames[s]);
+		std::string kind;
+		if (!slotList.getItem("kind", kind) || kind.empty())
+			continue;
+		asciiLower(kind);
+
+		std::string hp;
+		IGNORE_RETURN(slotList.getItem("hp", hp));
+
+		if (kind == "app")
+		{
+			std::string path;
+			if (!slotList.getItem("path", path) || path.empty())
+				continue;
+			float ox = 0.f;
+			float oy = 0.f;
+			float oz = 0.f;
+			IGNORE_RETURN(slotList.getItem("ox", ox));
+			IGNORE_RETURN(slotList.getItem("oy", oy));
+			IGNORE_RETURN(slotList.getItem("oz", oz));
+			pack.push_back('\n');
+			pack += "app";
+			pack.push_back('\t');
+			if (hp.empty())
+				pack += '-';
+			else
+				appendSanitizedField(pack, hp);
+			pack.push_back('\t');
+			appendSanitizedField(pack, path);
+			pack.push_back('\t');
+			char offs[128];
+			IGNORE_RETURN(snprintf(offs, sizeof(offs), "%f\t%f\t%f", ox, oy, oz));
+			pack += offs;
+		}
+		else if (kind == "light")
+		{
+			float r = 1.f;
+			float g = 1.f;
+			float b = 1.f;
+			float range = 10.f;
+			float intensity = 1.f;
+			IGNORE_RETURN(slotList.getItem("r", r));
+			IGNORE_RETURN(slotList.getItem("g", g));
+			IGNORE_RETURN(slotList.getItem("b", b));
+			IGNORE_RETURN(slotList.getItem("range", range));
+			IGNORE_RETURN(slotList.getItem("intensity", intensity));
+			pack.push_back('\n');
+			pack += "light";
+			pack.push_back('\t');
+			if (hp.empty())
+				pack += '-';
+			else
+				appendSanitizedField(pack, hp);
+			pack.push_back('\t');
+			char nums[192];
+			IGNORE_RETURN(snprintf(nums, sizeof(nums), "%f\t%f\t%f\t%f\t%f", r, g, b, range, intensity));
+			pack += nums;
+		}
+		else if (kind == "fx")
+		{
+			std::string path;
+			if (!slotList.getItem("path", path) || path.empty())
+				continue;
+			float ox = 0.f;
+			float oy = 0.f;
+			float oz = 0.f;
+			float scale = 1.f;
+			IGNORE_RETURN(slotList.getItem("ox", ox));
+			IGNORE_RETURN(slotList.getItem("oy", oy));
+			IGNORE_RETURN(slotList.getItem("oz", oz));
+			IGNORE_RETURN(slotList.getItem("scale", scale));
+			pack.push_back('\n');
+			pack += "fx";
+			pack.push_back('\t');
+			if (hp.empty())
+				pack += '-';
+			else
+				appendSanitizedField(pack, hp);
+			pack.push_back('\t');
+			appendSanitizedField(pack, path);
+			pack.push_back('\t');
+			char tail[160];
+			IGNORE_RETURN(snprintf(tail, sizeof(tail), "%f\t%f\t%f\t%f", ox, oy, oz, scale));
+			pack += tail;
+		}
+	}
+
+	if (pack == "v1")
+	{
+		if (!m_dynamicHardpointsState.get().empty())
+			m_dynamicHardpointsState = std::string();
+		return;
+	}
+
+	if (m_dynamicHardpointsState.get() != pack)
+		m_dynamicHardpointsState = pack;
 }
 
 //-----------------------------------------------------------------------
@@ -2635,6 +2809,7 @@ float TangibleObject::alter(real time)
 	{
 		updateRemoteTextureUrlFromObjvars();
 		updateDynamicLightFromObjvars();
+		updateDynamicHardpointsFromObjvars();
 		updateRemoteVideoStreamFromObjvars();
 		updateRtCameraVariablesFromObjvars();
 		updateTangibleDynamicsFromObjvars();
