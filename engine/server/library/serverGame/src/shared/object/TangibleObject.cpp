@@ -379,6 +379,14 @@ static const std::string OBJVAR_RT_CAMERA_FOV = "rt_camera.fov";
 static const std::string OBJVAR_RT_CAMERA_RESOLUTION = "rt_camera.resolution";
 static const std::string OBJVAR_RT_CAMERA_ACTIVE = "rt_camera.isActive";
 
+// Scripted dynamic point lights (CDF GameLight children) — housing room switches, fixture maintenance, etc.
+static const std::string OBJVAR_DYNAMIC_LIGHT_OVERRIDE   = "dynamicLight.override";
+static const std::string OBJVAR_DYNAMIC_LIGHT_R        = "dynamicLight.r";
+static const std::string OBJVAR_DYNAMIC_LIGHT_G        = "dynamicLight.g";
+static const std::string OBJVAR_DYNAMIC_LIGHT_B        = "dynamicLight.b";
+static const std::string OBJVAR_DYNAMIC_LIGHT_RANGE    = "dynamicLight.range";
+static const std::string OBJVAR_DYNAMIC_LIGHT_INTENSITY = "dynamicLight.intensity";
+
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
 
 
@@ -414,6 +422,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_rtCameraFov(),
 	m_rtCameraResolution(),
 	m_rtCameraActive(),
+	m_dynamicLightState(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1292,6 +1301,37 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 			scriptObject->detachScript(MAGIC_PAINTING_SCRIPT);
 		}
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void TangibleObject::updateDynamicLightFromObjvars()
+{
+	int overrideFlag = 0;
+	if (!getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_OVERRIDE, overrideFlag) || !overrideFlag)
+	{
+		if (!m_dynamicLightState.get().empty())
+			m_dynamicLightState = std::string();
+		return;
+	}
+
+	float r = 1.f;
+	float g = 1.f;
+	float b = 1.f;
+	float range = 10.f;
+	float intensity = 1.f;
+	IGNORE_RETURN(getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_R, r));
+	IGNORE_RETURN(getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_G, g));
+	IGNORE_RETURN(getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_B, b));
+	IGNORE_RETURN(getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_RANGE, range));
+	IGNORE_RETURN(getObjVars().getItem(OBJVAR_DYNAMIC_LIGHT_INTENSITY, intensity));
+
+	char buf[160];
+	IGNORE_RETURN(snprintf(buf, sizeof(buf), "1 %f %f %f %f %f", r, g, b, range, intensity));
+	buf[sizeof(buf) - 1] = '\0';
+	std::string const newState(buf);
+	if (m_dynamicLightState.get() != newState)
+		m_dynamicLightState = newState;
 }
 
 //-----------------------------------------------------------------------
@@ -2594,6 +2634,7 @@ float TangibleObject::alter(real time)
 	if (isAuthoritative())
 	{
 		updateRemoteTextureUrlFromObjvars();
+		updateDynamicLightFromObjvars();
 		updateRemoteVideoStreamFromObjvars();
 		updateRtCameraVariablesFromObjvars();
 		updateTangibleDynamicsFromObjvars();

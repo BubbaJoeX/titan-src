@@ -218,6 +218,8 @@ public:
 	void                 clearCondition(int condition);
 	/// Push texture.* objvars into m_remoteTexture* for client replication (script setObjVar, etc.).
 	void                 updateRemoteTextureUrlFromObjvars();
+	/// Push dynamicLight.* objvars into m_dynamicLightState for client-local light tuning (housing switches, maintenance).
+	void                 updateDynamicLightFromObjvars();
 	void                 rollupStructure(NetworkId const & owner, bool warnOnly);
 
 	bool                hasEncumbrances() const;
@@ -588,6 +590,8 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_rtCameraFov;           // FOV in degrees as string (for RT Camera)
 	Archive::AutoDeltaVariable<std::string> m_rtCameraResolution;    // Resolution as string (for RT Camera/Screen)
 	Archive::AutoDeltaVariable<std::string> m_rtCameraActive;        // "1" if active, empty otherwise
+	/// packed dynamic light params for CDF point lights — synced from dynamicLight.* objvars (housing, etc.)
+	Archive::AutoDeltaVariable<std::string> m_dynamicLightState;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 

@@ -738,6 +738,7 @@ void TangibleObject::addMembersToPackages()
 	addSharedVariable_np (m_remoteStreamStartTime);
 	addSharedVariable_np (m_remoteEmitterParentId);
 	addSharedVariable_np (m_remoteEmitterVolume);
+	addSharedVariable_np (m_dynamicLightState);
 }
 
 /*

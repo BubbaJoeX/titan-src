@@ -515,6 +515,7 @@ TangibleObject              m_rtScreenLinkedCamera   shared_np            std::s
 TangibleObject              m_rtCameraFov            shared_np            std::string
 TangibleObject              m_rtCameraResolution     shared_np            std::string
 TangibleObject              m_rtCameraActive         shared_np            std::string
+TangibleObject              m_dynamicLightState      shared_np            std::string
 
 VehicleObject               m_bogus                  server               int
 
