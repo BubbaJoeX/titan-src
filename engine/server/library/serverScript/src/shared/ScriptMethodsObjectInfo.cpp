@@ -315,6 +315,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL isAPlayerAppearanceInventoryContainer(JNIEnv *env, jobject self, jlong container);
 	jlongArray   JNICALL getAllWornItems(JNIEnv *env, jobject self, jlong player, jboolean ignoreAppearanceItems);
 	jlong        JNICALL getAppearanceInventory(JNIEnv *env, jobject self, jlong player);
+	jboolean     JNICALL ensureAppearanceInventory(JNIEnv *env, jobject self, jlong creature);
 	jboolean     JNICALL setDecoyOrigin(JNIEnv *env, jobject self, jlong creature, jlong origin);
 	jlong        JNICALL getDecoyOrigin(JNIEnv *env, jobject self, jlong creature);
 	jboolean     JNICALL openRatingWindow(JNIEnv * env, jobject self, jlong player, jstring title, jstring description);
@@ -565,6 +566,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_isAPlayerAppearanceInventoryContainer", "(J)Z", isAPlayerAppearanceInventoryContainer),
 	JF("_getAllWornItems", "(JZ)[J", getAllWornItems),
 	JF("_getAppearanceInventory", "(J)J", getAppearanceInventory),
+	JF("_ensureAppearanceInventory", "(J)Z", ensureAppearanceInventory),
 	JF("_setDecoyOrigin", "(JJ)Z", setDecoyOrigin),
 	JF("_getDecoyOrigin", "(J)J", getDecoyOrigin),
 	JF("_openRatingWindow", "(JLjava/lang/String;Ljava/lang/String;)Z", openRatingWindow),
@@ -6792,6 +6794,20 @@ jlong JNICALL ScriptMethodsObjectInfoNamespace::getAppearanceInventory(JNIEnv *e
 		appearInv = playerCreature->getAppearanceInventory()->getNetworkId();
 
 	return appearInv == NetworkId::cms_invalid ? 0 : appearInv.getValue();
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::ensureAppearanceInventory(JNIEnv *env, jobject self, jlong creatureId)
+{
+	UNREF(env);
+	UNREF(self);
+
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(creatureId, creature))
+		return JNI_FALSE;
+
+	return creature->ensureAppearanceInventory() ? JNI_TRUE : JNI_FALSE;
 }
 
 // ----------------------------------------------------------------------

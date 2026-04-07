@@ -254,6 +254,8 @@ public:
 	const ServerObject *  getHair       () const;
 	ServerObject *        getAppearanceInventory ();
 	const ServerObject *  getAppearanceInventory () const;
+	/** Create appearance inventory in the appearance slot if the creature template has that slot but it is empty (e.g. display NPCs). Authoritative only. */
+	bool                  ensureAppearanceInventory ();
 	ServerObject *		  getHangar		();
 	const ServerObject *  getHangar     () const;
 	ServerObject *        getObjectInSlot (const ConstCharCrcLowerString & slotName);

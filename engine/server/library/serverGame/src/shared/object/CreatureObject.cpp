@@ -6894,6 +6894,45 @@ const ServerObject * CreatureObject::getAppearanceInventory() const
 
 //----------------------------------------------------------------------
 
+bool CreatureObject::ensureAppearanceInventory ()
+{
+	if (!isAuthoritative ())
+		return false;
+
+	if (getAppearanceInventory ())
+		return true;
+
+	SlottedContainer * const container = ContainerInterface::getSlottedContainer (*this);
+	if (!container)
+	{
+		DEBUG_WARNING (true, ("ensureAppearanceInventory: creature %s has no slotted container", getNetworkId ().getValueString ().c_str ()));
+		return false;
+	}
+
+	SlotId const appearanceSlot = SlotIdManager::findSlotId (SlotNames::appearance);
+	if (appearanceSlot == SlotId::invalid)
+	{
+		DEBUG_WARNING (true, ("ensureAppearanceInventory: creature %s template has no appearance slot", getNetworkId ().getValueString ().c_str ()));
+		return false;
+	}
+
+	Container::ContainerErrorCode tmp = Container::CEC_Success;
+	Container::ContainedItem const itemId = container->getObjectInSlot (appearanceSlot, tmp);
+	if (itemId.getObject () != nullptr)
+		return true;
+
+	ServerObject * const appearanceInventory = ServerWorld::createNewObject (s_appearanceTemplate, *this, appearanceSlot, false);
+	if (!appearanceInventory)
+	{
+		WARNING (true, ("ensureAppearanceInventory: failed to create appearance inventory for creature %s", getNetworkId ().getValueString ().c_str ()));
+		return false;
+	}
+
+	return true;
+}
+
+//----------------------------------------------------------------------
+
 
 ServerObject * CreatureObject::getHangar()
 {
