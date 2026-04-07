@@ -1882,7 +1882,7 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		int const maxDefined = std::max(50, StaffRankDataTable::getMaxDefinedLevel());
 		if (which < 0 || which > maxDefined)
 		{
-			result += Unicode::narrowToWide(FormattedString("Invalid rank level. Use 0 (no title) or 1-%d (must be <= your account staff level).", maxDefined).c_str());
+			result += Unicode::narrowToWide(FormattedString<512>().sprintf("Invalid rank level. Use 0 (no title) or 1-%d (must be <= your account staff level).", maxDefined));
 			return true;
 		}
 		CreatureObject * userObject = dynamic_cast<CreatureObject*>(ServerWorld::findObjectByNetworkId(userId));
