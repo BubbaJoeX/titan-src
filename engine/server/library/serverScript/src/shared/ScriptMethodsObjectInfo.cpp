@@ -45,6 +45,7 @@
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedGame/GameObjectTypes.h"
+#include "sharedGame/StaffRankDataTable.h"
 #include "sharedLog/Log.h"
 #include "sharedMath/PackedArgb.h"
 #include "sharedMath/PaletteArgb.h"
@@ -157,6 +158,8 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL setComplexity(JNIEnv *env, jobject self, jlong target, jfloat complexity);
 	jboolean     JNICALL isGod(JNIEnv *env, jobject self, jlong target);
 	jint         JNICALL getGodLevel(JNIEnv *env, jobject self, jlong target);
+	jstring      JNICALL getStaffRankTitle(JNIEnv *env, jobject self, jlong target);
+	jstring      JNICALL getStaffRankTitleForLevel(JNIEnv *env, jobject self, jint level);
 	jint         JNICALL getCount(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setCount(JNIEnv *env, jobject self, jlong target, jint value);
 	jboolean     JNICALL incrementCount(JNIEnv *env, jobject self, jlong target, jint delta);
@@ -400,6 +403,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setComplexity", "(JF)Z", setComplexity),
 	JF("_isGod", "(J)Z", isGod),
 	JF("_getGodLevel", "(J)I", getGodLevel),
+	JF("_getStaffRankTitle", "(J)Ljava/lang/String;", getStaffRankTitle),
+	JF("_getStaffRankTitleForLevel", "(I)Ljava/lang/String;", getStaffRankTitleForLevel),
 	JF("_getCount", "(J)I", getCount),
 	JF("_setCount", "(JI)Z", setCount),
 	JF("_incrementCount", "(JI)Z", incrementCount),
@@ -3890,6 +3895,34 @@ jint JNICALL ScriptMethodsObjectInfoNamespace::getGodLevel(JNIEnv *env, jobject 
 		return object->getClient()->getGodLevel();
 	return 0;
 }	// JavaLibrary::getGodLevel
+
+//----------------------------------------------------------------------
+
+jstring JNICALL ScriptMethodsObjectInfoNamespace::getStaffRankTitle(JNIEnv *env, jobject self, jlong target)
+{
+	UNREF(self);
+
+	const ServerObject * object = nullptr;
+	if (!JavaLibrary::getObject(target, object))
+		return env->NewStringUTF("");
+
+	Client const * const client = object->getClient();
+	if (!client)
+		return env->NewStringUTF("");
+
+	std::string const title = StaffRankDataTable::getRankTitle(client->getRawGodLevel());
+	return env->NewStringUTF(title.c_str());
+}	// JavaLibrary::getStaffRankTitle
+
+//----------------------------------------------------------------------
+
+jstring JNICALL ScriptMethodsObjectInfoNamespace::getStaffRankTitleForLevel(JNIEnv *env, jobject self, jint level)
+{
+	UNREF(self);
+
+	std::string const title = StaffRankDataTable::getRankTitle(static_cast<int>(level));
+	return env->NewStringUTF(title.c_str());
+}	// JavaLibrary::getStaffRankTitleForLevel
 
 //----------------------------------------------------------------------
 

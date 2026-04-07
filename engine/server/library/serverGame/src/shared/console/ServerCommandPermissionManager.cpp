@@ -19,6 +19,8 @@
 
 #include "UnicodeUtils.h"
 
+ServerCommandPermissionManager * ServerCommandPermissionManager::ms_instance = 0;
+
 ServerCommandPermissionManager::ServerCommandPermissionManager() :
 		CommandPermissionManager(),
 		m_permissionTable(0)
@@ -26,12 +28,14 @@ ServerCommandPermissionManager::ServerCommandPermissionManager() :
 	m_permissionTable = DataTableManager::getTable("datatables/admin/command_permissions.iff", true);
 	DEBUG_FATAL(!m_permissionTable, ("Could not open command permissions table"));
 	CommandParser::setPermissionManager(this);
+	setInstance(this);
 }
 
 //------------------------------------------------------------------------------------------
 
 ServerCommandPermissionManager::~ServerCommandPermissionManager()
 {
+	setInstance(0);
 	DataTableManager::close("command_permissions.iff");
 	CommandParser::setPermissionManager(0);
 }
@@ -72,7 +76,9 @@ bool ServerCommandPermissionManager::isCommandAllowed (const NetworkId & userId,
 	int clientLevel = client->getGodLevel();
 	std::string command = Unicode::wideToNarrow(commandPath);
 	int row = m_permissionTable->searchColumnString( 0, command);
-	int commandLevel = 5;
+	// Commands not listed in command_permissions must not be executable via the in-game console path.
+	int const commandLevelNotListed = 1000;
+	int commandLevel = commandLevelNotListed;
 	
 	if (row != -1)
 		commandLevel = m_permissionTable->getIntValue(1, row);
@@ -83,6 +89,32 @@ bool ServerCommandPermissionManager::isCommandAllowed (const NetworkId & userId,
 		LOG("CustomerService",("Avatar:%s denied command %s because the command level is %d and they are %d", PlayerObject::getAccountDescription(userId).c_str(), command.c_str(), commandLevel, clientLevel));
 	}
 	return retval;
+}
+
+//------------------------------------------------------------------------------------------
+
+int ServerCommandPermissionManager::lookupPermissionLevel(std::string const & commandPath) const
+{
+	if (!m_permissionTable)
+		return -1;
+	int row = m_permissionTable->searchColumnString(0, commandPath);
+	if (row == -1)
+		return -1;
+	return m_permissionTable->getIntValue(1, row);
+}
+
+//------------------------------------------------------------------------------------------
+
+ServerCommandPermissionManager * ServerCommandPermissionManager::getInstance()
+{
+	return ms_instance;
+}
+
+//------------------------------------------------------------------------------------------
+
+void ServerCommandPermissionManager::setInstance(ServerCommandPermissionManager * mgr)
+{
+	ms_instance = mgr;
 }
 
 

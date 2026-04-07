@@ -128,6 +128,7 @@ void ConfigServerGame::install(void)
 	KEY_BOOL    (useSecureLoginForGodAccess, false);
 	KEY_BOOL    (useIPForGodAccess, false);
 	KEY_BOOL    (adminPersistAllCreates, false);
+	KEY_BOOL    (slashCommandsRequirePermissionTableEntry, false);
 	KEY_BOOL    (buildCluster, false);
 	KEY_INT     (requestSceneWarpTimeoutSeconds, 60);
 	KEY_BOOL    (moveValidationEnabled, true);

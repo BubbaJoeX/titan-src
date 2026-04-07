@@ -180,6 +180,7 @@ class ConfigServerGame
 		bool            useSecureLoginForGodAccess;
 		bool            useIPForGodAccess;
 		bool            adminPersistAllCreates;
+		bool            slashCommandsRequirePermissionTableEntry;
 		bool            buildCluster;                  // flag that this is the buildcluster
 
 		int             requestSceneWarpTimeoutSeconds;
@@ -720,6 +721,7 @@ class ConfigServerGame
 	static bool             getUseSecureLoginForGodAccess();
 	static bool             getUseIPForGodAccess(); 
 	static bool             getAdminPersistAllCreates   (void);
+	static bool             getSlashCommandsRequirePermissionTableEntry (void);
 	static bool             getBuildCluster             (void);
 
 	static int              getRequestSceneWarpTimeoutSeconds(void);
@@ -1730,6 +1732,13 @@ inline bool ConfigServerGame::getUseIPForGodAccess()
 inline bool ConfigServerGame::getAdminPersistAllCreates()
 {
 	return data->adminPersistAllCreates;
+}
+
+// ----------------------------------------------------------------------
+
+inline bool ConfigServerGame::getSlashCommandsRequirePermissionTableEntry()
+{
+	return data->slashCommandsRequirePermissionTableEntry;
 }
 
 // ----------------------------------------------------------------------

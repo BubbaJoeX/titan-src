@@ -16,6 +16,7 @@
 #include "serverGame/CreatureObject.h"
 #include "serverGame/NameManager.h"
 #include "serverGame/PlayerObject.h"
+#include "serverGame/ServerCommandPermissionManager.h"
 #include "serverGame/ServerSecureTrade.h"
 #include "serverGame/WeaponObject.h"
 #include "serverScript/GameScriptObject.h"
@@ -33,6 +34,8 @@
 #include "sharedNetworkMessages/MessageQueueCommandTimer.h"
 #include "sharedNetworkMessages/MessageQueueGenericValueType.h"
 #include "sharedObject/NetworkIdManager.h"
+
+#include <algorithm>
 
 // --------------------------------------------------------------------------
 
@@ -1384,7 +1387,36 @@ void CommandQueue::executeCommand(Command const &command, NetworkId const &targe
 				status = Command::CEC_GodLevel;
 				LOGU("CustomerService", ("Avatar:%s doesn't have adequate level for command %s >%s", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), targetId.getValueString().c_str()), params);
 			}
-			else
+			else if (ConfigServerGame::getSlashCommandsRequirePermissionTableEntry())
+			{
+				// Optional lock-down: staff slash commands must also appear in command_permissions as slash.<commandName>
+				ServerCommandPermissionManager const * const permMgr = ServerCommandPermissionManager::getInstance();
+				if (!permMgr)
+				{
+					status = Command::CEC_GodLevel;
+					LOGU("CustomerService", ("Avatar:%s denied command %s (no permission manager)", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), targetId.getValueString().c_str()), params);
+				}
+				else
+				{
+					std::string const slashPath = std::string("slash.") + command.m_commandName;
+					int const tableLevel = permMgr->lookupPermissionLevel(slashPath);
+					if (tableLevel < 0)
+					{
+						status = Command::CEC_GodLevel;
+						LOGU("CustomerService", ("Avatar:%s denied command %s (missing %s in command_permissions)", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), slashPath.c_str()), params);
+					}
+					else
+					{
+						int const requiredLevel = std::max(tableLevel, command.m_godLevel);
+						if (client->getGodLevel() < requiredLevel)
+						{
+							status = Command::CEC_GodLevel;
+							LOGU("CustomerService", ("Avatar:%s denied command %s (needs level %d) >%s", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), requiredLevel, targetId.getValueString().c_str()), params);
+						}
+					}
+				}
+			}
+			if (status == Command::CEC_Success)
 			{
 				LOGU("CustomerService", ("Avatar:%s has executed command %s >%s", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), targetId.getValueString().c_str()), params);
 			}

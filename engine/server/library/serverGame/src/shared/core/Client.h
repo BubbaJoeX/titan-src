@@ -147,6 +147,9 @@ public:
 
     int getGodLevel() const;
 
+    /** Account admin tier from admin table, ignoring /gm toggle (0 if not a staff account). */
+    int getRawGodLevel() const;
+
     bool isGodValidated() const;
 
     void onLoadPlayer(CreatureObject &newCharacter);
@@ -387,6 +390,12 @@ inline int Client::getGodLevel() const {
     } else {
         return -1; // because they may be aliased in the admin table, but don't want to be in gm right now
     }
+}
+
+//-----------------------------------------------------------------------
+
+inline int Client::getRawGodLevel() const {
+    return m_godLevel;
 }
 
 //-----------------------------------------------------------------------

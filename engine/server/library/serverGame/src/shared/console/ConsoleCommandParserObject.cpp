@@ -71,6 +71,7 @@
 #include "sharedGame/PlatformFeatureBits.h"
 #include "sharedGame/PlayerData.h"
 #include "sharedGame/ProsePackage.h"
+#include "sharedGame/StaffRankDataTable.h"
 #include "sharedGame/SharedStringIds.h"
 #include "sharedLog/Log.h"
 #include "sharedMath/Quaternion.h"
@@ -91,6 +92,7 @@
 #include "sharedTerrain/TerrainObject.h"
 #include "sharedUtility/DataTable.h"
 #include "sharedUtility/DataTableManager.h"
+#include <algorithm>
 #include <cstdio>
 
 #if defined(_WIN32) && PRODUCTION == 0
@@ -479,7 +481,7 @@ static const CommandParser::CmdInfo cmds[] =
 	{"moveItemInHouseToMe",             2, "<building oid> <index>",     "Moves the first item in a house to me. An index of 0 indicates first item"},
 	{"reinitializeVendor",              1, "<vendor oid>",               "Reinitialize a vendor moving all items to the stockroom"},
 	{"testVendorStatus",                2, "<vendor oid> <status>",      "Status test"},
-	{"setAdminTitle",                   1, "<0=none, 1=csr, 2=dev, 3=qa>",     "Set your development title 0=none, 1=csr, 2=dev, 3=qa"},
+	{"setAdminTitle",                   1, "<0-50>",     "Set displayed staff rank title: 0=none, 1-50=rank level (must be at or below your account admin level; see staff_ranks.iff)"},
 	{"playUiEffect",                    0, "<player oid> <effect string>", "Play a UI effect on the target client."},
 	{"rollupStructure",                 2, "<house oid> <owner oid>",    "Rollup a house and transfer the contents to the specified player's bank box."},
 	{"regionList",                      0, "",                           "List regions at point."},
@@ -1876,10 +1878,11 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
     }
 	else if (isCommand(argv[0], "setAdminTitle"))
 	{
-		int which  = atoi (Unicode::wideToNarrow (argv [1]).c_str ());
-		if (which < 0 || which > 3)
+		int const which = atoi(Unicode::wideToNarrow(argv[1]).c_str());
+		int const maxDefined = std::max(50, StaffRankDataTable::getMaxDefinedLevel());
+		if (which < 0 || which > maxDefined)
 		{
-			result += Unicode::narrowToWide("Invalid argument.  0=none, 1=csr, 2=dev, 3=qa");
+			result += Unicode::narrowToWide(FormattedString("Invalid rank level. Use 0 (no title) or 1-%d (must be <= your account staff level).", maxDefined).c_str());
 			return true;
 		}
 		CreatureObject * userObject = dynamic_cast<CreatureObject*>(ServerWorld::findObjectByNetworkId(userId));
@@ -1888,29 +1891,37 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 			result += getErrorMessage (argv[0], ERR_INVALID_USER);
 			return true;
 		}
+		Client * const client = userObject->getClient();
+		if (!client)
+		{
+			result += Unicode::narrowToWide("No client for this object.");
+			return true;
+		}
+		int const accountLevel = client->getRawGodLevel();
+		if (which > 0 && accountLevel < 1)
+		{
+			result += Unicode::narrowToWide("Only staff accounts may set a rank title.");
+			return true;
+		}
+		if (which > accountLevel)
+		{
+			result += Unicode::narrowToWide("You cannot display a rank above your account staff level.");
+			return true;
+		}
 		PlayerObject* playerObject = PlayerCreatureController::getPlayerObject(userObject);
 		if (!playerObject)
 		{
 			result += getErrorMessage(argv[0], ERR_INVALID_OBJECT);
 			return true;
 		}
-		switch(which)
+		if (which == 0)
 		{
-			case 0:
-				playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::NormalPlayer));
-				break;
-			case 1:
-				playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::CustomerServiceRepresentative));
-				break;
-			case 2:
-				playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::Developer));
-				break;
-			case 3:
-				playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::QualityAssurance));
-				break;
-			default:
-				playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::NormalPlayer));
-				break;
+			playerObject->setPriviledgedTitle(static_cast<int8>(PlayerDataPriviledgedTitle::NormalPlayer));
+		}
+		else
+		{
+			int8 const encoded = static_cast<int8>(PlayerDataPriviledgedTitle::kStaffRankDisplayEncodedBase + which);
+			playerObject->setPriviledgedTitle(encoded);
 		}
 		result += getErrorMessage(argv[0], ERR_SUCCESS);
 		return true;

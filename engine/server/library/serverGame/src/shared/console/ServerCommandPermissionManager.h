@@ -11,6 +11,8 @@
 
 #include "sharedCommandParser/CommandPermissionManager.h"
 
+#include <string>
+
 class DataTable;
 
 class ServerCommandPermissionManager : public CommandPermissionManager
@@ -26,6 +28,12 @@ public:
 
 	virtual bool                 isCommandAllowed         (const NetworkId & userId, const Unicode::String & commandPath) const;
 
+	/** @return required staff level from command_permissions.iff, or -1 if the command is not listed. */
+	int                          lookupPermissionLevel    (std::string const & commandPath) const;
+
+	static ServerCommandPermissionManager * getInstance ();
+	static void                  setInstance             (ServerCommandPermissionManager * mgr);
+
 protected:
 	ServerCommandPermissionManager (const ServerCommandPermissionManager & rhs);
 	ServerCommandPermissionManager &   operator=(const ServerCommandPermissionManager & rhs);
@@ -33,6 +41,7 @@ protected:
 private:
 
 	DataTable*                  m_permissionTable;
+	static ServerCommandPermissionManager * ms_instance;
 };
 
 

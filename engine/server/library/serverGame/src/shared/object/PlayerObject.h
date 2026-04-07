@@ -305,6 +305,8 @@ public:
 	bool isCustomerServiceRepresentative() const;
 	bool isDeveloper() const;
 	bool isWarden() const;
+	bool isStaffRankDisplayTitle() const;
+	int getStaffRankDisplayLevel() const;
 
 	void setPendingRequestQuestInformation(uint32 questCrc, NetworkId const & questGiver);
 	uint32 getPendingRequestQuestCrc() const;
@@ -888,6 +890,20 @@ inline bool PlayerObject::isDeveloper() const
 inline bool PlayerObject::isWarden() const
 {
 	return m_privledgedTitle.get() == static_cast<int8>(PlayerDataPriviledgedTitle::Warden);
+}
+
+//----------------------------------------------------------------------
+
+inline bool PlayerObject::isStaffRankDisplayTitle() const
+{
+	return PlayerDataPriviledgedTitle::isStaffRankDisplayEncodedTitle(m_privledgedTitle.get());
+}
+
+//----------------------------------------------------------------------
+
+inline int PlayerObject::getStaffRankDisplayLevel() const
+{
+	return PlayerDataPriviledgedTitle::staffRankDisplayLevelFromEncodedTitle(m_privledgedTitle.get());
 }
 
 // ----------------------------------------------------------------------

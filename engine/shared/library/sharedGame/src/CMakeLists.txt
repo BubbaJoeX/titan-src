@@ -63,6 +63,8 @@ set(SHARED_SOURCES
 	shared/core/GroundZoneManager.cpp
 	shared/core/GuildRankDataTable.h
 	shared/core/GuildRankDataTable.cpp
+	shared/core/StaffRankDataTable.h
+	shared/core/StaffRankDataTable.cpp
 	shared/core/HoverPlaneHelper.cpp
 	shared/core/HoverPlaneHelper.h
 	shared/core/HyperspaceManager.cpp
