@@ -67,6 +67,9 @@
 #include "sharedObject/SlottedContainmentProperty.h"
 #include "sharedObject/VolumeContainer.h"
 
+#include <algorithm>
+#include <cstring>
+
 using namespace JNIWrappersNamespace;
 
 
@@ -96,6 +99,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jobject      JNICALL getNameStringId     (JNIEnv *env, jobject self, jlong target);
 	jobject      JNICALL getNameFromTemplate (JNIEnv *env, jobject self, jstring templateName);
 	jobject      JNICALL getNameFromTemplateCrc (JNIEnv *env, jobject self, jint templateCrc);
+	jobjectArray JNICALL getObjectTemplateNamesWithPrefix(JNIEnv *env, jobject self, jstring prefix);
 	jobjectArray JNICALL getNamesFromTemplates  (JNIEnv *env, jobject self, jobjectArray templateNames);
 	jobjectArray JNICALL getNamesFromTemplateCrcs(JNIEnv *env,jobject self, jintArray templateCrcs);
 	jobjectArray JNICALL getCtsDestinationClusters(JNIEnv *env, jobject self);
@@ -459,6 +463,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getObjectCollisionRadius",                     "(J)F", getObjectCollisionRadius),
 	JF("_getGameObjectType",     "(J)I",    getGameObjectType),
 	JF("getGameObjectTypeFromTemplate", "(Ljava/lang/String;)I", getGameObjectTypeFromTemplate),
+	JF("getObjectTemplateNamesWithPrefix", "(Ljava/lang/String;)[Ljava/lang/String;", getObjectTemplateNamesWithPrefix),
 	JF("getGameObjectTypeFromTemplate", "(I)I", getGameObjectTypeFromTemplateCrc),
 	JF("getGameObjectTypeName", "(I)Ljava/lang/String;", getGameObjectTypeName),
 	JF("getGameObjectTypeFromName", "(Ljava/lang/String;)I", getGameObjectTypeFromName),
@@ -2376,6 +2381,60 @@ jfloat JNICALL ScriptMethodsObjectInfoNamespace::getDefaultScaleFromObjectTempla
 	baseServerObjectTemplate->releaseReference();
 
 	return returnScale;
+}
+
+// ----------------------------------------------------------------------
+
+jobjectArray JNICALL ScriptMethodsObjectInfoNamespace::getObjectTemplateNamesWithPrefix(JNIEnv *env, jobject self, jstring jprefix)
+{
+	UNREF(env);
+	UNREF(self);
+
+	JavaStringParam prefixParam(jprefix);
+	std::string prefix;
+	if (!JavaLibrary::convert(prefixParam, prefix))
+	{
+		LOG("ScriptMethodsObjectInfo", ("getObjectTemplateNamesWithPrefix(): error handling prefix arg."));
+		return 0;
+	}
+
+	if (prefix.empty())
+	{
+		LocalObjectArrayRefPtr const empty = createNewObjectArray(0, JavaLibrary::getClsString());
+		if (empty == LocalObjectArrayRef::cms_nullPtr)
+			return 0;
+		return empty->getReturnValue();
+	}
+
+	std::vector<const char *> allNames;
+	ObjectTemplateList::getAllTemplateNamesFromCrcStringTable(allNames);
+
+	std::vector<std::string> matches;
+	matches.reserve(allNames.size() / 16 + 4);
+	size_t const prefixLen = prefix.size();
+	for (size_t i = 0; i < allNames.size(); ++i)
+	{
+		char const *const name = allNames[i];
+		if (!name)
+			continue;
+		if (std::strncmp(name, prefix.c_str(), prefixLen) != 0)
+			continue;
+		matches.push_back(std::string(name));
+	}
+
+	std::sort(matches.begin(), matches.end());
+
+	LocalObjectArrayRefPtr out = createNewObjectArray(matches.size(), JavaLibrary::getClsString());
+	if (out == LocalObjectArrayRef::cms_nullPtr)
+		return 0;
+
+	for (size_t i = 0; i < matches.size(); ++i)
+	{
+		JavaString jval(matches[i].c_str());
+		setObjectArrayElement(*out, static_cast<jsize>(i), jval);
+	}
+
+	return out->getReturnValue();
 }
 
 // ----------------------------------------------------------------------
