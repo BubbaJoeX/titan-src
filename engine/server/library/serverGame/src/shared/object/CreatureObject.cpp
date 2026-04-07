@@ -765,6 +765,7 @@ CreatureObject::CreatureObject(const ServerCreatureObjectTemplate* newTemplate) 
 	m_isBeast(false),
 	m_forceShowHam(false),
 	m_suppressTemplateClientDataFile(false),
+	m_authoritativeClientAnimationAction(),
 	m_regionFlagTimer(ConfigServerGame::getRegionFlagUpdateTimeSecs()),
 	m_wearableAppearanceData(),
 	m_decoyOrigin(NetworkId::cms_invalid)
@@ -11651,6 +11652,26 @@ bool CreatureObject::setSuppressTemplateClientDataFile(bool const suppress)
 		m_suppressTemplateClientDataFile.set(suppress);
 	}
 
+	return true;
+}
+
+//----------------------------------------------------------------------
+
+std::string const &CreatureObject::getAuthoritativeClientAnimationAction() const
+{
+	return m_authoritativeClientAnimationAction.get();
+}
+
+//----------------------------------------------------------------------
+
+bool CreatureObject::setAuthoritativeClientAnimationAction(std::string const &action)
+{
+	if (!isAuthoritative())
+	{
+		return false;
+	}
+
+	m_authoritativeClientAnimationAction.set(action);
 	return true;
 }
 

@@ -35,6 +35,7 @@
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
 #include "sharedNetworkMessages/MessageQueueGenericValueType.h"
+#include "sharedNetworkMessages/MessageQueueString.h"
 #include "serverNetworkMessages/SynchronizeScriptVarDeltasMessage.h"
 #include "serverScript/GameScriptObject.h"
 #include "sharedCollision/CollisionProperty.h"
@@ -56,6 +57,7 @@
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/CustomizationData.h"
 #include "sharedObject/CustomizationDataProperty.h"
+#include "sharedObject/Controller.h"
 #include "sharedObject/NetworkIdManager.h"
 #include "sharedObject/ObjectTemplate.h"
 #include "sharedObject/ObjectTemplateList.h"
@@ -307,6 +309,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jobject      JNICALL getOverrideMapColor(JNIEnv * env, jobject self, jlong object);
 	jboolean     JNICALL setForceShowHam(JNIEnv * env, jobject self, jlong object, jboolean show);
 	jboolean     JNICALL setSuppressTemplateClientDataFile(JNIEnv *env, jobject self, jlong creature, jboolean suppress);
+	jboolean     JNICALL setAuthoritativeClientAnimationAction(JNIEnv *env, jobject self, jlong creature, jstring actionName);
 	jboolean     JNICALL isContainedByPlayerAppearanceInventory(JNIEnv *env, jobject self, jlong player, jlong item);
 	jlongArray   JNICALL getAllItemsFromAppearanceInventory(JNIEnv *env, jobject self, jlong player);
 	jboolean     JNICALL isAPlayerAppearanceInventoryContainer(JNIEnv *env, jobject self, jlong container);
@@ -556,6 +559,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getOverrideMapColor", "(J)Lscript/color;", getOverrideMapColor),
 	JF("_setForceShowHam", "(JZ)Z", setForceShowHam),
 	JF("_setSuppressTemplateClientDataFile", "(JZ)Z", setSuppressTemplateClientDataFile),
+	JF("_setAuthoritativeClientAnimationAction", "(JLjava/lang/String;)Z", setAuthoritativeClientAnimationAction),
 	JF("_isContainedByPlayerAppearanceInventory", "(JJ)Z", isContainedByPlayerAppearanceInventory),
 	JF("_getAllItemsFromAppearanceInventory", "(J)[J", getAllItemsFromAppearanceInventory),
 	JF("_isAPlayerAppearanceInventoryContainer", "(J)Z", isAPlayerAppearanceInventoryContainer),
@@ -6531,11 +6535,45 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setForceShowHam(JNIEnv * env,
 
 jboolean JNICALL ScriptMethodsObjectInfoNamespace::setSuppressTemplateClientDataFile(JNIEnv *env, jobject /*self*/, jlong creatureId, jboolean suppress)
 {
+	UNREF(env);
+
 	CreatureObject *creature = nullptr;
 	if (!JavaLibrary::getObject(creatureId, creature))
 		return JNI_FALSE;
 
+	bool const wasSuppressed = creature->getSuppressTemplateClientDataFile();
 	if (!creature->setSuppressTemplateClientDataFile(suppress != JNI_FALSE))
+		return JNI_FALSE;
+
+	// Tell observers to drop client-baked .cdf wearables when suppression newly turns on (already-suppressed: no spam).
+	if (suppress != JNI_FALSE && !wasSuppressed)
+	{
+		Controller *controller = nullptr;
+		if (JavaLibrary::getObjectController(creatureId, creature, controller))
+		{
+			MessageQueueString *const msg = new MessageQueueString("mannequin:strip_cdf");
+			controller->appendMessage(
+				CM_animationAction,
+				0,
+				msg,
+				GameControllerMessageFlags::SEND | GameControllerMessageFlags::RELIABLE | GameControllerMessageFlags::DEST_ALL_CLIENT);
+		}
+	}
+
+	return JNI_TRUE;
+}
+
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setAuthoritativeClientAnimationAction(JNIEnv * /*env*/, jobject /*self*/, jlong creatureId, jstring actionName)
+{
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(creatureId, creature))
+		return JNI_FALSE;
+
+	std::string actionStr;
+	if (!JavaLibrary::convert(JavaStringParam(actionName), actionStr))
+		return JNI_FALSE;
+
+	if (!creature->setAuthoritativeClientAnimationAction(actionStr))
 		return JNI_FALSE;
 
 	return JNI_TRUE;

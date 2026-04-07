@@ -148,6 +148,8 @@ CreatureObject	            m_wsZ                    server               float
 
 CreatureObject	            m_isBeast                shared_np            bool
 CreatureObject              m_forceShowHam           shared_np            bool
+CreatureObject              m_suppressTemplateClientDataFile shared_np            bool
+CreatureObject              m_authoritativeClientAnimationAction shared_np std::string
 CreatureObject              m_wearableAppearanceData shared_np            vector
 CreatureObject		    m_decoyOrigin            shared_np            NetworkId
 

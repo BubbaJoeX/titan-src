@@ -596,6 +596,9 @@ public:
 	bool      getSuppressTemplateClientDataFile() const;
 	bool      setSuppressTemplateClientDataFile(bool suppress);
 
+	std::string const &getAuthoritativeClientAnimationAction() const;
+	bool                 setAuthoritativeClientAnimationAction(std::string const &action);
+
 	static void  runMissionCreationQueue();
 
 	virtual   bool hasBounty(const CreatureObject & target) const;
@@ -1032,6 +1035,8 @@ private:
 	Archive::AutoDeltaVariable<bool> m_forceShowHam;
 	/// When true, clients skip applying the creature template's .cdf (e.g. display mannequin with script-driven wearables only).
 	Archive::AutoDeltaVariable<bool> m_suppressTemplateClientDataFile;
+	/// Replayed on all clients via shared autodelta (baselines + updates); same strings as CM_animationAction / doAnimationAction.
+	Archive::AutoDeltaVariable<std::string> m_authoritativeClientAnimationAction;
 
 	Timer m_regionFlagTimer; // Occasionally verify we have the correct region flags.
 
