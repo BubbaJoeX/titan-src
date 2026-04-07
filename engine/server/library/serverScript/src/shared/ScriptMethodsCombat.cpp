@@ -1597,7 +1597,11 @@ jboolean JNICALL ScriptMethodsCombatNamespace::doDamage(JNIEnv *env, jobject sel
 
 	WeaponObject * weapon = nullptr;
 	if (!JavaLibrary::getObject(weaponId, weapon))
-		return JNI_FALSE;
+	{
+		// Installation turrets often use a tangible child that is not a WeaponObject; still apply damage.
+		bool const ok = CombatEngine::onSuccessfulAttack(*attacker, *defender, damage, hitLocation);
+		return ok ? JNI_TRUE : JNI_FALSE;
+	}
 
 	bool result = CombatEngine::onSuccessfulAttack(*attacker, *defender, *weapon,
 		damage, hitLocation);
