@@ -19,7 +19,8 @@ const unsigned long ServerClock::cms_endOfTime = static_cast<unsigned long>(-1);
 ServerClock::ServerClock() :
 serverFrame(0),
 subtractInterval(0),
-lastTime(time(0))
+lastTime(time(0)),
+m_environmentTimeBiasSeconds(0)
 {
 }
 

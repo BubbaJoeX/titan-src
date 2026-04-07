@@ -8,6 +8,7 @@
 #include "serverScript/FirstServerScript.h"
 #include "serverScript/JavaLibrary.h"
 
+#include "serverGame/Client.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/PlanetObject.h"
@@ -33,6 +34,7 @@
 #include "sharedNetworkMessages/DestroyClientPathMessage.h"
 #include "sharedNetworkMessages/EnterStructurePlacementModeMessage.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
+#include "sharedNetworkMessages/ServerTimeMessage.h"
 #include "sharedNetworkMessages/ShowAirspeederPanelMessage.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/LotManager.h"
@@ -41,10 +43,33 @@
 #include "sharedTerrain/TerrainObject.h"
 
 #include <algorithm>
+#include <cmath>
 #include <list>
+#include <vector>
 
 using namespace JNIWrappersNamespace;
 
+namespace
+{
+void broadcastServerEnvironmentTimeToAllClients()
+{
+	int64 const t = static_cast<int64>(ServerClock::getInstance().getEffectiveEnvironmentTimeSeconds());
+	ServerTimeMessage const msg(t);
+	std::vector<ServerObject *> withClients;
+	GameServer::getInstance().getObjectsWithClients(withClients);
+	for (size_t i = 0; i < withClients.size(); ++i)
+	{
+		if (!withClients[i])
+			continue;
+		CreatureObject * const co = withClients[i]->asCreatureObject();
+		if (!co)
+			continue;
+		Client * const client = co->getClient();
+		if (client)
+			client->send(msg, true);
+	}
+}
+}
 
 // ======================================================================
 // ScriptMethodsTerrainNamespace
@@ -66,6 +91,7 @@ namespace ScriptMethodsTerrainNamespace
 	jlong        JNICALL createTemporaryStructure (JNIEnv* env, jobject self, jstring serverObjectTemplateName, jobject position, jint rotation);
 	jint         JNICALL getNumberOfLots (JNIEnv* env, jobject self, jstring serverObjectTemplateName);
 	jfloat       JNICALL getLocalTime (JNIEnv* env, jobject self);
+	jboolean     JNICALL setLocalTime (JNIEnv* env, jobject self, jfloat normalizedTimeOfDay);
 	jfloat       JNICALL getLocalDayLength (JNIEnv* env, jobject self);
 	jboolean     JNICALL setWeatherData (JNIEnv* env, jobject self, jint index, jfloat windVelocityX, jfloat windVelocityZ);
 	jboolean     JNICALL isBelowWater (JNIEnv* env, jobject self, jobject location);
@@ -106,6 +132,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_createTemporaryStructure",          "(Ljava/lang/String;Lscript/location;I)J",     createTemporaryStructure),
 	JF("getNumberOfLots",                   "(Ljava/lang/String;)I",                                     getNumberOfLots),
 	JF("getLocalTime",                      "()F",                                                       getLocalTime),
+	JF("setLocalTime",                     "(F)Z",                                                      setLocalTime),
 	JF("getLocalDayLength",                 "()F",                                                       getLocalDayLength),
 	JF("setWeatherData",                    "(IFF)Z",                                                    setWeatherData),
 	JF("isBelowWater",                      "(Lscript/location;)Z",                                      isBelowWater),
@@ -623,7 +650,54 @@ jfloat JNICALL ScriptMethodsTerrainNamespace::getLocalTime (JNIEnv* /*env*/, job
 		return 0.f;
 	}
 
-	return fmodf (static_cast<float> (ServerClock::getInstance ().getGameTimeSeconds ()), environmentCycleTime) / environmentCycleTime;
+	const long long eff = ServerClock::getInstance().getEffectiveEnvironmentTimeSeconds();
+	return static_cast<jfloat>(std::fmod(static_cast<double>(eff), static_cast<double>(environmentCycleTime)) / static_cast<double>(environmentCycleTime));
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::setLocalTime (JNIEnv* /*env*/, jobject /*self*/, jfloat normalizedTimeOfDay)
+{
+	if (normalizedTimeOfDay != normalizedTimeOfDay)
+		return JNI_FALSE;
+
+	float n = normalizedTimeOfDay;
+	if (n < 0.f)
+		n = 0.f;
+	else if (n > 1.f)
+		n = 1.f;
+
+	const TerrainObject* const terrainObject = TerrainObject::getInstance();
+	if (!terrainObject)
+	{
+		DEBUG_WARNING(true, ("setLocalTime: no terrain"));
+		return JNI_FALSE;
+	}
+
+	const float environmentCycleTime = terrainObject->getEnvironmentCycleTime();
+	if (environmentCycleTime <= 0.f)
+	{
+		DEBUG_WARNING(true, ("setLocalTime: environmentCycleTime <= 0"));
+		return JNI_FALSE;
+	}
+
+	const long long g = static_cast<long long>(ServerClock::getInstance().getGameTimeSeconds());
+	const long long bias = ServerClock::getInstance().getEnvironmentTimeBiasSeconds();
+	const double C = static_cast<double>(environmentCycleTime);
+	const long long eff = g + bias;
+	double curMod = std::fmod(static_cast<double>(eff), C);
+	if (curMod < 0.0)
+		curMod += C;
+	const double target = static_cast<double>(n) * C;
+	double delta = target - curMod;
+	if (delta > C * 0.5)
+		delta -= C;
+	else if (delta < -C * 0.5)
+		delta += C;
+
+	ServerClock::getInstance().adjustEnvironmentTimeBiasSeconds(static_cast<long long>(std::llround(delta)));
+	broadcastServerEnvironmentTimeToAllClients();
+	return JNI_TRUE;
 }
 
 // ----------------------------------------------------------------------

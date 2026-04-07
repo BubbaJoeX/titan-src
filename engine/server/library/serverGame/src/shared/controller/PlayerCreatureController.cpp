@@ -1884,7 +1884,7 @@ float PlayerCreatureController::realAlter(float time)
 
 		if (client)
 		{
-			ServerTimeMessage timeSync(static_cast<int64>(ServerClock::getInstance().getGameTimeSeconds()));
+			ServerTimeMessage timeSync(static_cast<int64>(ServerClock::getInstance().getEffectiveEnvironmentTimeSeconds()));
 			client->send(timeSync, true);
 
 			// @todo: this should no be called every alter
