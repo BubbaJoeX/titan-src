@@ -306,6 +306,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL clearOverrideMapColor(JNIEnv * env, jobject self, jlong object);
 	jobject      JNICALL getOverrideMapColor(JNIEnv * env, jobject self, jlong object);
 	jboolean     JNICALL setForceShowHam(JNIEnv * env, jobject self, jlong object, jboolean show);
+	jboolean     JNICALL setSuppressTemplateClientDataFile(JNIEnv *env, jobject self, jlong creature, jboolean suppress);
 	jboolean     JNICALL isContainedByPlayerAppearanceInventory(JNIEnv *env, jobject self, jlong player, jlong item);
 	jlongArray   JNICALL getAllItemsFromAppearanceInventory(JNIEnv *env, jobject self, jlong player);
 	jboolean     JNICALL isAPlayerAppearanceInventoryContainer(JNIEnv *env, jobject self, jlong container);
@@ -554,6 +555,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_clearOverrideMapColor", "(J)Z", clearOverrideMapColor),
 	JF("_getOverrideMapColor", "(J)Lscript/color;", getOverrideMapColor),
 	JF("_setForceShowHam", "(JZ)Z", setForceShowHam),
+	JF("_setSuppressTemplateClientDataFile", "(JZ)Z", setSuppressTemplateClientDataFile),
 	JF("_isContainedByPlayerAppearanceInventory", "(JJ)Z", isContainedByPlayerAppearanceInventory),
 	JF("_getAllItemsFromAppearanceInventory", "(J)[J", getAllItemsFromAppearanceInventory),
 	JF("_isAPlayerAppearanceInventoryContainer", "(J)Z", isAPlayerAppearanceInventoryContainer),
@@ -6523,6 +6525,18 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setForceShowHam(JNIEnv * env,
 	{
 		return JNI_FALSE;
 	}
+
+	return JNI_TRUE;
+}
+
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setSuppressTemplateClientDataFile(JNIEnv *env, jobject /*self*/, jlong creatureId, jboolean suppress)
+{
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(creatureId, creature))
+		return JNI_FALSE;
+
+	if (!creature->setSuppressTemplateClientDataFile(suppress != JNI_FALSE))
+		return JNI_FALSE;
 
 	return JNI_TRUE;
 }

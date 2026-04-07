@@ -764,6 +764,7 @@ CreatureObject::CreatureObject(const ServerCreatureObjectTemplate* newTemplate) 
 	m_lastWaterDamageTime(0),
 	m_isBeast(false),
 	m_forceShowHam(false),
+	m_suppressTemplateClientDataFile(false),
 	m_regionFlagTimer(ConfigServerGame::getRegionFlagUpdateTimeSecs()),
 	m_wearableAppearanceData(),
 	m_decoyOrigin(NetworkId::cms_invalid)
@@ -11627,6 +11628,30 @@ void CreatureObject::setIsBeast(bool newValue)
 	{
 		m_isBeast.set(newValue);
 	}
+}
+
+//----------------------------------------------------------------------
+
+bool CreatureObject::getSuppressTemplateClientDataFile() const
+{
+	return m_suppressTemplateClientDataFile.get();
+}
+
+//----------------------------------------------------------------------
+
+bool CreatureObject::setSuppressTemplateClientDataFile(bool const suppress)
+{
+	if (!isAuthoritative())
+	{
+		return false;
+	}
+
+	if (m_suppressTemplateClientDataFile.get() != suppress)
+	{
+		m_suppressTemplateClientDataFile.set(suppress);
+	}
+
+	return true;
 }
 
 //----------------------------------------------------------------------

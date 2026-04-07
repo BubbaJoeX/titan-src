@@ -178,6 +178,7 @@ void CreatureObject::addMembersToPackages()
 	addSharedVariable_np (m_visibleOnMapAndRadar);
 	addSharedVariable_np (m_isBeast);
 	addSharedVariable_np (m_forceShowHam);
+	addSharedVariable_np (m_suppressTemplateClientDataFile);
 	addSharedVariable_np (m_wearableAppearanceData);
 	addSharedVariable_np (m_decoyOrigin);
 	addAuthClientServerVariable_np (m_accelPercent);

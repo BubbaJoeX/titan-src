@@ -593,6 +593,9 @@ public:
 
 	bool      setForceShowHam(bool show);
 
+	bool      getSuppressTemplateClientDataFile() const;
+	bool      setSuppressTemplateClientDataFile(bool suppress);
+
 	static void  runMissionCreationQueue();
 
 	virtual   bool hasBounty(const CreatureObject & target) const;
@@ -1027,6 +1030,8 @@ private:
 
 	Archive::AutoDeltaVariable<bool> m_isBeast;
 	Archive::AutoDeltaVariable<bool> m_forceShowHam;
+	/// When true, clients skip applying the creature template's .cdf (e.g. display mannequin with script-driven wearables only).
+	Archive::AutoDeltaVariable<bool> m_suppressTemplateClientDataFile;
 
 	Timer m_regionFlagTimer; // Occasionally verify we have the correct region flags.
 

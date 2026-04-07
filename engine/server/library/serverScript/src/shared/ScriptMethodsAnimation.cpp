@@ -57,6 +57,9 @@ const JNINativeMethod NATIVES[] = {
 
 //----------------------------------------------------------------------
 
+// Forwards animationName to clients as CM_animationAction. Logical .ash/.lat action names are
+// resolved on the client; prefixes ans: and ansl: play a raw .ans keyframe on the object's .sat
+// (see ClientController::tryPlayRawAnsKeyframeOnObject on the client).
 
 void JNICALL ScriptMethodsAnimationNamespace::doAnimationAction (JNIEnv *env, jobject self, jlong target, jstring animationName)
 {
