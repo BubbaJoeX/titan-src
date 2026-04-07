@@ -175,6 +175,7 @@ void CreatureObject::addMembersToPackages()
 	addSharedVariable_np (m_clientUsesAnimationLocomotion);
 	addSharedVariable_np (m_difficulty);
 	addSharedVariable_np (m_hologramType);
+	addSharedVariable_np (m_hologramAffectsWearables);
 	addSharedVariable_np (m_visibleOnMapAndRadar);
 	addSharedVariable_np (m_isBeast);
 	addSharedVariable_np (m_forceShowHam);

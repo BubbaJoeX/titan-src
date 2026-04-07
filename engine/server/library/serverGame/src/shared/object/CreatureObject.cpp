@@ -755,6 +755,7 @@ CreatureObject::CreatureObject(const ServerCreatureObjectTemplate* newTemplate) 
 	m_clientUsesAnimationLocomotion(false),
 	m_difficulty(static_cast<unsigned char>(D_normal)),
 	m_hologramType(-1),
+	m_hologramAffectsWearables(true),
 	m_visibleOnMapAndRadar(true),
 	m_lookAtYaw(0.0f),
 	m_useLookAtYaw(false),
@@ -14351,6 +14352,16 @@ void CreatureObject::setHologramType(int32 const newHologramType)
 	{	
 		sendControllerMessageToAuthServer(CM_modifyHologramType, new MessageQueueGenericValueType<int32 >(newHologramType));				
 	}
+}
+
+// ----------------------------------------------------------------------
+
+void CreatureObject::setHologramAffectsWearables(bool const affectsWearables)
+{
+	if (!isAuthoritative())
+		return;
+
+	m_hologramAffectsWearables = affectsWearables;
 }
 
 // ----------------------------------------------------------------------

@@ -141,6 +141,7 @@ CreatureObject              m_sayMode                none                 char
 CreatureObject              m_clientUsesAnimationLocomotion shared_np            bool
 CreatureObject              m_difficulty             shared_np            char
 CreatureObject              m_hologramType           shared_np            int32
+CreatureObject              m_hologramAffectsWearables shared_np            bool
 CreatureObject              m_visibleOnMapAndRadar   shared_np            bool
 CreatureObject	            m_wsX                    server               float
 CreatureObject	            m_wsY                    server               float

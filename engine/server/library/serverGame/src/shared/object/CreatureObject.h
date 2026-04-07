@@ -662,6 +662,10 @@ public:
 	int32 getHologramType() const;
 	void setHologramType(int32 newHologramType);
 
+	/** When false, clients apply hologram shader only to base creature meshes, not script/equipped wearables. Default true. */
+	bool getHologramAffectsWearables() const;
+	void setHologramAffectsWearables(bool affectsWearables);
+
 	bool getVisibleOnMapAndRadar() const;
 	void setVisibleOnMapAndRadar(bool visible);
 
@@ -1018,6 +1022,7 @@ private:
 	Archive::AutoDeltaVariable<bool> m_clientUsesAnimationLocomotion;
 	Archive::AutoDeltaVariable<unsigned char> m_difficulty;
 	Archive::AutoDeltaVariable<int32> m_hologramType;
+	Archive::AutoDeltaVariable<bool> m_hologramAffectsWearables;
 	Archive::AutoDeltaVariable<bool> m_visibleOnMapAndRadar;
 
 	//Look at position
@@ -1412,6 +1417,13 @@ inline bool operator==(CreatureMod &a, CreatureMod const &b)
 inline int32 CreatureObject::getHologramType() const
 {
 	return m_hologramType.get();
+}
+
+// ----------------------------------------------------------------------
+
+inline bool CreatureObject::getHologramAffectsWearables() const
+{
+	return m_hologramAffectsWearables.get();
 }
 
 // ----------------------------------------------------------------------

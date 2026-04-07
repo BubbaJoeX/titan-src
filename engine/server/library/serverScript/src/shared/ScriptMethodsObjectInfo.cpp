@@ -296,6 +296,8 @@ namespace ScriptMethodsObjectInfoNamespace
 	void         JNICALL openCustomizationWindow(JNIEnv *env, jobject self, jlong player, jlong object, jstring customVarName1, jint minVar1, jint maxVar1, jstring customVarName2, jint minVar2, jint maxVar2, jstring customVarName3, jint minVar3, jint maxVar3, jstring customVarName4, jint minVar4, jint maxVar4);
 	jint         JNICALL getHologramType(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setHologramType(JNIEnv *env, jobject self, jlong target, jint type);
+	jboolean     JNICALL getHologramAffectsWearables(JNIEnv *env, jobject self, jlong target);
+	jboolean     JNICALL setHologramAffectsWearables(JNIEnv *env, jobject self, jlong target, jboolean affectsWearables);
 	jboolean     JNICALL setVisibleOnMapAndRadar(JNIEnv *env, jobject self, jlong target, jboolean visible);
 	jboolean     JNICALL getVisibleOnMapAndRadar(JNIEnv *env, jobject self, jlong target);
 	jlong        JNICALL getBeastmasterPet(JNIEnv *env, jobject self, jlong object);
@@ -547,6 +549,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_openCustomizationWindow", "(JJLjava/lang/String;IILjava/lang/String;IILjava/lang/String;IILjava/lang/String;II)V", openCustomizationWindow),
 	JF("_getHologramType", "(J)I", getHologramType),
 	JF("_setHologramType", "(JI)Z", setHologramType),
+	JF("_getHologramAffectsWearables", "(J)Z", getHologramAffectsWearables),
+	JF("_setHologramAffectsWearables", "(JZ)Z", setHologramAffectsWearables),
 	JF("_setVisibleOnMapAndRadar", "(JZ)Z", setVisibleOnMapAndRadar),
 	JF("_getVisibleOnMapAndRadar", "(J)Z", getVisibleOnMapAndRadar),
 	JF("_getBeastmasterPet", "(J)J", getBeastmasterPet),
@@ -5049,6 +5053,35 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setHologramType(JNIEnv *env, 
 
 	creature->setHologramType(type);
 	return true;
+}
+
+//-----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::getHologramAffectsWearables(JNIEnv *env, jobject self, jlong target)
+{
+	UNREF(env);
+	UNREF(self);
+
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(target, creature))
+		return JNI_FALSE;
+
+	return creature->getHologramAffectsWearables() ? JNI_TRUE : JNI_FALSE;
+}
+
+//-----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsObjectInfoNamespace::setHologramAffectsWearables(JNIEnv *env, jobject self, jlong target, jboolean affectsWearables)
+{
+	UNREF(env);
+	UNREF(self);
+
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(target, creature))
+		return JNI_FALSE;
+
+	creature->setHologramAffectsWearables(affectsWearables != JNI_FALSE);
+	return JNI_TRUE;
 }
 
 //-----------------------------------------------------------------------
