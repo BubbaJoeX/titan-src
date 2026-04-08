@@ -11,6 +11,7 @@
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ObserveTracker.h"
 #include "serverGame/ServerObject.h"
+#include "serverGame/ServerWorld.h"
 #include "serverGame/VisibleObjectNotification.h"
 #include "sharedDebug/Profiler.h"
 #include "sharedObject/NetworkIdManager.h"
@@ -27,7 +28,14 @@ namespace SpaceVisibilityManager_namespace
 	const int ms_nodeSize      = 512;   // must be a power of 2
 	const int ms_nodeSizeLn    = 9;     // base 2 log of the node size
 	const int ms_maxCoordinate = 8192;  // maximum allowed coordinate for an object, positive or negative (increased for atmospheric flight on ground scenes)
-	const int ms_maxNodeIndex  = (ms_maxCoordinate * 2) / ms_nodeSize; 
+	const int ms_maxNodeIndex  = (ms_maxCoordinate * 2) / ms_nodeSize;
+
+	// Planetary atmospheric flight: template far-update radii are often < one grid cell (512m).
+	// Those objects register in a single cell, so when a ship observer moves across boundaries
+	// the grid diff drops them and ObserveTracker schedules destroys after the out-of-range delay
+	// (worse while maneuvering / gunning). Floor radii so creatures and props stay in overlapping cells.
+	int const ms_minAtmosphericVisibilityMetersNonCreature = 2048; // four cells
+	int const ms_minAtmosphericVisibilityMetersCreature    = 3072; // six cells 
 
 	// Typedefs
 
@@ -200,6 +208,13 @@ TrackedObject * SpaceVisibilityManager_namespace::internalAddObject(ServerObject
 {
 	PROFILER_AUTO_BLOCK_DEFINE("SpaceVisibilityManager::addObject");
 	DEBUG_REPORT_LOG(ConfigServerGame::getDebugSpaceVisibilityManager(),("SpaceVisibilityManager::addObject(%s, %i);\n",object.getNetworkId().getValueString().c_str(), updateRadius));
+
+	if (ServerWorld::isAtmosphericFlightScene() && updateRadius > 0)
+	{
+		int const minimumMeters = object.asCreatureObject() ? ms_minAtmosphericVisibilityMetersCreature : ms_minAtmosphericVisibilityMetersNonCreature;
+		if (updateRadius < minimumMeters)
+			updateRadius = minimumMeters;
+	}
 
 	updateRadius = updateRadius==0 ? 0 : (1 + (updateRadius-1) / ms_nodeSize); // divide specified radius by node size, but always round up
 	TrackedObjectsType::const_iterator i=ms_trackedObjects.find(object.getNetworkId());
