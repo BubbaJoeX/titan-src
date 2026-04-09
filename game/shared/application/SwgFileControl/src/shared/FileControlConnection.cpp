@@ -83,11 +83,12 @@ void FileControlConnection::onReceive(const Archive::ByteStream & bs)
 				m_machineId = machineId;
 
 				const char * serverKey = ConfigFileControl::getFileServerKey();
-				if (serverKey && key == serverKey)
+				const bool serverAuthDisabled = (!serverKey || serverKey[0] == '\0');
+				if (serverAuthDisabled || (serverKey && key == serverKey))
 				{
 					m_authenticated = true;
-					sendAuthResponse(true, "Authentication successful");
-					LOG("FileControl", ("Client %s:%d authenticated (machineId=%s)", getRemoteAddress().c_str(), getRemotePort(), machineId.c_str()));
+					sendAuthResponse(true, serverAuthDisabled ? "Authentication successful (no fileServerKey on server)" : "Authentication successful");
+					LOG("FileControl", ("Client %s:%d authenticated (machineId=%s)%s", getRemoteAddress().c_str(), getRemotePort(), machineId.c_str(), serverAuthDisabled ? " [server key empty]" : ""));
 				}
 				else
 				{
