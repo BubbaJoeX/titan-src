@@ -17,6 +17,7 @@
 #include "sharedFoundation/Crc.h"
 #include "sharedLog/Log.h"
 
+#include <cstdio>
 #include <cstring>
 
 // ======================================================================
@@ -89,6 +90,14 @@ void FileControlConnection::onReceive(const Archive::ByteStream & bs)
 					m_authenticated = true;
 					sendAuthResponse(true, serverAuthDisabled ? "Authentication successful (no fileServerKey on server)" : "Authentication successful");
 					LOG("FileControl", ("Client %s:%d authenticated (machineId=%s)%s", getRemoteAddress().c_str(), getRemotePort(), machineId.c_str(), serverAuthDisabled ? " [server key empty]" : ""));
+					{
+						char const * const ch = ConfigFileControl::getChannel();
+						char const * const machine = (!machineId.empty() ? machineId.c_str() : "unknown");
+						char const * const channelLabel = (ch && ch[0]) ? ch : "default";
+						std::fprintf(stdout, "[Titan]: (%s) has connected from %s on channel %s.\n", machine, getRemoteAddress().c_str(), channelLabel);
+						std::fflush(stdout);
+						LOG("Titan", ("(%s) has connected from %s on channel %s", machine, getRemoteAddress().c_str(), channelLabel));
+					}
 				}
 				else
 				{
