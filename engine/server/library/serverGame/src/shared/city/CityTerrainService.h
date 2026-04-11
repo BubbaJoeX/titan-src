@@ -108,7 +108,7 @@ private:
 	static void broadcastToCity(int32 cityId, int32 modType, std::string const & regionId,
 								std::string const & shader, float centerX, float centerZ,
 								float radius, float endX, float endZ, float width,
-								float height, float blendDist);
+								float height, float blendDist, bool regionActive = true);
 	static void sendResponse(Client const & client, bool success, std::string const & regionId,
 							 std::string const & errorMessage);
 

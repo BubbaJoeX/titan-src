@@ -84,7 +84,7 @@ void CityTerrainService::addRegionToMemory(CityTerrainRegion const & region)
 	removeRegionFromMemory(region.regionId);
 
 	CityTerrainRegion newRegion = region;
-	newRegion.active = true;
+	newRegion.active = region.active;
 	newRegion.timestamp = static_cast<int64>(time(0));
 	newRegion.priority = ++s_priorityCounter;
 
@@ -606,6 +606,9 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 		objVars.getItem(regionBase + ".creator_name", creatorName);
 		objVars.getItem(regionBase + ".timestamp", timestamp);
 
+		int activeInt = 1;
+		objVars.getItem(regionBase + ".active", activeInt);
+
 		CityTerrainRegion region;
 		region.regionId = regionId;
 		region.cityId = cityId;
@@ -619,7 +622,7 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 		region.width = width;
 		region.height = height;
 		region.blendDistance = blendDist;
-		region.active = true;
+		region.active = (activeInt != 0);
 		region.timestamp = timestamp;
 		region.creatorId = NetworkId(creatorIdStr);
 		region.creatorName = creatorName;
@@ -686,6 +689,45 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 		broadcastToCity(cityId, CityTerrainModificationType::MT_CLEAR_ALL, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
 		sendResponse(client, true, "", "");
+		return;
+	}
+
+	if (modType == CityTerrainModificationType::MT_SUSPEND || modType == CityTerrainModificationType::MT_RESUME)
+	{
+		std::string const & regionId = shader;
+		if (regionId.empty())
+		{
+			sendResponse(client, false, "", "No region id specified.");
+			return;
+		}
+
+		RegionMap::iterator it = s_regions.find(regionId);
+		if (it == s_regions.end() || it->second.cityId != cityId)
+		{
+			sendResponse(client, false, regionId, "Region not found in this city.");
+			return;
+		}
+
+		it->second.active = (modType == CityTerrainModificationType::MT_RESUME);
+
+		// Persist active flag only (geometry unchanged)
+		if (CityInterface::cityExists(cityId))
+		{
+			CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+			NetworkId const & cityHallId = cityInfo.getCityHallId();
+			ServerObject * const cityHall = ServerWorld::findObjectByNetworkId(cityHallId);
+			if (cityHall)
+			{
+				std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
+				cityHall->setObjVarItem(regionBase + ".active", it->second.active ? 1 : 0);
+			}
+		}
+
+		CityTerrainRegion const & r = it->second;
+		broadcastToCity(cityId, modType, regionId, r.shaderTemplate, r.centerX, r.centerZ, r.radius,
+			r.endX, r.endZ, r.width, r.height, r.blendDistance, r.active);
+
+		sendResponse(client, true, regionId, "");
 		return;
 	}
 
@@ -821,7 +863,7 @@ void CityTerrainService::sendTerrainSyncToClient(Client const & client, int32 ci
 
 		CityTerrainModifyMessage const msg(cityId, region->type, region->regionId, region->shaderTemplate,
 			region->centerX, region->centerZ, region->radius, region->endX, region->endZ,
-			region->width, region->height, region->blendDistance);
+			region->width, region->height, region->blendDistance, region->active);
 		client.send(msg, true);
 	}
 }
@@ -866,7 +908,7 @@ void CityTerrainService::sendNearbyCitiesTerrainSync(Client const & client, floa
 
 					CityTerrainModifyMessage const msg(cityId, region->type, region->regionId, region->shaderTemplate,
 						region->centerX, region->centerZ, region->radius, region->endX, region->endZ,
-						region->width, region->height, region->blendDistance);
+						region->width, region->height, region->blendDistance, region->active);
 					client.send(msg, true);
 					++totalRegionsSent;
 				}
@@ -981,9 +1023,9 @@ void CityTerrainService::adjustObjectsInRegion(int32 cityId, float centerX, floa
 void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::string const & regionId,
 										  std::string const & shader, float centerX, float centerZ,
 										  float radius, float endX, float endZ, float width,
-										  float height, float blendDist)
+										  float height, float blendDist, bool regionActive)
 {
-	CityTerrainModifyMessage const msg(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
+	CityTerrainModifyMessage const msg(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist, regionActive);
 
 	LOG("CityTerrain", ("broadcastToCity: cityId=%d modType=%d regionId=%s shader=%s",
 		cityId, modType, regionId.c_str(), shader.c_str()));
@@ -1089,6 +1131,7 @@ void CityTerrainService::saveRegionToCityHall(int32 cityId, std::string const & 
 	cityHall->setObjVarItem(regionBase + ".creator_id", creatorId.getValueString());
 	cityHall->setObjVarItem(regionBase + ".creator_name", creatorName);
 	cityHall->setObjVarItem(regionBase + ".timestamp", static_cast<int>(time(0)));
+	cityHall->setObjVarItem(regionBase + ".active", 1);
 
 	// Update the region_ids array
 	std::vector<std::string> regionIds;
@@ -1167,6 +1210,7 @@ void CityTerrainService::removeRegionFromCityHall(int32 cityId, std::string cons
 	cityHall->removeObjVarItem(regionBase + ".creator_id");
 	cityHall->removeObjVarItem(regionBase + ".creator_name");
 	cityHall->removeObjVarItem(regionBase + ".timestamp");
+	cityHall->removeObjVarItem(regionBase + ".active");
 
 	// Update the region_ids array - rebuild without the removed region
 	DynamicVariableList const & objVars = cityHall->getObjVars();
@@ -1268,6 +1312,7 @@ void CityTerrainService::removeAllRegionsFromCityHall(int32 cityId)
 		cityHall->removeObjVarItem(regionBase + ".creator_id");
 		cityHall->removeObjVarItem(regionBase + ".creator_name");
 		cityHall->removeObjVarItem(regionBase + ".timestamp");
+		cityHall->removeObjVarItem(regionBase + ".active");
 	}
 
 	// Reset the region count
