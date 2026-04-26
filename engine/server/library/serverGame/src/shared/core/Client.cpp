@@ -1077,6 +1077,22 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("ZoneAbilityUseRequest") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                GenericValueTypeMessage<std::string> const msg(ri);
+                CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
+                if (creatureOwner && creatureOwner->isAuthoritative() && creatureOwner->getScriptObject()) {
+                    ScriptParams scriptParams;
+                    scriptParams.addParam(NetworkId::cms_invalid);
+                    scriptParams.addParam(Unicode::narrowToWide(msg.getValue()));
+                    scriptParams.addParam(0.0f);
+                    creatureOwner->getScriptObject()->callScriptCommandHandler("handleZoneAbilityUseRequest", scriptParams);
+                }
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("ConGenericMessage") : {
 
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();

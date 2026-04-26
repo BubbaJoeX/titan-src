@@ -328,6 +328,8 @@ namespace ScriptMethodsObjectInfoNamespace
 	void         JNICALL openExamineWindow(JNIEnv * env, jobject self, jlong player, jlong item);
 	void         JNICALL openCityTerrainPainter(JNIEnv * env, jobject self, jlong player, jint cityId);
 	void         JNICALL openTerraformingUI(JNIEnv * env, jobject self, jlong player, jint cityId);
+	void         JNICALL sendZoneAbilityTrayUpdate(JNIEnv * env, jobject self, jlong player, jstring payload);
+	void         JNICALL sendZoneAbilityTrayClose(JNIEnv * env, jobject self, jlong player);
 
 	// Direct color customization support
 	jboolean     JNICALL setCustomizationColorRGB(JNIEnv * env, jobject self, jlong target, jstring varName, jint r, jint g, jint b);
@@ -582,6 +584,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_openExamineWindow", "(JJ)V", openExamineWindow),
 	JF("_openCityTerrainPainter", "(JI)V", openCityTerrainPainter),
 	JF("_openTerraformingUI", "(JI)V", openTerraformingUI),
+	JF("_sendZoneAbilityTrayUpdate", "(JLjava/lang/String;)V", sendZoneAbilityTrayUpdate),
+	JF("_sendZoneAbilityTrayClose", "(J)V", sendZoneAbilityTrayClose),
 	// Direct color customization support
 	JF("_setCustomizationColorRGB", "(JLjava/lang/String;III)Z", setCustomizationColorRGB),
 	JF("_setCustomizationColorHtml", "(JLjava/lang/String;Ljava/lang/String;)Z", setCustomizationColorHtml),
@@ -7061,6 +7065,46 @@ void JNICALL ScriptMethodsObjectInfoNamespace::openTerraformingUI(JNIEnv * env, 
 	}
 
 	GenericValueTypeMessage<int32> const msg("OpenTerraformingUIMessage", static_cast<int32>(cityId));
+	playerCreature->getClient()->send(msg, true);
+}
+
+// ----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsObjectInfoNamespace::sendZoneAbilityTrayUpdate(JNIEnv * env, jobject self, jlong player, jstring payload)
+{
+	UNREF(self);
+
+	CreatureObject const * playerCreature = nullptr;
+	if (!JavaLibrary::getObject(player, playerCreature) || !playerCreature || !playerCreature->getClient())
+	{
+		return;
+	}
+
+	JavaStringParam localPayload(payload);
+	std::string narrowPayload;
+	if (!JavaLibrary::convert(localPayload, narrowPayload))
+	{
+		return;
+	}
+
+	GenericValueTypeMessage<std::string> const msg("ZoneAbilityTrayUpdate", narrowPayload);
+	playerCreature->getClient()->send(msg, true);
+}
+
+// ----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsObjectInfoNamespace::sendZoneAbilityTrayClose(JNIEnv * env, jobject self, jlong player)
+{
+	UNREF(env);
+	UNREF(self);
+
+	CreatureObject const * playerCreature = nullptr;
+	if (!JavaLibrary::getObject(player, playerCreature) || !playerCreature || !playerCreature->getClient())
+	{
+		return;
+	}
+
+	GenericValueTypeMessage<bool> const msg("ZoneAbilityTrayClose", true);
 	playerCreature->getClient()->send(msg, true);
 }
 
