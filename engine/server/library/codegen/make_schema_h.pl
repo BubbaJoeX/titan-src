@@ -200,9 +200,30 @@ sub parseTable
 
 # ----------------------------------------------------------------------
 
+# Strip Oracle column clauses so bare types match (e.g. "int not null", "varchar2(64) not null",
+# "number(20)", "date default sysdate").
+sub normalizeDbType
+{
+    my ($dbtype) = @_;
+    $dbtype =~ s/^\s+|\s+$//g;
+    $dbtype =~ s/\s+not\s+null\b//gi;
+    $dbtype =~ s/\s+null\b//gi;
+    $dbtype =~ s/\s+default\s+.*$//i;
+    $dbtype =~ s/^\s+|\s+$//g;
+    if ($dbtype =~ /^number\s*\(/i)
+    {
+	$dbtype = "number";
+    }
+    return $dbtype;
+}
+
+# ----------------------------------------------------------------------
+
 sub translateType
 {
     my($dbtype)=@_;
+    my $rawtype = $dbtype;
+    $dbtype = normalizeDbType($dbtype);
   SWITCH:
     {
 	if ($dbtype eq "int") { $ctype="DB::BindableLong"; last SWITCH; }
@@ -211,7 +232,7 @@ sub translateType
 	if ($dbtype eq "date") { $ctype="DB::BindableTimestamp"; last SWITCH; }
 	if ($dbtype eq "char(1)") { $ctype="DB::BindableBool"; last SWITCH; }
 	if ($dbtype =~ /^varchar(2)?\((\d+)\)/) { $ctype="DB::BindableString<$2>"; last SWITCH; }
-	die "Datatype $dbtype not handled.";
+	die "Datatype $rawtype not handled.";
     }
     
     $ctype
@@ -222,6 +243,8 @@ sub translateType
 sub translateBufferType
 {
     my($dbtype)=@_;
+    my $rawtype = $dbtype;
+    $dbtype = normalizeDbType($dbtype);
   SWITCH:
     {
 	if ($dbtype eq "int") { $ctype="DB::BindableLong"; last SWITCH; }
@@ -230,7 +253,7 @@ sub translateBufferType
 	if ($dbtype eq "date") { $ctype="DB::BindableTimestamp"; last SWITCH; }
 	if ($dbtype eq "char(1)") { $ctype="DB::BindableBool"; last SWITCH; }
 	if ($dbtype =~ /^varchar(2)?\((\d+)\)/) { $ctype="DB::BufferString"; last SWITCH; }
-	die "Datatype $dbtype not handled.";
+	die "Datatype $rawtype not handled.";
     }
     
     $ctype
@@ -243,6 +266,7 @@ sub constructorParams
 {
     my($dbtype)=@_;
     my($params);
+    $dbtype = normalizeDbType($dbtype);
     if ($dbtype =~ /^varchar(2)?\((\d+)\)/)
     {
 	$params=$2;
