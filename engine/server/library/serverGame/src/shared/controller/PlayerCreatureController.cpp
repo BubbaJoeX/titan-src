@@ -97,6 +97,7 @@
 #include "sharedUtility/ValueTypeObjId.h"
 #include "sharedUtility/ValueTypeString.h"
 
+#include <cmath>
 #include <limits>
 
 // ======================================================================
@@ -429,6 +430,13 @@ bool PlayerCreatureController::isLocationValid(Vector const &position_w, CellObj
 	{
 		if (!terrainObject->isPassableForceChunkCreation(position_w))
 			return false;
+
+		float terrainHeightSample = 0.f;
+		if (terrainObject->getHeightForceChunkCreation(position_w, terrainHeightSample))
+		{
+			if (position_w.y < terrainHeightSample - 1.0f)
+				return false;
+		}
 	}
 
 	if (ConfigServerGame::getMoveCheckDestinationCollision())
@@ -783,6 +791,18 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 		else
 		{
 			m_speedCheckConsecutiveFailureCount = 0;
+		}
+
+		if (creature->isInWorldCell())
+		{
+			float const dt = static_cast<float>(timeDiffMs) / 1000.0f;
+			if (dt > 1e-4f)
+			{
+				float const dY = std::fabs(newV.y - oldV.y);
+				float const maxVerticalPerSecond = 18.0f;
+				if (dY > maxVerticalPerSecond * dt * 1.25f)
+					return handleInvalidMove("vertical delta too large");
+			}
 		}
 	}
 

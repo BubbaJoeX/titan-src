@@ -44,8 +44,8 @@ bool    ms_enableMountRadii         = false;
 bool    ms_buildBoxTrees            = false;
 bool    ms_buildDebugData           = false;
 
-bool    ms_useMeshGeometryCollision = false;
-bool    ms_useMeshFloor             = false;
+bool    ms_useMeshGeometryCollision = true;
+bool    ms_useMeshFloor             = true;
 
 bool    ms_updateStatus             = true;
 bool    ms_reportStatus             = false;

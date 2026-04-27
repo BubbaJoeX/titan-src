@@ -9,6 +9,8 @@
 #include "serverGame/FirstServerGame.h"
 #include "serverGame/CreatureController.h"
 
+#include <algorithm>
+
 #include "SwgGameServer/CombatEngine.h"
 #include "SwgGameServer/ConfigCombatEngine.h"
 #include "serverGame/Chat.h"
@@ -1481,6 +1483,56 @@ float CreatureController::realAlter(float time)
 					damage.value = damageValue;
 					damageData.damage.push_back(damage);
 					owner->applyDamage(damageData);
+				}
+			}
+		}
+
+		// Underwater oxygen: stored in objvars for client HUD; rebreather = set objvar creature.rebreather_active (int 1) from script/buff
+		if (owner->isAuthoritative()
+			&& owner->isInWorldCell()
+			&& owner->getState(States::Swimming)
+			&& isPlayerControlled
+			&& !owner->isDead())
+		{
+			TerrainObject const *const terrainForO2 = TerrainObject::getConstInstance();
+			Vector const pO2 = owner->getPosition_w();
+			float o2Surface = 0.f;
+			bool const inOpenWater = terrainForO2 && terrainForO2->getWaterHeight(pO2, o2Surface) && pO2.y < o2Surface - 0.35f;
+
+			float oxygen = 100.f;
+			IGNORE_RETURN(owner->getObjVars().getItem("creature.oxygen_current", oxygen));
+
+			if (inOpenWater && !owner->getObjVars().hasItem("creature.rebreather_active"))
+			{
+				oxygen -= 9.0f * time;
+				if (oxygen < 0.f)
+					oxygen = 0.f;
+				IGNORE_RETURN(owner->setObjVarItem("creature.oxygen_current", oxygen));
+
+				if (oxygen <= 0.f)
+				{
+					CombatEngineData::DamageData drownDamage;
+					AttribMod::AttribMod d;
+					d.tag = 0;
+					d.attrib = Attributes::Health;
+					d.attack = 0;
+					d.sustain = 0;
+					d.decay = AttribMod::AMDS_pool;
+					d.flags = AttribMod::AMF_directDamage;
+					int const v = -std::max(1, static_cast<int>(static_cast<float>(owner->getMaxAttribute(Attributes::Health)) * 0.04f * time * 2.0f));
+					d.value = v;
+					drownDamage.damage.push_back(d);
+					owner->applyDamage(drownDamage);
+				}
+			}
+			else
+			{
+				if (oxygen < 100.f)
+				{
+					oxygen += 30.0f * time;
+					if (oxygen > 100.f)
+						oxygen = 100.f;
+					IGNORE_RETURN(owner->setObjVarItem("creature.oxygen_current", oxygen));
 				}
 			}
 		}
