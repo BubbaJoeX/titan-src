@@ -2402,14 +2402,6 @@ jobjectArray JNICALL ScriptMethodsObjectInfoNamespace::getObjectTemplateNamesWit
 		return 0;
 	}
 
-	if (prefix.empty())
-	{
-		LocalObjectArrayRefPtr const empty = createNewObjectArray(0, JavaLibrary::getClsString());
-		if (empty == LocalObjectArrayRef::cms_nullPtr)
-			return 0;
-		return empty->getReturnValue();
-	}
-
 	std::vector<const char *> allNames;
 	ObjectTemplateList::getAllTemplateNamesFromCrcStringTable(allNames);
 
@@ -2421,7 +2413,8 @@ jobjectArray JNICALL ScriptMethodsObjectInfoNamespace::getObjectTemplateNamesWit
 		char const *const name = allNames[i];
 		if (!name)
 			continue;
-		if (std::strncmp(name, prefix.c_str(), prefixLen) != 0)
+		// Empty prefix means "all template names" (developer /god listing); do not return zero results.
+		if (!prefix.empty() && std::strncmp(name, prefix.c_str(), prefixLen) != 0)
 			continue;
 		matches.push_back(std::string(name));
 	}
