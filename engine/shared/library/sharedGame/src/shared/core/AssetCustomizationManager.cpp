@@ -26,6 +26,7 @@
 #include "sharedObject/RangedIntCustomizationVariable.h"
 
 #include <stdlib.h>
+#include <set>
 
 // ======================================================================
 
@@ -183,7 +184,7 @@ namespace AssetCustomizationManagerNamespace
 	CrcLookupEntry  *s_crcLookupTable;
 	int              s_crcLookupEntryCount;
 	bool             s_attemptedDefaultLoad;
-	bool             s_runtimeLookupDisabled;
+	std::set<std::string> s_runtimeLookupBlacklist;
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
@@ -247,7 +248,7 @@ void AssetCustomizationManagerNamespace::remove()
 	s_crcLookupTable = nullptr;
 	s_crcLookupEntryCount = 0;
 	s_attemptedDefaultLoad = false;
-	s_runtimeLookupDisabled = false;
+	s_runtimeLookupBlacklist.clear();
 }
 
 // ----------------------------------------------------------------------
@@ -791,6 +792,7 @@ namespace
 		return true;
 #endif
 	}
+
 }
 
 // ======================================================================
@@ -809,7 +811,7 @@ void AssetCustomizationManager::install(char const *filename)
 			load(iff);
 	}
 	s_attemptedDefaultLoad = false;
-	s_runtimeLookupDisabled = false;
+	s_runtimeLookupBlacklist.clear();
 	s_installed = true;
 	ExitChain::add(remove, "AssetCustomizationManager", 0, false);
 }
@@ -820,12 +822,14 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
 	int runtimeAddedVariableCount = 0;
-	if (!s_runtimeLookupDisabled)
+	char const * const assetPath = assetName.getString();
+	std::string const assetKey = assetPath ? assetPath : "";
+	if (!assetKey.empty() && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
 	{
 		if (!tryAddVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables, runtimeAddedVariableCount))
 		{
-			s_runtimeLookupDisabled = true;
-			WARNING(true, ("AssetCustomizationManager: runtime customization lookup crashed for [%s]; disabling runtime path and using ACM fallback for stability.", assetName.getString() ? assetName.getString() : "<null>"));
+			s_runtimeLookupBlacklist.insert(assetKey);
+			WARNING(true, ("AssetCustomizationManager: runtime customization lookup crashed for [%s]; blacklisting runtime for this asset and using ACM fallback.", assetPath ? assetPath : "<null>"));
 		}
 	}
 	if (runtimeAddedVariableCount > 0)
@@ -860,7 +864,9 @@ bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
 	bool result = false;
-	if (!s_runtimeLookupDisabled)
+	char const * const assetPath = assetName.getString();
+	std::string const assetKey = assetPath ? assetPath : "";
+	if (!assetKey.empty() && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
 	{
 		MemoryBlockManagedObject scratchObject;
 		CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
@@ -870,9 +876,9 @@ bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 			result = (runtimeAddedVariableCount > 0);
 		else
 		{
-			s_runtimeLookupDisabled = true;
+			s_runtimeLookupBlacklist.insert(assetKey);
 			result = false;
-			WARNING(true, ("AssetCustomizationManager: runtime customizability query crashed for [%s]; disabling runtime path and using ACM fallback for stability.", assetName.getString() ? assetName.getString() : "<null>"));
+			WARNING(true, ("AssetCustomizationManager: runtime customizability query crashed for [%s]; blacklisting runtime for this asset and using ACM fallback.", assetPath ? assetPath : "<null>"));
 		}
 		scratchCustomizationData->release();
 	}
