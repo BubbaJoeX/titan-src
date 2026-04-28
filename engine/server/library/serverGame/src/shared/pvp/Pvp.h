@@ -57,6 +57,8 @@ public:
 	static bool hasPersonalEnemyFlag      (TangibleObject const &who, NetworkId const &enemyId);
 	static bool hasFactionEnemyFlag       (TangibleObject const &who, FactionId factionId);
 	static bool areFactionsOpposed        (FactionId align1, FactionId align2);
+	/** True if either faction lists the other as an opponent (pvp faction_opponents table). */
+	static bool areFactionsMutuallyOpposed(FactionId align1, FactionId align2);
 	static FactionId battlefieldGetFaction(TangibleObject const &who, RegionPvp const &region);
 	static bool battlefieldIsParticipant  (TangibleObject const &who, RegionPvp const &region);
 	static bool hasAnyTimedEnemyFlag      (TangibleObject const &who);

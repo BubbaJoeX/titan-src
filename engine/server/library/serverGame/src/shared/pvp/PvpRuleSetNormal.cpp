@@ -12,6 +12,7 @@
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GuildInterface.h"
 #include "serverGame/PlayerCreatureController.h"
+#include "serverGame/Pvp.h"
 #include "serverGame/PvpFactions.h"
 #include "serverGame/PvpInternal.h"
 #include "serverGame/TangibleObject.h"
@@ -244,7 +245,16 @@ bool PvpRuleSetNormal::canAttack(TangibleObject const &actor, TangibleObject con
 		}
 		else if (targetFaction == actorFaction)
 		{
-			// NPCs canít attack a target of the same faction
+			// NPCs canùt attack a target of the same faction
+			return false;
+		}
+		else if (   creatureActor && creatureTarget
+		         && !actorIsPlayer && !targetIsPlayer
+		         && actorFaction && targetFaction
+		         && !Pvp::areFactionsMutuallyOpposed(actorFaction, targetFaction))
+		{
+			// Creature NPC vs creature NPC with non-zero aligned factions: only pairs listed
+			// as opponents in faction_opponents may engage; unrelated factions ignore each other.
 			return false;
 		}
 		else if (PvpFactions::isNonaggressiveFaction(actorFaction))

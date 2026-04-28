@@ -49,6 +49,7 @@ namespace ScriptMethodsMountNamespace
 	jboolean     JNICALL mountTangibleObject(JNIEnv *env, jobject self, jlong playerId, jlong tangibleObjectId, jfloat offsetX, jfloat offsetY, jfloat offsetZ, jboolean lockOrientation);
 	jboolean     JNICALL dismountTangibleObject(JNIEnv *env, jobject self, jlong playerId);
 	jboolean     JNICALL isMountedOnTangibleObject(JNIEnv *env, jobject self, jlong playerId);
+	void         JNICALL syncMountVehicleTurretGunnerBindings(JNIEnv *env, jobject self, jlong mountId);
 }
 
 
@@ -75,6 +76,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_mountTangibleObject", "(JJFFFZ)Z", mountTangibleObject),
 	JF("_dismountTangibleObject", "(J)Z", dismountTangibleObject),
 	JF("_isMountedOnTangibleObject", "(J)Z", isMountedOnTangibleObject),
+	JF("_syncMountVehicleTurretGunnerBindings", "(J)V", syncMountVehicleTurretGunnerBindings),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -524,6 +526,28 @@ jboolean JNICALL ScriptMethodsMountNamespace::isMountedOnTangibleObject(JNIEnv *
 		return JNI_FALSE;
 
 	return static_cast<jboolean>(playerObject->isMountedOnTangibleObject() ? JNI_TRUE : JNI_FALSE);
+}
+
+// ----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsMountNamespace::syncMountVehicleTurretGunnerBindings(JNIEnv *env, jobject self, jlong mountId)
+{
+	UNREF(self);
+
+	if (!ConfigServerGame::getMountsEnabled())
+		return;
+
+	CreatureObject *const mountObject = JavaLibrary::getCreatureThrow(env, mountId, "syncMountVehicleTurretGunnerBindings(): error in mountId arg");
+	if (!mountObject)
+		return;
+
+	if (!mountObject->isAuthoritative())
+	{
+		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::syncMountVehicleTurretGunnerBindings(): mount id=[%s] is not authoritative; ignoring.", mountObject->getNetworkId().getValueString().c_str()));
+		return;
+	}
+
+	mountObject->syncMountVehicleTurretGunnerBindings();
 }
 
 // ======================================================================

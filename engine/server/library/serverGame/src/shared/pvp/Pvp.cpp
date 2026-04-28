@@ -388,6 +388,16 @@ bool Pvp::areFactionsOpposed(FactionId align1, FactionId align2)
 
 // ----------------------------------------------------------------------
 
+bool Pvp::areFactionsMutuallyOpposed(FactionId align1, FactionId align2)
+{
+	if (align1 == align2)
+		return false;
+
+	return PvpInternal::areFactionsOpposed(align1, align2) || PvpInternal::areFactionsOpposed(align2, align1);
+}
+
+// ----------------------------------------------------------------------
+
 Pvp::FactionId Pvp::battlefieldGetFaction(TangibleObject const &who, RegionPvp const &region)
 {
 	return PvpInternal::battlefieldGetFaction(who, region);

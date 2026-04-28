@@ -500,6 +500,11 @@ public:
 	void                                   getMountingRiders(std::vector<const CreatureObject *> & riders) const;
 	void                                   getMountingRiders(std::vector<CreatureObject *> & riders);
 
+	/// Vehicle mount: (1) locks turret object transform to this mount via Object::attachToObject_w when mount.vehicleTurretId is valid;
+	/// optional mount.vehicleTurretLocalX/Y/Z place the turret in mount object space; engine objvar mount._engineTurretAttached tracks binding for clean detach.
+	/// (2) assigns replicated turret gunner fields (mount.vehicleTurretRiderSlot, mount.vehicleTurretEye*) to the appropriate rider.
+	void                                   syncMountVehicleTurretGunnerBindings();
+
 	// Called on rider.
 	bool                                   mountCreature(CreatureObject &mountObject);
 	CreatureObject                 const  *getMountedCreature() const;

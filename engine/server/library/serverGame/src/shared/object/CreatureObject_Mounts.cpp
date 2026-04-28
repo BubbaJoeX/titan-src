@@ -15,6 +15,7 @@
 #include "serverGame/CreatureController.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/ServerTangibleObjectTemplate.h"
+#include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
 #include "sharedGame/SharedSaddleManager.h"
 #include "sharedCollision/CollisionProperty.h" 
@@ -35,9 +36,11 @@
 #include "sharedObject/SlottedContainer.h"
 #include "sharedObject/SlottedContainmentProperty.h"
 #include "sharedTerrain/TerrainObject.h"
+#include "sharedFoundation/DynamicVariableList.h"
 #include "swgSharedUtility/Postures.h"
 #include "UnicodeUtils.h"
 
+#include <algorithm>
 #include <string>
 
 // ======================================================================
@@ -51,6 +54,22 @@ namespace CreatureObjectNamespace
 	
 	char const *const  cs_mountErrorChannelName = "mounts-error";
 	char const *const  cs_mountInfoChannelName = "mounts-info";
+
+	// Vehicle-mounted controllable turret (landspeeder gunner): objvars on the mount creature.
+	char const *const  cs_mountVehicleTurretIdObjVarName        = "mount.vehicleTurretId";
+	char const *const  cs_mountVehicleTurretRiderSlotObjVarName = "mount.vehicleTurretRiderSlot";
+	char const *const  cs_mountVehicleTurretEyeXObjVarName      = "mount.vehicleTurretEyeX";
+	char const *const  cs_mountVehicleTurretEyeYObjVarName      = "mount.vehicleTurretEyeY";
+	char const *const  cs_mountVehicleTurretEyeZObjVarName      = "mount.vehicleTurretEyeZ";
+	// Written only by sync: tracks last transform-bound turret so we can detach when vehicleTurretId changes/clears.
+	char const *const  cs_mountEngineTurretAttachedObjVarName   = "mount._engineTurretAttached";
+
+	char const *const  cs_mountVehicleTurretLocalXObjVarName    = "mount.vehicleTurretLocalX";
+	char const *const  cs_mountVehicleTurretLocalYObjVarName    = "mount.vehicleTurretLocalY";
+	char const *const  cs_mountVehicleTurretLocalZObjVarName    = "mount.vehicleTurretLocalZ";
+
+	void clearVehicleTurretGunnerBindingsOnMountRiders(CreatureObject *mount);
+	void syncMountVehicleTurretObjectAttachment(CreatureObject *mount);
 	
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -285,6 +304,98 @@ bool CreatureObjectNamespace::realDetachRider(CreatureObject * const mount, Slot
 // ======================================================================
 
 using namespace CreatureObjectNamespace;
+
+// ----------------------------------------------------------------------
+
+void CreatureObjectNamespace::clearVehicleTurretGunnerBindingsOnMountRiders(CreatureObject *const mount)
+{
+	NOT_NULL(mount);
+
+	int const maxSlots = getSaddleSeatingCapacity(mount);
+	int const clampedSlots = std::min(maxSlots, cs_totalNumberOfRiders);
+
+	for (int i = 0; i < clampedSlots; ++i)
+	{
+		CreatureObject *const rider = realGetMountingRider(mount, s_riderSlotId[i]);
+		if (rider)
+		{
+			rider->setTurretGunnerMountTurretId(NetworkId::cms_invalid);
+			rider->setTurretGunnerEyeOffsets(0.f, 0.f, 0.f);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void CreatureObjectNamespace::syncMountVehicleTurretObjectAttachment(CreatureObject *const mount)
+{
+	if (!mount || !mount->isAuthoritative() || !mount->isMountable())
+		return;
+
+	Object *const mountObj = mount;
+
+	DynamicVariableList const &objVars = mount->getObjVars();
+
+	NetworkId desiredTurretId;
+	bool const wantTurret = objVars.getItem(cs_mountVehicleTurretIdObjVarName, desiredTurretId) && desiredTurretId.isValid();
+
+	NetworkId previouslyAttachedId;
+	bool const hadTrackedAttached = objVars.getItem(cs_mountEngineTurretAttachedObjVarName, previouslyAttachedId);
+
+	if (hadTrackedAttached && previouslyAttachedId.isValid() && (!wantTurret || previouslyAttachedId != desiredTurretId))
+	{
+		ServerObject *const previousObject = ServerWorld::findObjectByNetworkId(previouslyAttachedId);
+		if (previousObject)
+		{
+			Object *const previousObj = previousObject;
+			if (previousObj->getAttachedTo() == mountObj)
+				previousObj->detachFromObject(Object::DF_none);
+		}
+		mount->removeObjVarItem(cs_mountEngineTurretAttachedObjVarName);
+	}
+
+	if (!wantTurret)
+		return;
+
+	if (desiredTurretId == mount->getNetworkId())
+		return;
+
+	ServerObject *const turretObject = ServerWorld::findObjectByNetworkId(desiredTurretId);
+	if (!turretObject)
+		return;
+
+	Object *const turretObj = turretObject;
+
+	if (turretObj->getAttachedTo() == mountObj)
+	{
+		IGNORE_RETURN(mount->setObjVarItem(cs_mountEngineTurretAttachedObjVarName, desiredTurretId));
+		return;
+	}
+
+	if (turretObj->getAttachedTo())
+		turretObj->detachFromObject(Object::DF_none);
+
+	// Hardpoint-style offset in mount object space (meters); defaults 0 if omitted.
+	float localX = 0.f;
+	float localY = 0.f;
+	float localZ = 0.f;
+	bool const hasLocalX = objVars.getItem(cs_mountVehicleTurretLocalXObjVarName, localX);
+	bool const hasLocalY = objVars.getItem(cs_mountVehicleTurretLocalYObjVarName, localY);
+	bool const hasLocalZ = objVars.getItem(cs_mountVehicleTurretLocalZObjVarName, localZ);
+	if (hasLocalX || hasLocalY || hasLocalZ)
+	{
+		Vector const offset_o(localX, localY, localZ);
+		Vector const position_w(mount->rotateTranslate_o2w(offset_o));
+		turretObject->setPosition_w(position_w);
+	}
+
+	if (turretObject->getParentCell() != mount->getParentCell())
+		turretObject->setParentCell(mount->getParentCell());
+
+	turretObj->attachToObject_w(mountObj, true);
+
+	IGNORE_RETURN(mount->setObjVarItem(cs_mountEngineTurretAttachedObjVarName, desiredTurretId));
+}
 
 // ======================================================================
 // CreatureObject: PRIVATE STATIC
@@ -839,6 +950,8 @@ bool CreatureObject::detachRider(NetworkId const riderId)
 
 	updatePositionOnPlanetServer(true);
 
+	syncMountVehicleTurretGunnerBindings();
+
 	return detachedRider;
 }
 
@@ -880,6 +993,8 @@ bool CreatureObject::detachAllRiders()
 	//-- Set mount's AlterScheduler schedule phase back to zero so that
 	//   the mount gets altered along with everything else.
 	AlterScheduler::setObjectSchedulePhase(*this, 0);
+
+	syncMountVehicleTurretGunnerBindings();
 
 	return detachedRider;
 }
@@ -932,6 +1047,67 @@ void CreatureObject::getMountingRiders(std::vector<CreatureObject *> & riders)
 	}
 }
 
+// ----------------------------------------------------------------------
+
+void CreatureObject::syncMountVehicleTurretGunnerBindings()
+{
+	if (!ConfigServerGame::getMountsEnabled())
+		return;
+
+	if (!isAuthoritative() || !isMountable())
+		return;
+
+	syncMountVehicleTurretObjectAttachment(this);
+
+	clearVehicleTurretGunnerBindingsOnMountRiders(this);
+
+	DynamicVariableList const &objVars = getObjVars();
+
+	NetworkId turretId;
+	if (!objVars.getItem(cs_mountVehicleTurretIdObjVarName, turretId) || !turretId.isValid())
+		return;
+
+	int capacity = getSaddleSeatingCapacity(this);
+	if (capacity < 1)
+		return;
+
+	capacity = std::min(capacity, cs_totalNumberOfRiders);
+
+	CreatureObject *gunner = nullptr;
+
+	int explicitSlot = -1;
+	if (objVars.getItem(cs_mountVehicleTurretRiderSlotObjVarName, explicitSlot))
+	{
+		if (explicitSlot >= 0 && explicitSlot < capacity)
+			gunner = realGetMountingRider(this, s_riderSlotId[explicitSlot]);
+	}
+	else
+	{
+		// Prefer passenger (slot 1) on multi-seat mounts when occupied; otherwise driver for solo vehicle vs vehicle.
+		if (capacity >= 2)
+		{
+			gunner = realGetMountingRider(this, s_riderSlotId[1]);
+			if (!gunner)
+				gunner = realGetMountingRider(this, s_riderSlotId[0]);
+		}
+		else
+			gunner = realGetMountingRider(this, s_riderSlotId[0]);
+	}
+
+	if (!gunner)
+		return;
+
+	gunner->setTurretGunnerMountTurretId(turretId);
+
+	float ex = 0.f;
+	float ey = 0.f;
+	float ez = 0.f;
+	bool const hasEx = objVars.getItem(cs_mountVehicleTurretEyeXObjVarName, ex);
+	bool const hasEy = objVars.getItem(cs_mountVehicleTurretEyeYObjVarName, ey);
+	bool const hasEz = objVars.getItem(cs_mountVehicleTurretEyeZObjVarName, ez);
+	if (hasEx || hasEy || hasEz)
+		gunner->setTurretGunnerEyeOffsets(ex, ey, ez);
+}
 
 // ----------------------------------------------------------------------
 /**
@@ -1048,6 +1224,8 @@ bool CreatureObject::mountCreature(CreatureObject &mountObject)
 
 	//-- Tell rider to update movement info so it pulls walk/run speed from the mount.
 	updateMovementInfo();
+
+	mountObject.syncMountVehicleTurretGunnerBindings();
 	
 	//-- Indicate transfer success.
 	return transferSuccess;
