@@ -1382,6 +1382,26 @@ float CreatureController::realAlter(float time)
 			float waterHeight = 0.0f;
 			calculateWaterState(newSwimState, isBurning, lavaResistance, waterHeight);
 
+			// Portal exit support: if we just moved back to world terrain and are below local water
+			// surface, switch to swimming immediately (don't wait for floor/contact resolution).
+			if (!newSwimState && owner->isInWorldCell())
+			{
+				TerrainObject const * const terrainObject = TerrainObject::getConstInstance();
+				Vector const position = owner->getPosition_w();
+				float terrainHeight = 0.f;
+				float surfaceHeight = 0.f;
+				if (terrainObject
+					&& terrainObject->getHeight(position, terrainHeight)
+					&& terrainObject->getWaterHeight(position, surfaceHeight))
+				{
+					float const swimHeight = owner->getSwimHeight();
+					bool const floorIsUnderwater = (terrainHeight + swimHeight) < surfaceHeight;
+					bool const clearlyUnderSurface = position.y < (surfaceHeight - 0.10f);
+					if (floorIsUnderwater && clearlyUnderSurface)
+						newSwimState = true;
+				}
+			}
+
 			bool const isVehicle = GameObjectTypes::isTypeOf(owner->getGameObjectType(), static_cast<int>(SharedObjectTemplate::GOT_vehicle));
 			if (!isVehicle) // make everything but vehicles walk on lava
 			{
@@ -1405,6 +1425,17 @@ float CreatureController::realAlter(float time)
 			{
 				// We've just detected that the owner stopped swimming.
 				onExitSwimming();
+
+				// Portal entry support: if we crossed into an interior while swimming, immediately
+				// return to walk mode and clamp to floor to avoid water-column carry-over.
+				if (!owner->isInWorldCell())
+				{
+					Footprint * const footprint = owner->getFootprint();
+					if (footprint)
+						footprint->snapToGround();
+
+					owner->setLocomotion(Locomotions::Walking);
+				}
 			}
 			else if (!currentSwimState && newSwimState)
 			{
@@ -1488,8 +1519,8 @@ float CreatureController::realAlter(float time)
 		}
 
 		// Underwater oxygen: stored in objvars for client HUD; rebreather = set objvar creature.rebreather_active (int 1) from script/buff
+		// Applies anywhere swimming is valid (including underwater structures/cells), not just world cell.
 		if (owner->isAuthoritative()
-			&& owner->isInWorldCell()
 			&& owner->getState(States::Swimming)
 			&& isPlayerControlled
 			&& !owner->isDead())
@@ -1504,29 +1535,47 @@ float CreatureController::realAlter(float time)
 
 			if (inOpenWater && !owner->getObjVars().hasItem("creature.rebreather_active"))
 			{
-				oxygen -= 9.0f * time;
+				// Full oxygen bar lasts at least ~4 minutes under water (100% over 240s).
+				float const oxygenDepletionPerSecond = 100.f / 240.f;
+				oxygen -= oxygenDepletionPerSecond * time;
 				if (oxygen < 0.f)
 					oxygen = 0.f;
 				IGNORE_RETURN(owner->setObjVarItem("creature.oxygen_current", oxygen));
 
 				if (oxygen <= 0.f)
 				{
-					CombatEngineData::DamageData drownDamage;
-					AttribMod::AttribMod d;
-					d.tag = 0;
-					d.attrib = Attributes::Health;
-					d.attack = 0;
-					d.sustain = 0;
-					d.decay = AttribMod::AMDS_pool;
-					d.flags = AttribMod::AMF_directDamage;
-					int const v = -std::max(1, static_cast<int>(static_cast<float>(owner->getMaxAttribute(Attributes::Health)) * 0.04f * time * 2.0f));
-					d.value = v;
-					drownDamage.damage.push_back(d);
-					owner->applyDamage(drownDamage);
+					// Grace period when oxygen first hits zero to avoid incapacitating a swimmer
+					// who is actively reaching the surface for air.
+					float oxygenZeroElapsed = 0.f;
+					IGNORE_RETURN(owner->getObjVars().getItem("creature.oxygen_zero_elapsed", oxygenZeroElapsed));
+					oxygenZeroElapsed += time;
+					IGNORE_RETURN(owner->setObjVarItem("creature.oxygen_zero_elapsed", oxygenZeroElapsed));
+
+					float const depthBelowSurface = o2Surface - pO2.y;
+					bool const deepUnderwater = depthBelowSurface > 1.25f;
+					bool const graceExpired = oxygenZeroElapsed >= 6.0f;
+					if (deepUnderwater && graceExpired)
+					{
+						CombatEngineData::DamageData drownDamage;
+						AttribMod::AttribMod d;
+						d.tag = 0;
+						d.attrib = Attributes::Health;
+						d.attack = 0;
+						d.sustain = 0;
+						d.decay = AttribMod::AMDS_pool;
+						d.flags = AttribMod::AMF_directDamage;
+						int const v = -std::max(1, static_cast<int>(static_cast<float>(owner->getMaxAttribute(Attributes::Health)) * 0.04f * time * 2.0f));
+						d.value = v;
+						drownDamage.damage.push_back(d);
+						owner->applyDamage(drownDamage);
+					}
 				}
 			}
 			else
 			{
+				if (owner->getObjVars().hasItem("creature.oxygen_zero_elapsed"))
+					IGNORE_RETURN(owner->removeObjVarItem("creature.oxygen_zero_elapsed"));
+
 				if (oxygen < 100.f)
 				{
 					oxygen += 30.0f * time;
@@ -2083,7 +2132,9 @@ void CreatureController::calculateWaterState(bool& isSwimming, bool &isBurning, 
 
 	isSwimming = false;
 
-	if (collisionProperty && ownerCreature->isInWorldCell() && !isOnSolidFloor)
+	// Allow swim detection in portaled structure cells as well as world cell so underwater
+	// structures can be flooded/swimmable when not standing on a solid floor.
+	if (collisionProperty && !isOnSolidFloor)
 	{
 		Vector const position = ownerCreature->getPosition_w();
 		float terrainHeight;
