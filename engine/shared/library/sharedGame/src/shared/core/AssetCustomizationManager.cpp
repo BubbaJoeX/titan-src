@@ -16,9 +16,13 @@
 #include "sharedFoundation/TemporaryCrcString.h"
 #include "sharedMath/PaletteArgb.h"
 #include "sharedMath/PaletteArgbList.h"
+#include "sharedObject/Appearance.h"
+#include "sharedObject/AppearanceTemplateList.h"
 #include "sharedObject/BasicRangedIntCustomizationVariable.h"
 #include "sharedObject/CustomizationData.h"
+#include "sharedObject/MemoryBlockManagedObject.h"
 #include "sharedObject/PaletteColorCustomizationVariable.h"
+#include "sharedObject/RangedIntCustomizationVariable.h"
 
 #include <stdlib.h>
 
@@ -654,6 +658,115 @@ void AssetCustomizationManagerNamespace::addVariablesForAssetAndLinks(int assetI
 	}
 }
 
+// ----------------------------------------------------------------------
+
+namespace
+{
+	struct VariableCountContext
+	{
+		int count;
+	};
+
+	struct VariableCopyContext
+	{
+		CustomizationData &destination;
+		bool               skipSharedOwnerVariables;
+		int                copiedCount;
+	};
+
+	void countVariableCallback(std::string const &, CustomizationVariable const *, void *context)
+	{
+		NOT_NULL(context);
+		VariableCountContext * const variableCountContext = reinterpret_cast<VariableCountContext *>(context);
+		++variableCountContext->count;
+	}
+
+	bool isSharedOwnerVariablePath(std::string const &variablePathName)
+	{
+		return (variablePathName.compare(0, 14, "/shared_owner/") == 0);
+	}
+
+	void copyVariableCallback(std::string const &fullVariablePathName, CustomizationVariable const *customizationVariable, void *context)
+	{
+		NOT_NULL(context);
+		NOT_NULL(customizationVariable);
+		VariableCopyContext * const variableCopyContext = reinterpret_cast<VariableCopyContext *>(context);
+
+		if (variableCopyContext->skipSharedOwnerVariables && isSharedOwnerVariablePath(fullVariablePathName))
+			return;
+
+		if (variableCopyContext->destination.findConstVariable(fullVariablePathName))
+			return;
+
+		PaletteColorCustomizationVariable const * const paletteVariable = dynamic_cast<PaletteColorCustomizationVariable const *>(customizationVariable);
+		if (paletteVariable)
+		{
+			PaletteArgb const * const palette = paletteVariable->fetchPalette();
+			variableCopyContext->destination.addVariableTakeOwnership(fullVariablePathName, new PaletteColorCustomizationVariable(palette, paletteVariable->getValue()));
+			palette->release();
+			++variableCopyContext->copiedCount;
+			return;
+		}
+
+		RangedIntCustomizationVariable const * const rangedVariable = dynamic_cast<RangedIntCustomizationVariable const *>(customizationVariable);
+		if (rangedVariable)
+		{
+			int minRangeInclusive = 0;
+			int maxRangeExclusive = 0;
+			rangedVariable->getRange(minRangeInclusive, maxRangeExclusive);
+			variableCopyContext->destination.addVariableTakeOwnership(fullVariablePathName, new BasicRangedIntCustomizationVariable(minRangeInclusive, rangedVariable->getValue(), maxRangeExclusive));
+			++variableCopyContext->copiedCount;
+			return;
+		}
+
+		WARNING(true, ("AssetCustomizationManager: unsupported variable type for [%s] while copying runtime customization declarations.", fullVariablePathName.c_str()));
+	}
+
+	int getVariableCount(CustomizationData const &customizationData)
+	{
+		VariableCountContext variableCountContext;
+		variableCountContext.count = 0;
+		customizationData.iterateOverConstVariables(countVariableCallback, &variableCountContext, false);
+		return variableCountContext.count;
+	}
+
+	int addVariablesFromAppearance(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables)
+	{
+		char const * const assetPath = assetName.getString();
+		if (!assetPath || !*assetPath)
+			return 0;
+
+		MemoryBlockManagedObject scratchObject;
+		Appearance * const appearance = AppearanceTemplateList::createAppearance(assetPath);
+		if (!appearance)
+			return 0;
+
+		scratchObject.setAppearance(appearance);
+
+		Appearance * const ownedAppearance = scratchObject.getAppearance();
+		if (!ownedAppearance)
+			return 0;
+
+		int const beforeCount = getVariableCount(customizationData);
+
+		if (skipSharedOwnerVariables)
+		{
+			CustomizationData scratchCustomizationData(scratchObject);
+			ownedAppearance->addCustomizationVariables(scratchCustomizationData);
+
+			VariableCopyContext variableCopyContext = {customizationData, true, 0};
+			scratchCustomizationData.iterateOverConstVariables(copyVariableCallback, &variableCopyContext, false);
+		}
+		else
+		{
+			ownedAppearance->addCustomizationVariables(customizationData);
+		}
+
+		int const afterCount = getVariableCount(customizationData);
+		return (afterCount >= beforeCount) ? (afterCount - beforeCount) : 0;
+	}
+}
+
 // ======================================================================
 // class AssetCustomizationManager: PUBLIC STATIC
 // ======================================================================
@@ -661,24 +774,9 @@ void AssetCustomizationManagerNamespace::addVariablesForAssetAndLinks(int assetI
 void AssetCustomizationManager::install(char const *filename)
 {
 	InstallTimer const installTimer("AssetCustomizationManager::install");
-
-	DEBUG_FATAL(s_installed, ("AssetCustomizationManager already installed."));
-	DEBUG_FATAL(!filename || !*filename, ("AssetCustomizationManager requires a valid filename for successful installation."));
-
-	//-- Check endian-ness of platform.  This code assumes little-endian due to the way
-	//   the data image is loaded directly into memory.  If we ever hit this,
-	//   we can do a conversion at load time to big-endian.
-	uint32 testValue = 1;
-	FATAL(*reinterpret_cast<uint8*>(&testValue) != 1, ("AssetCustomizationManager: running on a non-little-endian architecture, unsupported by this class at this time."));
-
-	Iff iff;
-	bool const openResult = iff.open(filename, true);
-	FATAL(!openResult, ("AssetCustomizationManager data file [%s] does not exist or failed to open.  This is likely a configuration file issue.", filename));
-
-	load(iff);
-
+	UNREF(installTimer);
+	UNREF(filename);
 	s_installed = true;
-	ExitChain::add(remove, "AssetCustomizationManager");
 }
 
 // ----------------------------------------------------------------------
@@ -686,20 +784,16 @@ void AssetCustomizationManager::install(char const *filename)
 int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
+	return addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+}
 
-	//-- Convert asset name to internal asset id.
-	int const assetId = lookupAssetId(assetName);
-	if (!assetId)
-	{
-		// Exit: there are no customization variables for this asset or its dependencies.
-		return 0;
-	}
+// ----------------------------------------------------------------------
 
-	//-- Recursively add customization variables used directly by an asset and then check any child assets used by the asset.
-	int addedVariableCount = 0;
-	addVariablesForAssetAndLinks(assetId, customizationData, skipSharedOwnerVariables, addedVariableCount);
-
-	return addedVariableCount;
+bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
+{
+	MemoryBlockManagedObject scratchObject;
+	CustomizationData scratchCustomizationData(scratchObject);
+	return addVariablesFromAppearance(assetName, scratchCustomizationData, false) > 0;
 }
 
 // ======================================================================

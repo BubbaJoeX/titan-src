@@ -178,7 +178,7 @@ void SetupSharedGame::install (const SetupSharedGame::Data& data)
 	ShipTurretManager::install ();
 	ObjectUsabilityManager::install();
 
-	AssetCustomizationManager::install ("customization/asset_customization_manager.iff");
+	AssetCustomizationManager::install (0);
 
 	if (data.getUseMountValidScaleRangeTable ())
 		MountValidScaleRangeTable::install ("datatables/mount/valid_scale_range.iff");
