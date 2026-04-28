@@ -55,6 +55,28 @@ using namespace JNIWrappersNamespace;
 
 namespace
 {
+
+static void broadcastDeveloperWaterPatchesToSameScene (CreatureObject const * issuer)
+{
+	std::vector<LocalWaterTablePatch> const patches = TerrainWaterLevelDeveloperDelta::getPatchesSnapshot ();
+	DeveloperWaterLevelMessage const msg (patches);
+	std::string const scene = issuer->getSceneId ();
+	std::vector<ServerObject *> withClients;
+	GameServer::getInstance ().getObjectsWithClients (withClients);
+	for (size_t i = 0; i < withClients.size (); ++i)
+	{
+		ServerObject * const so = withClients[i];
+		if (!so || so->getSceneId () != scene)
+			continue;
+		CreatureObject * const co = so->asCreatureObject ();
+		if (!co)
+			continue;
+		Client * const cl = co->getClient ();
+		if (cl)
+			cl->send (msg, true);
+	}
+}
+
 void broadcastServerEnvironmentTimeToAllClients()
 {
 	int64 const t = static_cast<int64>(ServerClock::getInstance().getEffectiveEnvironmentTimeSeconds());
@@ -115,6 +137,7 @@ namespace ScriptMethodsTerrainNamespace
 	jlong        JNICALL getStandingOn(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL developerTriggerLocalWaterWave (JNIEnv * env, jobject self, jlong player);
 	jboolean     JNICALL changeLocalWaterLevel (JNIEnv * env, jobject self, jlong player, jfloat deltaMeters, jboolean persist);
+	jboolean     JNICALL resetLocalWaterLevel (JNIEnv * env, jobject self, jlong player, jboolean persist);
 }
 
 
@@ -158,6 +181,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getStandingOn", "(J)J", getStandingOn),
 	JF("_developerTriggerLocalWaterWave", "(J)Z", developerTriggerLocalWaterWave),
 	JF("_changeLocalWaterLevel", "(JFZ)Z", changeLocalWaterLevel),
+	JF("_resetLocalWaterLevel", "(JZ)Z", resetLocalWaterLevel),
 };
 
 	bool const jniOk = JavaLibrary::registerNatives (NATIVES, sizeof (NATIVES) / sizeof (NATIVES[0]));
@@ -1401,28 +1425,46 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::changeLocalWaterLevel (JNIEnv * 
 	if (!player->isInWorldCell ())
 		return JNI_FALSE;
 
-	float const newDelta = TerrainWaterLevelDeveloperDelta::getDelta () + static_cast<float>(deltaMeters);
-	TerrainWaterLevelDeveloperDelta::setDelta (newDelta);
+	TerrainObject const * const terrain = TerrainObject::getInstance ();
+	if (!terrain)
+		return JNI_FALSE;
+
+	Vector const pos = player->getPosition_w ();
+	if (!terrain->isBelowWater (pos))
+		return JNI_FALSE;
+
+	TerrainWaterLevelDeveloperDelta::applyDeltaAt (pos.x, pos.z, static_cast<float>(deltaMeters));
 
 	if (persist)
-		TerrainWaterLevelDeveloperDelta::savePersistedForScene (ServerWorld::getSceneId ().c_str (), newDelta);
+		TerrainWaterLevelDeveloperDelta::savePersistedForScene (ServerWorld::getSceneId ().c_str ());
 
-	DeveloperWaterLevelMessage const msg (newDelta);
-	std::string const scene = player->getSceneId ();
-	std::vector<ServerObject *> withClients;
-	GameServer::getInstance ().getObjectsWithClients (withClients);
-	for (size_t i = 0; i < withClients.size (); ++i)
-	{
-		ServerObject * const so = withClients[i];
-		if (!so || so->getSceneId () != scene)
-			continue;
-		CreatureObject * const co = so->asCreatureObject ();
-		if (!co)
-			continue;
-		Client * const cl = co->getClient ();
-		if (cl)
-			cl->send (msg, true);
-	}
+	broadcastDeveloperWaterPatchesToSameScene (player);
+
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::resetLocalWaterLevel (JNIEnv * /*env*/, jobject /*self*/, jlong playerId, jboolean persist)
+{
+	PROFILER_AUTO_BLOCK_DEFINE ("JNI::resetLocalWaterLevel");
+
+	CreatureObject * player = nullptr;
+	if (!JavaLibrary::getObject (playerId, player) || !player)
+		return JNI_FALSE;
+
+	if (!player->isPlayerControlled ())
+		return JNI_FALSE;
+
+	if (!player->isInWorldCell ())
+		return JNI_FALSE;
+
+	TerrainWaterLevelDeveloperDelta::resetAll ();
+
+	if (persist)
+		TerrainWaterLevelDeveloperDelta::savePersistedForScene (ServerWorld::getSceneId ().c_str ());
+
+	broadcastDeveloperWaterPatchesToSameScene (player);
 
 	return JNI_TRUE;
 }

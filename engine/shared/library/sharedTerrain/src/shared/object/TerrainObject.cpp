@@ -340,7 +340,7 @@ bool TerrainObject::getWaterHeight (const Vector& position_w, float& height, Ter
 
 	if (result)
 	{
-		height += TerrainWaterLevelDeveloperDelta::getDelta ();
+		height += TerrainWaterLevelDeveloperDelta::getDeltaAt (position_w.x, position_w.z);
 
 		m_cachedPositionWater_w     = position;
 		m_cachedPositionWaterHeight = height;

@@ -732,6 +732,7 @@ include_directories(
 	${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMessageDispatch/include/public
 	${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedNetwork/include/public
 	${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedObject/include/public
+	${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedTerrain/include/public
 	${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedUtility/include/public
 	${SWG_GAME_SOURCE_DIR}/shared/library/swgSharedUtility/include/public
 	${SWG_EXTERNALS_SOURCE_DIR}/ours/library/archive/include

@@ -1,7 +1,7 @@
 // ======================================================================
 //
 // DeveloperWaterLevelMessage.h
-// Server -> client: additive water plane height delta (meters).
+// Server -> client: full list of local water table patches.
 //
 // ======================================================================
 
@@ -10,22 +10,25 @@
 
 #include "Archive/AutoDeltaByteStream.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
+#include "sharedTerrain/TerrainWaterLevelDeveloperDelta.h"
+
+#include <vector>
 
 class DeveloperWaterLevelMessage : public GameNetworkMessage
 {
 public:
 
-	explicit DeveloperWaterLevelMessage (float deltaMeters);
+	explicit DeveloperWaterLevelMessage (std::vector<LocalWaterTablePatch> const & patches);
 	explicit DeveloperWaterLevelMessage (Archive::ReadIterator & source);
 	virtual ~DeveloperWaterLevelMessage ();
 
-	float getDeltaMeters () const;
+	std::vector<LocalWaterTablePatch> getPatches () const;
 
 	static char const * const cms_name;
 
 private:
 
-	Archive::AutoVariable<float> m_deltaMeters;
+	Archive::AutoArray<LocalWaterTablePatch> m_patches;
 };
 
 #endif
