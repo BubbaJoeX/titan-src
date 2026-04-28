@@ -1430,10 +1430,6 @@ float CreatureController::realAlter(float time)
 				// return to walk mode and clamp to floor to avoid water-column carry-over.
 				if (!owner->isInWorldCell())
 				{
-					Footprint * const footprint = owner->getFootprint();
-					if (footprint)
-						footprint->snapToGround();
-
 					owner->setLocomotion(Locomotions::Walking);
 				}
 			}
