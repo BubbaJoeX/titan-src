@@ -35,7 +35,10 @@
 #include "sharedNetworkMessages/EnterStructurePlacementModeMessage.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedNetworkMessages/ServerTimeMessage.h"
+#include "sharedNetworkMessages/DeveloperWaterLevelMessage.h"
+#include "sharedNetworkMessages/DeveloperWaterWaveMessage.h"
 #include "sharedNetworkMessages/ShowAirspeederPanelMessage.h"
+#include "sharedTerrain/TerrainWaterLevelDeveloperDelta.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/LotManager.h"
 #include "sharedObject/ObjectTemplateList.h"
@@ -45,6 +48,7 @@
 #include <algorithm>
 #include <cmath>
 #include <list>
+#include <string>
 #include <vector>
 
 using namespace JNIWrappersNamespace;
@@ -109,6 +113,8 @@ namespace ScriptMethodsTerrainNamespace
 	void         JNICALL setCreatureCoverVisibility(JNIEnv * env, jobject self, jlong target, jboolean isVisibile);
 	jboolean     JNICALL getCreatureCoverVisibility(JNIEnv * env, jobject self, jlong target);
 	jlong        JNICALL getStandingOn(JNIEnv *env, jobject self, jlong target);
+	jboolean     JNICALL developerTriggerLocalWaterWave (JNIEnv * env, jobject self, jlong player);
+	jboolean     JNICALL changeLocalWaterLevel (JNIEnv * env, jobject self, jlong player, jfloat deltaMeters, jboolean persist);
 }
 
 
@@ -150,9 +156,14 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setCreatureCoverVisibility", "(JZ)V", setCreatureCoverVisibility),
 	JF("_getCreatureCoverVisibility", "(J)Z", getCreatureCoverVisibility),
 	JF("_getStandingOn", "(J)J", getStandingOn),
+	JF("_developerTriggerLocalWaterWave", "(J)Z", developerTriggerLocalWaterWave),
+	JF("_changeLocalWaterLevel", "(JFZ)Z", changeLocalWaterLevel),
 };
 
-	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
+	bool const jniOk = JavaLibrary::registerNatives (NATIVES, sizeof (NATIVES) / sizeof (NATIVES[0]));
+	if (jniOk)
+		TerrainWaterLevelDeveloperDelta::loadPersistedForScene (ServerWorld::getSceneId ().c_str ());
+	return jniOk;
 }
 
 
@@ -1337,6 +1348,83 @@ jlong JNICALL ScriptMethodsTerrainNamespace::getStandingOn(JNIEnv *env, jobject 
 	}
 
 	return NetworkId::cms_invalid.getValue();
+}
+
+//----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::developerTriggerLocalWaterWave (JNIEnv * /*env*/, jobject /*self*/, jlong playerId)
+{
+	PROFILER_AUTO_BLOCK_DEFINE("JNI::developerTriggerLocalWaterWave");
+
+	CreatureObject * player = nullptr;
+	if (!JavaLibrary::getObject (playerId, player) || !player)
+		return JNI_FALSE;
+
+	if (!player->isPlayerControlled ())
+		return JNI_FALSE;
+
+	if (!player->isInWorldCell ())
+		return JNI_FALSE;
+
+	Client * const client = player->getClient ();
+	if (!client)
+		return JNI_FALSE;
+
+	const TerrainObject * const terrain = TerrainObject::getInstance ();
+	if (!terrain)
+		return JNI_FALSE;
+
+	Vector const pos = player->getPosition_w ();
+	if (!terrain->isBelowWater (pos))
+		return JNI_FALSE;
+
+	float const radius     = 55.f;
+	float const amplitude  = 0.12f;
+	DeveloperWaterWaveMessage const msg (pos.x, pos.z, radius, amplitude);
+	client->send (msg, true);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsTerrainNamespace::changeLocalWaterLevel (JNIEnv * /*env*/, jobject /*self*/, jlong playerId, jfloat deltaMeters, jboolean persist)
+{
+	PROFILER_AUTO_BLOCK_DEFINE ("JNI::changeLocalWaterLevel");
+
+	CreatureObject * player = nullptr;
+	if (!JavaLibrary::getObject (playerId, player) || !player)
+		return JNI_FALSE;
+
+	if (!player->isPlayerControlled ())
+		return JNI_FALSE;
+
+	if (!player->isInWorldCell ())
+		return JNI_FALSE;
+
+	float const newDelta = TerrainWaterLevelDeveloperDelta::getDelta () + static_cast<float>(deltaMeters);
+	TerrainWaterLevelDeveloperDelta::setDelta (newDelta);
+
+	if (persist)
+		TerrainWaterLevelDeveloperDelta::savePersistedForScene (ServerWorld::getSceneId ().c_str (), newDelta);
+
+	DeveloperWaterLevelMessage const msg (newDelta);
+	std::string const scene = player->getSceneId ();
+	std::vector<ServerObject *> withClients;
+	GameServer::getInstance ().getObjectsWithClients (withClients);
+	for (size_t i = 0; i < withClients.size (); ++i)
+	{
+		ServerObject * const so = withClients[i];
+		if (!so || so->getSceneId () != scene)
+			continue;
+		CreatureObject * const co = so->asCreatureObject ();
+		if (!co)
+			continue;
+		Client * const cl = co->getClient ();
+		if (cl)
+			cl->send (msg, true);
+	}
+
+	return JNI_TRUE;
 }
 
 // ======================================================================

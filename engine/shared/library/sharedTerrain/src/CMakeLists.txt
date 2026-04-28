@@ -103,6 +103,8 @@ set(SHARED_SOURCES
 
 	shared/object/TerrainObject.cpp
 	shared/object/TerrainObject.h
+	shared/object/TerrainWaterLevelDeveloperDelta.cpp
+	shared/object/TerrainWaterLevelDeveloperDelta.h
 	shared/object/TerrainReferenceObjectNotification.cpp
 	shared/object/TerrainReferenceObjectNotification.h
 )

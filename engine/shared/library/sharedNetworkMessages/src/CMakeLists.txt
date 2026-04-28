@@ -542,6 +542,10 @@ set(SHARED_SOURCES
 	shared/clientGameServer/SuiEventNotification.h
 	shared/clientGameServer/ServerWeatherMessage.cpp
 	shared/clientGameServer/ServerWeatherMessage.h
+	shared/clientGameServer/DeveloperWaterWaveMessage.cpp
+	shared/clientGameServer/DeveloperWaterWaveMessage.h
+	shared/clientGameServer/DeveloperWaterLevelMessage.cpp
+	shared/clientGameServer/DeveloperWaterLevelMessage.h
 	shared/clientGameServer/ShipDamageMessage.cpp
 	shared/clientGameServer/ShipDamageMessage.h
 	shared/clientGameServer/ShipDamageMessageArchive.cpp
