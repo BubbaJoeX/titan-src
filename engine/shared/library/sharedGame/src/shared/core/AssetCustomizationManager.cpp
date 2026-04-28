@@ -755,16 +755,6 @@ namespace
 			CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
 			scratchCustomizationData->fetch();
 			ownedAppearance->addCustomizationVariables(*scratchCustomizationData);
-			if (getVariableCount(*scratchCustomizationData) == 0 && AsynchronousLoader::isEnabled())
-			{
-				for (int i = 0; i < 3; ++i)
-				{
-					AsynchronousLoader::processCallbacks();
-					ownedAppearance->addCustomizationVariables(*scratchCustomizationData);
-					if (getVariableCount(*scratchCustomizationData) > 0)
-						break;
-				}
-			}
 
 			VariableCopyContext variableCopyContext = {customizationData, true, 0};
 			scratchCustomizationData->iterateOverConstVariables(copyVariableCallback, &variableCopyContext, false);
@@ -773,16 +763,6 @@ namespace
 		else
 		{
 			ownedAppearance->addCustomizationVariables(customizationData);
-			if ((getVariableCount(customizationData) == beforeCount) && AsynchronousLoader::isEnabled())
-			{
-				for (int i = 0; i < 3; ++i)
-				{
-					AsynchronousLoader::processCallbacks();
-					ownedAppearance->addCustomizationVariables(customizationData);
-					if (getVariableCount(customizationData) > beforeCount)
-						break;
-				}
-			}
 		}
 
 		int const afterCount = getVariableCount(customizationData);
@@ -797,9 +777,16 @@ namespace
 void AssetCustomizationManager::install(char const *filename)
 {
 	InstallTimer const installTimer("AssetCustomizationManager::install");
-	UNREF(installTimer);
-	UNREF(filename);
+	DEBUG_FATAL(s_installed, ("AssetCustomizationManager already installed."));
+	if (filename && *filename)
+	{
+		Iff iff;
+		bool const openResult = iff.open(filename, true);
+		if (openResult)
+			load(iff);
+	}
 	s_installed = true;
+	ExitChain::add(remove, "AssetCustomizationManager", 0, false);
 }
 
 // ----------------------------------------------------------------------
@@ -807,18 +794,37 @@ void AssetCustomizationManager::install(char const *filename)
 int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
-	return addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+	int const runtimeAddedVariableCount = addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+	if (runtimeAddedVariableCount > 0)
+		return runtimeAddedVariableCount;
+
+	// Optional compatibility fallback when ACM data is present.
+	if (s_crcLookupTable && (s_crcLookupEntryCount > 0))
+	{
+		int const assetId = lookupAssetId(assetName);
+		if (assetId)
+		{
+			int addedVariableCount = 0;
+			addVariablesForAssetAndLinks(assetId, customizationData, skipSharedOwnerVariables, addedVariableCount);
+			return addedVariableCount;
+		}
+	}
+
+	return 0;
 }
 
 // ----------------------------------------------------------------------
 
 bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 {
+	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
 	MemoryBlockManagedObject scratchObject;
 	CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
 	scratchCustomizationData->fetch();
-	bool const result = (addVariablesFromAppearance(assetName, *scratchCustomizationData, false) > 0);
+	bool result = (addVariablesFromAppearance(assetName, *scratchCustomizationData, false) > 0);
 	scratchCustomizationData->release();
+	if (!result && s_crcLookupTable && (s_crcLookupEntryCount > 0))
+		result = (lookupAssetId(assetName) != 0);
 	return result;
 }
 
