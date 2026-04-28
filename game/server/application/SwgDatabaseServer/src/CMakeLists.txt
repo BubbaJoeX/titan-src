@@ -254,11 +254,14 @@ if(WIN32)
     set(WINDOWS_PLATFORM --windows)
 endif()
 
+# Any *.tab change must rerun Perl so Schema.h stays aligned (avoids stale Bindable* output).
+file(GLOB SCHEMA_DATABASE_TAB_FILES "${SWG_GAME_SOURCE_DIR}/server/database/schema/*.tab")
+
 add_custom_command(
     OUTPUT ${SCHEMA_H_OUTPUT_NATIVE}
     COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_H_TEMPLATE_NATIVE} ${SCHEMA_H_OUTPUT_NATIVE}
     COMMAND ${PERL_EXECUTABLE} "${MAKE_SCHEMA_H}" --ddldirectory "${SWG_GAME_SOURCE_DIR}/server/database/schema" --output "${SCHEMA_H_OUTPUT_NATIVE}" ${WINDOWS_PLATFORM}
-    DEPENDS ${SCHEMA_H_TEMPLATE_NATIVE} ${MAKE_SCHEMA_H}
+    DEPENDS ${SCHEMA_H_TEMPLATE_NATIVE} ${MAKE_SCHEMA_H} ${SCHEMA_DATABASE_TAB_FILES}
 )
 
 add_custom_command(
