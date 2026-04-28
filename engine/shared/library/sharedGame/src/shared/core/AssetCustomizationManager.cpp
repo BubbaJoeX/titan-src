@@ -182,6 +182,7 @@ namespace AssetCustomizationManagerNamespace
 
 	CrcLookupEntry  *s_crcLookupTable;
 	int              s_crcLookupEntryCount;
+	bool             s_attemptedDefaultLoad;
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
@@ -244,6 +245,7 @@ void AssetCustomizationManagerNamespace::remove()
 	delete[] s_crcLookupTable;
 	s_crcLookupTable = nullptr;
 	s_crcLookupEntryCount = 0;
+	s_attemptedDefaultLoad = false;
 }
 
 // ----------------------------------------------------------------------
@@ -785,6 +787,7 @@ void AssetCustomizationManager::install(char const *filename)
 		if (openResult)
 			load(iff);
 	}
+	s_attemptedDefaultLoad = false;
 	s_installed = true;
 	ExitChain::add(remove, "AssetCustomizationManager", 0, false);
 }
@@ -797,6 +800,14 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 	int const runtimeAddedVariableCount = addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
 	if (runtimeAddedVariableCount > 0)
 		return runtimeAddedVariableCount;
+
+	if (!s_attemptedDefaultLoad && (!s_crcLookupTable || s_crcLookupEntryCount <= 0))
+	{
+		s_attemptedDefaultLoad = true;
+		Iff iff;
+		if (iff.open("customization/asset_customization_manager.iff", true))
+			load(iff);
+	}
 
 	// Optional compatibility fallback when ACM data is present.
 	if (s_crcLookupTable && (s_crcLookupEntryCount > 0))
@@ -823,6 +834,16 @@ bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 	scratchCustomizationData->fetch();
 	bool result = (addVariablesFromAppearance(assetName, *scratchCustomizationData, false) > 0);
 	scratchCustomizationData->release();
+	if (!result)
+	{
+		if (!s_attemptedDefaultLoad && (!s_crcLookupTable || s_crcLookupEntryCount <= 0))
+		{
+			s_attemptedDefaultLoad = true;
+			Iff iff;
+			if (iff.open("customization/asset_customization_manager.iff", true))
+				load(iff);
+		}
+	}
 	if (!result && s_crcLookupTable && (s_crcLookupEntryCount > 0))
 		result = (lookupAssetId(assetName) != 0);
 	return result;
