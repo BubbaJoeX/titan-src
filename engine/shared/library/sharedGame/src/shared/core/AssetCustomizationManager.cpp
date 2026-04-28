@@ -793,6 +793,23 @@ namespace
 #endif
 	}
 
+	bool shouldSkipRuntimeLookup(char const *assetPath)
+	{
+		if (!assetPath || !*assetPath)
+			return true;
+
+		std::string const path(assetPath);
+		std::string::size_type const dot = path.find_last_of('.');
+		if (dot == std::string::npos)
+			return false;
+
+		std::string ext = path.substr(dot);
+		for (std::string::size_type i = 0; i < ext.size(); ++i)
+			ext[i] = static_cast<char>(tolower(static_cast<unsigned char>(ext[i])));
+
+		return (ext == ".lmg") || (ext == ".mgn");
+	}
+
 }
 
 // ======================================================================
@@ -824,7 +841,7 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 	int runtimeAddedVariableCount = 0;
 	char const * const assetPath = assetName.getString();
 	std::string const assetKey = assetPath ? assetPath : "";
-	if (!assetKey.empty() && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
+	if (!assetKey.empty() && !shouldSkipRuntimeLookup(assetPath) && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
 	{
 		if (!tryAddVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables, runtimeAddedVariableCount))
 		{
@@ -866,7 +883,7 @@ bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 	bool result = false;
 	char const * const assetPath = assetName.getString();
 	std::string const assetKey = assetPath ? assetPath : "";
-	if (!assetKey.empty() && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
+	if (!assetKey.empty() && !shouldSkipRuntimeLookup(assetPath) && (s_runtimeLookupBlacklist.find(assetKey) == s_runtimeLookupBlacklist.end()))
 	{
 		MemoryBlockManagedObject scratchObject;
 		CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
