@@ -751,11 +751,13 @@ namespace
 
 		if (skipSharedOwnerVariables)
 		{
-			CustomizationData scratchCustomizationData(scratchObject);
-			ownedAppearance->addCustomizationVariables(scratchCustomizationData);
+			CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
+			scratchCustomizationData->fetch();
+			ownedAppearance->addCustomizationVariables(*scratchCustomizationData);
 
 			VariableCopyContext variableCopyContext = {customizationData, true, 0};
-			scratchCustomizationData.iterateOverConstVariables(copyVariableCallback, &variableCopyContext, false);
+			scratchCustomizationData->iterateOverConstVariables(copyVariableCallback, &variableCopyContext, false);
+			scratchCustomizationData->release();
 		}
 		else
 		{
@@ -792,8 +794,11 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 {
 	MemoryBlockManagedObject scratchObject;
-	CustomizationData scratchCustomizationData(scratchObject);
-	return addVariablesFromAppearance(assetName, scratchCustomizationData, false) > 0;
+	CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
+	scratchCustomizationData->fetch();
+	bool const result = (addVariablesFromAppearance(assetName, *scratchCustomizationData, false) > 0);
+	scratchCustomizationData->release();
+	return result;
 }
 
 // ======================================================================
