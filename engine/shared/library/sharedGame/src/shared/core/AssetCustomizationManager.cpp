@@ -183,6 +183,7 @@ namespace AssetCustomizationManagerNamespace
 	CrcLookupEntry  *s_crcLookupTable;
 	int              s_crcLookupEntryCount;
 	bool             s_attemptedDefaultLoad;
+	bool             s_runtimeLookupDisabled;
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
@@ -246,6 +247,7 @@ void AssetCustomizationManagerNamespace::remove()
 	s_crcLookupTable = nullptr;
 	s_crcLookupEntryCount = 0;
 	s_attemptedDefaultLoad = false;
+	s_runtimeLookupDisabled = false;
 }
 
 // ----------------------------------------------------------------------
@@ -770,6 +772,25 @@ namespace
 		int const afterCount = getVariableCount(customizationData);
 		return (afterCount >= beforeCount) ? (afterCount - beforeCount) : 0;
 	}
+
+	bool tryAddVariablesFromAppearance(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables, int &addedVariableCount)
+	{
+#if defined(PLATFORM_WIN32)
+		__try
+		{
+			addedVariableCount = addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+			return true;
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			addedVariableCount = 0;
+			return false;
+		}
+#else
+		addedVariableCount = addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+		return true;
+#endif
+	}
 }
 
 // ======================================================================
@@ -788,6 +809,7 @@ void AssetCustomizationManager::install(char const *filename)
 			load(iff);
 	}
 	s_attemptedDefaultLoad = false;
+	s_runtimeLookupDisabled = false;
 	s_installed = true;
 	ExitChain::add(remove, "AssetCustomizationManager", 0, false);
 }
@@ -797,7 +819,15 @@ void AssetCustomizationManager::install(char const *filename)
 int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
-	int const runtimeAddedVariableCount = addVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables);
+	int runtimeAddedVariableCount = 0;
+	if (!s_runtimeLookupDisabled)
+	{
+		if (!tryAddVariablesFromAppearance(assetName, customizationData, skipSharedOwnerVariables, runtimeAddedVariableCount))
+		{
+			s_runtimeLookupDisabled = true;
+			WARNING(true, ("AssetCustomizationManager: runtime customization lookup crashed for [%s]; disabling runtime path and using ACM fallback for stability.", assetName.getString() ? assetName.getString() : "<null>"));
+		}
+	}
 	if (runtimeAddedVariableCount > 0)
 		return runtimeAddedVariableCount;
 
@@ -829,11 +859,23 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 bool AssetCustomizationManager::isAssetCustomizable(CrcString const &assetName)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
-	MemoryBlockManagedObject scratchObject;
-	CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
-	scratchCustomizationData->fetch();
-	bool result = (addVariablesFromAppearance(assetName, *scratchCustomizationData, false) > 0);
-	scratchCustomizationData->release();
+	bool result = false;
+	if (!s_runtimeLookupDisabled)
+	{
+		MemoryBlockManagedObject scratchObject;
+		CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
+		scratchCustomizationData->fetch();
+		int runtimeAddedVariableCount = 0;
+		if (tryAddVariablesFromAppearance(assetName, *scratchCustomizationData, false, runtimeAddedVariableCount))
+			result = (runtimeAddedVariableCount > 0);
+		else
+		{
+			s_runtimeLookupDisabled = true;
+			result = false;
+			WARNING(true, ("AssetCustomizationManager: runtime customizability query crashed for [%s]; disabling runtime path and using ACM fallback for stability.", assetName.getString() ? assetName.getString() : "<null>"));
+		}
+		scratchCustomizationData->release();
+	}
 	if (!result)
 	{
 		if (!s_attemptedDefaultLoad && (!s_crcLookupTable || s_crcLookupEntryCount <= 0))
