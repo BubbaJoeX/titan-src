@@ -90,6 +90,7 @@ public:
 private:
 	ServerSecureTrade*          m_secureTrade;
 	Watcher<CreatureObject>     m_secureTradeInitiator;
+	bool                        m_wasInWorldCell;
 
 protected:
 	virtual float realAlter(real time);

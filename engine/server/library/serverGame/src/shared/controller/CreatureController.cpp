@@ -103,7 +103,8 @@ namespace CreatureControllerNamespace
 CreatureController::CreatureController(CreatureObject * newOwner) :
 	TangibleController(newOwner),
 	m_secureTrade(0),
-	m_secureTradeInitiator(0)
+	m_secureTradeInitiator(0),
+	m_wasInWorldCell(newOwner ? newOwner->isInWorldCell() : false)
 {
 }
 
@@ -1380,11 +1381,22 @@ float CreatureController::realAlter(float time)
 			bool const currentSwimState = owner->getState(States::Swimming);
 			bool newSwimState = false;
 			float waterHeight = 0.0f;
+
+			bool const isInWorldCellNow = owner->isInWorldCell();
+			bool const portalEnteredInterior = (m_wasInWorldCell && !isInWorldCellNow);
+			bool const portalExitedToWorld = (!m_wasInWorldCell && isInWorldCellNow);
+			m_wasInWorldCell = isInWorldCellNow;
+
 			calculateWaterState(newSwimState, isBurning, lavaResistance, waterHeight);
 
-			// Portal exit support: if we just moved back to world terrain and are below local water
-			// surface, switch to swimming immediately (don't wait for floor/contact resolution).
-			if (!newSwimState && owner->isInWorldCell())
+			// Portal transitions are authoritative here:
+			// - entering interior from swim: force walk immediately
+			// - exiting to world into submerged floor: force swim immediately
+			if (portalEnteredInterior)
+			{
+				newSwimState = false;
+			}
+			else if (portalExitedToWorld)
 			{
 				TerrainObject const * const terrainObject = TerrainObject::getConstInstance();
 				Vector const position = owner->getPosition_w();
@@ -1426,9 +1438,8 @@ float CreatureController::realAlter(float time)
 				// We've just detected that the owner stopped swimming.
 				onExitSwimming();
 
-				// Portal entry support: if we crossed into an interior while swimming, immediately
-				// return to walk mode and clamp to floor to avoid water-column carry-over.
-				if (!owner->isInWorldCell())
+				// Entering interior from world swim: force walk locomotion immediately.
+				if (portalEnteredInterior)
 				{
 					owner->setLocomotion(Locomotions::Walking);
 				}
