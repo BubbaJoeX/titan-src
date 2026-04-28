@@ -838,6 +838,27 @@ void AssetCustomizationManager::install(char const *filename)
 int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const &assetName, CustomizationData &customizationData, bool skipSharedOwnerVariables)
 {
 	DEBUG_FATAL(!s_installed, ("AssetCustomizationManager not installed."));
+	if (!s_attemptedDefaultLoad && (!s_crcLookupTable || s_crcLookupEntryCount <= 0))
+	{
+		s_attemptedDefaultLoad = true;
+		Iff iff;
+		if (iff.open("customization/asset_customization_manager.iff", true))
+			load(iff);
+	}
+
+	// Prefer ACM when data exists to avoid partial runtime declarations on legacy assets.
+	if (s_crcLookupTable && (s_crcLookupEntryCount > 0))
+	{
+		int const assetId = lookupAssetId(assetName);
+		if (assetId)
+		{
+			int addedVariableCount = 0;
+			addVariablesForAssetAndLinks(assetId, customizationData, skipSharedOwnerVariables, addedVariableCount);
+			return addedVariableCount;
+		}
+	}
+
+	// No ACM entry: use runtime declaration extraction for rapid iteration/new assets.
 	int runtimeAddedVariableCount = 0;
 	char const * const assetPath = assetName.getString();
 	std::string const assetKey = assetPath ? assetPath : "";
@@ -849,28 +870,9 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 			WARNING(true, ("AssetCustomizationManager: runtime customization lookup crashed for [%s]; blacklisting runtime for this asset and using ACM fallback.", assetPath ? assetPath : "<null>"));
 		}
 	}
+
 	if (runtimeAddedVariableCount > 0)
 		return runtimeAddedVariableCount;
-
-	if (!s_attemptedDefaultLoad && (!s_crcLookupTable || s_crcLookupEntryCount <= 0))
-	{
-		s_attemptedDefaultLoad = true;
-		Iff iff;
-		if (iff.open("customization/asset_customization_manager.iff", true))
-			load(iff);
-	}
-
-	// Optional compatibility fallback when ACM data is present.
-	if (s_crcLookupTable && (s_crcLookupEntryCount > 0))
-	{
-		int const assetId = lookupAssetId(assetName);
-		if (assetId)
-		{
-			int addedVariableCount = 0;
-			addVariablesForAssetAndLinks(assetId, customizationData, skipSharedOwnerVariables, addedVariableCount);
-			return addedVariableCount;
-		}
-	}
 
 	return 0;
 }
