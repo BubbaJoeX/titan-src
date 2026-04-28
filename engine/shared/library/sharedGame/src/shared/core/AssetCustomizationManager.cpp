@@ -10,6 +10,7 @@
 #include "sharedGame/AssetCustomizationManager.h"
 
 #include "sharedDebug/InstallTimer.h"
+#include "sharedFile/AsynchronousLoader.h"
 #include "sharedFile/Iff.h"
 #include "sharedFoundation/CrcString.h"
 #include "sharedFoundation/ExitChain.h"
@@ -754,6 +755,16 @@ namespace
 			CustomizationData * const scratchCustomizationData = new CustomizationData(scratchObject);
 			scratchCustomizationData->fetch();
 			ownedAppearance->addCustomizationVariables(*scratchCustomizationData);
+			if (getVariableCount(*scratchCustomizationData) == 0 && AsynchronousLoader::isEnabled())
+			{
+				for (int i = 0; i < 3; ++i)
+				{
+					AsynchronousLoader::processCallbacks();
+					ownedAppearance->addCustomizationVariables(*scratchCustomizationData);
+					if (getVariableCount(*scratchCustomizationData) > 0)
+						break;
+				}
+			}
 
 			VariableCopyContext variableCopyContext = {customizationData, true, 0};
 			scratchCustomizationData->iterateOverConstVariables(copyVariableCallback, &variableCopyContext, false);
@@ -762,6 +773,16 @@ namespace
 		else
 		{
 			ownedAppearance->addCustomizationVariables(customizationData);
+			if ((getVariableCount(customizationData) == beforeCount) && AsynchronousLoader::isEnabled())
+			{
+				for (int i = 0; i < 3; ++i)
+				{
+					AsynchronousLoader::processCallbacks();
+					ownedAppearance->addCustomizationVariables(customizationData);
+					if (getVariableCount(customizationData) > beforeCount)
+						break;
+				}
+			}
 		}
 
 		int const afterCount = getVariableCount(customizationData);
