@@ -229,7 +229,8 @@ sub translateType
 	if ($dbtype eq "int") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "number") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "float") { $ctype="DB::BindableDouble"; last SWITCH; }
-	if ($dbtype eq "date") { $ctype="DB::BindableTimestamp"; last SWITCH; }
+	# Oracle DATE — no BindableTimestamp in DB layer; use BindableLong (seconds or truncated epoch per query code).
+	if ($dbtype eq "date") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "char(1)") { $ctype="DB::BindableBool"; last SWITCH; }
 	if ($dbtype =~ /^varchar(2)?\((\d+)\)/) { $ctype="DB::BindableString<$2>"; last SWITCH; }
 	die "Datatype $rawtype not handled.";
@@ -250,7 +251,7 @@ sub translateBufferType
 	if ($dbtype eq "int") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "number") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "float") { $ctype="DB::BindableDouble"; last SWITCH; }
-	if ($dbtype eq "date") { $ctype="DB::BindableTimestamp"; last SWITCH; }
+	if ($dbtype eq "date") { $ctype="DB::BindableLong"; last SWITCH; }
 	if ($dbtype eq "char(1)") { $ctype="DB::BindableBool"; last SWITCH; }
 	if ($dbtype =~ /^varchar(2)?\((\d+)\)/) { $ctype="DB::BufferString"; last SWITCH; }
 	die "Datatype $rawtype not handled.";
