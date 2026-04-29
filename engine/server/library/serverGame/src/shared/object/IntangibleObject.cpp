@@ -31,7 +31,7 @@
 #include "sharedFoundation/Clock.h"
 #include "sharedFoundation/ConstCharCrcLowerString.h"
 #include "sharedFoundation/DynamicVariable.h"
-#include "sharedFoundation/Unicode.h"
+#include "Unicode.h"
 #include "sharedGame/SharedObjectTemplate.h"
 #include "sharedLog/Log.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
