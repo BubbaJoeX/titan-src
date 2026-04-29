@@ -37,6 +37,7 @@
 #include "serverGame/GuildInterface.h"
 #include "serverGame/GuildMemberInfo.h"
 #include "serverGame/HarvesterInstallationObject.h"
+#include "serverGame/FarmRanchController.h"
 #include "serverGame/ServerImageDesignerManager.h"
 #include "serverGame/ManufactureSchematicObject.h"
 #include "serverGame/MessageToQueue.h"
@@ -2706,6 +2707,27 @@ static void commandFuncHarvesterMakeCrate(Command const &, NetworkId const &acto
 
 	if (targetObj && actorObj && targetObj->isOnAdminList(*actorObj))
 		targetObj->emptyHopper(actor, resourceId, amount, discard, sequenceId);
+}
+
+// ----------------------------------------------------------------------
+
+static void commandFuncFarmPlant(Command const & c, NetworkId const & actor, NetworkId const & target, Unicode::String const & params)
+{
+	FarmRanchController::commandFarmPlant(c, actor, target, params);
+}
+
+// ----------------------------------------------------------------------
+
+static void commandFuncFarmHarvest(Command const & c, NetworkId const & actor, NetworkId const & target, Unicode::String const & params)
+{
+	FarmRanchController::commandFarmHarvest(c, actor, target, params);
+}
+
+// ----------------------------------------------------------------------
+
+static void commandFuncRanchBreed(Command const & c, NetworkId const & actor, NetworkId const & target, Unicode::String const & params)
+{
+	FarmRanchController::commandRanchBreed(c, actor, target, params);
 }
 
 // ----------------------------------------------------------------------
@@ -9750,6 +9772,10 @@ void CommandCppFuncs::install()
 	CommandTable::addCppFunction("harvesterDiscardHopper", commandFuncHarvesterDiscardHopper);
 	CommandTable::addCppFunction("harvesterMakeCrate", commandFuncHarvesterMakeCrate);
 	CommandTable::addCppFunction("harvesterGetResourceData", commandFuncHarvesterGetResourceData);
+
+	CommandTable::addCppFunction("farmPlant", commandFuncFarmPlant);
+	CommandTable::addCppFunction("farmHarvest", commandFuncFarmHarvest);
+	CommandTable::addCppFunction("ranchBreed", commandFuncRanchBreed);
 
 	// syncronized ui
 	CommandTable::addCppFunction("synchronizedUiListen", commandFuncSynchronizedUiListen);

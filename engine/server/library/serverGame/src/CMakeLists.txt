@@ -362,6 +362,9 @@ set(SHARED_SOURCES
 	shared/core/SceneGlobalData.cpp
 	shared/core/SceneGlobalData.h
 
+	shared/farming/FarmRanchController.cpp
+	shared/farming/FarmRanchController.h
+
 	shared/guild/GuildInfo.cpp
 	shared/guild/GuildInfo.h
 	shared/guild/GuildInterface.cpp
