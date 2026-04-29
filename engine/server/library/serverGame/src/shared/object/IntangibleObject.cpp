@@ -30,6 +30,8 @@
 #include "serverUtility/ServerClock.h"
 #include "sharedFoundation/Clock.h"
 #include "sharedFoundation/ConstCharCrcLowerString.h"
+#include "sharedFoundation/DynamicVariable.h"
+#include "sharedFoundation/Unicode.h"
 #include "sharedGame/SharedObjectTemplate.h"
 #include "sharedLog/Log.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
@@ -41,6 +43,74 @@
 #include "sharedFoundation/CrcConstexpr.hpp"
 
 #include <climits>
+
+// ======================================================================
+
+namespace
+{
+	int findDataTableColumn(DataTable const * dt, char const * a, char const * b = nullptr, char const * c = nullptr)
+	{
+		int n = dt->findColumnNumber(a);
+		if (n >= 0)
+			return n;
+		if (b)
+		{
+			n = dt->findColumnNumber(b);
+			if (n >= 0)
+				return n;
+		}
+		if (c)
+		{
+			n = dt->findColumnNumber(c);
+			if (n >= 0)
+				return n;
+		}
+		return -1;
+	}
+
+	/** Packed buildout objvar cell (see God Client BuildoutAreaSupport::packObjvarList). */
+	void applyPackedObjvars(ServerObject * obj, std::string const & packed)
+	{
+		if (obj == nullptr || packed.empty())
+			return;
+
+		unsigned int pos = 0;
+		while (pos < packed.size())
+		{
+			if (packed[pos] == '$' && pos + 1 < packed.size() && packed[pos + 1] == '|')
+				break;
+
+			unsigned int oldPos = pos;
+			while (pos < packed.size() && packed[pos] != '|')
+				++pos;
+			std::string const objvarName = packed.substr(oldPos, pos - oldPos);
+			if (pos < packed.size() && packed[pos] == '|')
+				++pos;
+
+			int const objvarType = atoi(packed.c_str() + pos);
+			if (objvarType < 0 || objvarType > 64)
+			{
+				WARNING(true, ("Theater objvar invalid type index %d", objvarType));
+				break;
+			}
+			while (pos < packed.size() && packed[pos] != '|')
+				++pos;
+			if (pos < packed.size() && packed[pos] == '|')
+				++pos;
+
+			oldPos = pos;
+			while (pos < packed.size() && packed[pos] != '|')
+				++pos;
+			std::string const objvarValue = packed.substr(oldPos, pos - oldPos);
+			if (pos < packed.size() && packed[pos] == '|')
+				++pos;
+
+			DynamicVariable value;
+			value.load(0, objvarType, Unicode::narrowToWide(objvarValue));
+			IGNORE_RETURN(obj->setObjVarItem(objvarName, value));
+		}
+	}
+}
 
 // ======================================================================
 
@@ -72,6 +142,7 @@ IntangibleObject::IntangibleObject(const ServerIntangibleObjectTemplate* newTemp
 	m_positions(),
 	m_headings(),
 	m_scripts(),
+	m_objvarRows(),
 	m_player(),
 	m_objects(),
 	m_center(),
@@ -253,6 +324,9 @@ size_t i;
 						NOT_NULL(newObject->getScriptObject());
 						newObject->getScriptObject()->attachScript(m_scripts[i], true);
 					}
+					// optional packed objvars (same format as buildout .tab)
+					if (i < m_objvarRows.size() && !m_objvarRows[i].empty())
+						applyPackedObjvars(newObject, m_objvarRows[i]);
 #ifdef _DEBUG
 					++objectsCreated;
 #endif
@@ -321,6 +395,7 @@ size_t i;
 				m_positions.clear();
 				m_headings.clear();
 				m_scripts.clear();
+				m_objvarRows.clear();
 #ifdef _DEBUG
 				unsigned long endTime = Clock::timeMs();
 				if (endTime >= startTime)
@@ -560,7 +635,13 @@ int IntangibleObject::getNumObjects(const std::string & datatable)
 		return 0;
 	}
 
-	int templateColumn = dt->findColumnNumber("template");
+	int const templateColumn = findDataTableColumn(dt, "template", "TEMPLATE");
+	if (templateColumn < 0)
+	{
+		WARNING(true, ("IntangibleObject::getNumObjects datatable %s has no template column",
+			datatable.c_str()));
+		return 0;
+	}
 
 	// if the 1st row's template is "THEATER", ignore it
 	if (static_cast<uint32>(dt->getIntValue(templateColumn, 0)) == THEATER_DATATABLE_TAG)
@@ -595,9 +676,15 @@ float IntangibleObject::getRadius(const std::string & datatable)
 		return 0;
 	}
 
-	int templateColumn = dt->findColumnNumber("template");
-	int xColumn        = dt->findColumnNumber("x");
-	int zColumn        = dt->findColumnNumber("z");
+	int const templateColumn = findDataTableColumn(dt, "template", "TEMPLATE");
+	int const xColumn        = findDataTableColumn(dt, "x", "X");
+	int const zColumn        = findDataTableColumn(dt, "z", "Z");
+	if (templateColumn < 0 || xColumn < 0 || zColumn < 0)
+	{
+		WARNING(true, ("IntangibleObject::getRadius datatable %s missing template/x/z column",
+			datatable.c_str()));
+		return 0;
+	}
 
 	float minx = FLT_MAX;
 	float maxx = -FLT_MIN;
@@ -657,17 +744,26 @@ IntangibleObject * IntangibleObject::spawnTheater(const std::string & datatable,
 		return nullptr;
 	}
 
-	int templateColumn = dt->findColumnNumber("template");
-	int xColumn        = dt->findColumnNumber("x");
-	int yColumn        = dt->findColumnNumber("y");
-	int zColumn        = dt->findColumnNumber("z");
-	int headingColumn  = dt->findColumnNumber("heading");
-	int scriptColumn   = dt->findColumnNumber("script");
-	
+	int const templateColumn = findDataTableColumn(dt, "template", "TEMPLATE");
+	int const xColumn        = findDataTableColumn(dt, "x", "X");
+	int const yColumn        = findDataTableColumn(dt, "y", "Y");
+	int const zColumn        = findDataTableColumn(dt, "z", "Z");
+	int const headingColumn  = findDataTableColumn(dt, "heading", "YAW", "yaw");
+	int const scriptColumn   = findDataTableColumn(dt, "script", "SCRIPT");
+	int const objvarsColumn  = findDataTableColumn(dt, "objvars", "OBJVARS");
+
+	if (templateColumn < 0 || xColumn < 0 || yColumn < 0 || zColumn < 0 || headingColumn < 0)
+	{
+		WARNING(true, ("IntangibleObject::spawnTheater datatable %s missing required columns "
+			"(need template, x, y, z, plus heading or YAW)", datatable.c_str()));
+		return nullptr;
+	}
+
 	std::vector<int32> objectCrcs;
 	std::vector<Vector> objectPositions;
 	std::vector<float> objectHeadings;
 	std::vector<std::string> objectScripts;
+	std::vector<std::string> objectObjvars;
 
 	dt->getIntColumn(templateColumn, objectCrcs);
 	dt->getFloatColumn(headingColumn, objectHeadings);
@@ -686,11 +782,13 @@ IntangibleObject * IntangibleObject::spawnTheater(const std::string & datatable,
 		objectHeadings.erase(objectHeadings.begin());
 		objectPositions.resize(rows-1);
 		objectScripts.resize(rows-1);
+		objectObjvars.resize(rows-1);
 	}
 	else
 	{
 		objectPositions.resize(rows);
 		objectScripts.resize(rows);
+		objectObjvars.resize(rows);
 	}
 
 	std::vector<float> tempPos;
@@ -721,7 +819,8 @@ IntangibleObject * IntangibleObject::spawnTheater(const std::string & datatable,
 			minz = tempPos[i];
 		else if (tempPos[i] > maxz)
 			maxz = tempPos[i];
-		objectScripts[j] = dt->getStringValue(scriptColumn, i);
+		objectScripts[j] = (scriptColumn >= 0) ? dt->getStringValue(scriptColumn, i) : std::string();
+		objectObjvars[j] = (objvarsColumn >= 0) ? dt->getStringValue(objvarsColumn, i) : std::string();
 	}
 
 	// Find out the area the theater will take up and use getGoodLocation
@@ -796,7 +895,7 @@ IntangibleObject * IntangibleObject::spawnTheater(const std::string & datatable,
 		theater->setLayer(layer);
 	}
 	theater->setTheater();
-	theater->setObjects(objectCrcs, objectPositions, objectHeadings, objectScripts);
+	theater->setObjects(objectCrcs, objectPositions, objectHeadings, objectScripts, objectObjvars);
 	theater->addToWorld();
 	theater->scheduleForAlter();
 
@@ -819,10 +918,12 @@ IntangibleObject * IntangibleObject::spawnTheater(const std::string & datatable,
  *						our position
  * @param headings		the orientation of the objects
  * @param scripts       list scripts to be attached to the objects
+ * @param objvars       optional packed objvar blobs (buildout format) per object
  */
 void IntangibleObject::setObjects(const std::vector<int32> & crcs, 
 	const std::vector<Vector> & positions, const std::vector<float> & headings, 
-	const std::vector<std::string> & scripts)
+	const std::vector<std::string> & scripts,
+	const std::vector<std::string> & objvars)
 {
 	if (!isTheater())
 		return;
@@ -834,6 +935,9 @@ void IntangibleObject::setObjects(const std::vector<int32> & crcs,
 		return;
 
 	if (!scripts.empty() && crcs.size() != scripts.size())
+		return;
+
+	if (!objvars.empty() && crcs.size() != objvars.size())
 		return;
 
 	if (!isAuthoritative())
@@ -866,6 +970,9 @@ void IntangibleObject::setObjects(const std::vector<int32> & crcs,
 
 		if (!scripts.empty())
 			m_scripts.push_back(scripts[i]);
+
+		if (!objvars.empty())
+			m_objvarRows.push_back(objvars[i]);
 	}
 	float xrad = (maxx - minx) / 2.0f;
 	float zrad = (maxz - minz) / 2.0f;

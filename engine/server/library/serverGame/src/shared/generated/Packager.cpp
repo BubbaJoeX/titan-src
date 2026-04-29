@@ -306,6 +306,7 @@ void IntangibleObject::addMembersToPackages()
 	addServerVariable_np (m_positions);
 	addServerVariable_np (m_headings);
 	addServerVariable_np (m_scripts);
+	addServerVariable_np (m_objvarRows);
 	addServerVariable_np (m_player);
 	addServerVariable_np (m_objects);
 	addServerVariable_np (m_center);

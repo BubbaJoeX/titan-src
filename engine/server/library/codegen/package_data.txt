@@ -177,6 +177,7 @@ IntangibleObject            m_crcs                   server_np            std::v
 IntangibleObject            m_positions              server_np            std::vector<Vector>
 IntangibleObject            m_headings               server_np            std::vector<float>
 IntangibleObject            m_scripts                server_np            std::vector<std::string>
+IntangibleObject            m_objvarRows             server_np            std::vector<std::string>
 IntangibleObject            m_player                 server_np            NetworkId
 IntangibleObject            m_objects                server_np            std::vector<NetworkId>
 IntangibleObject            m_center                 server_np            Vector

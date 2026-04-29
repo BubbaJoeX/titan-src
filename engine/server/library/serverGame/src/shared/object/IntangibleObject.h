@@ -62,7 +62,7 @@ public:
 	       bool  isTheater() const;
 		   void  setTheaterCreator(const NetworkId & creator);
 	       bool  setTheaterName(const std::string & name);
-	       void  setObjects(const std::vector<int32> & crcs, const std::vector<Vector> & positions, const std::vector<float> & headings, const std::vector<std::string> & scripts);
+	       void  setObjects(const std::vector<int32> & crcs, const std::vector<Vector> & positions, const std::vector<float> & headings, const std::vector<std::string> & scripts, const std::vector<std::string> & objvars = std::vector<std::string>());
 		   void  setPlayer(const CreatureObject & player);
 
 protected:
@@ -91,6 +91,7 @@ private:
 	Archive::AutoDeltaVector<Vector>            m_positions;  // object positions (relative to us)
 	Archive::AutoDeltaVector<float>             m_headings;   // object orientation
 	Archive::AutoDeltaVector<std::string>       m_scripts;    // scripts to be attached to the created objects
+	Archive::AutoDeltaVector<std::string>       m_objvarRows; // optional packed buildout-style objvar blobs per spawned object
 	Archive::AutoDeltaVariable<CachedNetworkId> m_player;     // the player the theater is created for
 	Archive::AutoDeltaVector<CachedNetworkId>   m_objects;    // objects created
 	Archive::AutoDeltaVariable<Vector>          m_center;     // center of the theater (not neccessarily our position)
