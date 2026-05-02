@@ -12,6 +12,7 @@
 
 #include "sharedFoundation/NetworkId.h"
 #include "Unicode.h"
+#include "UnicodeUtils.h"
 
 class Command;
 
