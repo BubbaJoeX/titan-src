@@ -18,6 +18,7 @@
 #include "serverUtility/ServerClock.h"
 
 #include "sharedFoundation/Crc.h"
+#include "sharedFoundation/ConstCharCrcString.h"
 #include "Unicode.h"
 #include "UnicodeUtils.h"
 #include "sharedLog/Log.h"
