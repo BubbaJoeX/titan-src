@@ -21,6 +21,7 @@
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedNetworkMessages/MessageQueueNpcConversationCameraCommand.h"
 #include "sharedObject/Controller.h"
+#include "sharedObject/NetworkIdManager.h"
 #include "sharedObject/ObjectTemplateList.h"
 #include "UnicodeUtils.h"
 
