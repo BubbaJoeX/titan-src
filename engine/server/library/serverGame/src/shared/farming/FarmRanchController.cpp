@@ -19,6 +19,7 @@
 
 #include "sharedFoundation/Crc.h"
 #include "Unicode.h"
+#include "UnicodeUtils.h"
 #include "sharedLog/Log.h"
 #include "sharedMath/Transform.h"
 #include "sharedMath/Vector.h"
