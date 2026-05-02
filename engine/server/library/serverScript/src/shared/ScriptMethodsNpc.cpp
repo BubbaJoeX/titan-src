@@ -713,6 +713,15 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtTarget(JN
 	if (targetId == NetworkId::cms_invalid)
 		return JNI_FALSE;
 
+	// Validate that the target object still exists on the server
+	// before dispatching the camera command. If the target has been
+	// destroyed (e.g., killed during conversation, ended conversation),
+	// the stale NetworkId would cause AutoDelta tracking to dereference
+	// freed memory in MemoryBlockManager::allocate.
+	Object * const targetObj = NetworkIdManager::getObjectById(targetId);
+	if (targetObj == nullptr)
+		return JNI_FALSE;
+
 	Controller * const controller = playerObject->getController();
 	if (!controller)
 		return JNI_FALSE;
