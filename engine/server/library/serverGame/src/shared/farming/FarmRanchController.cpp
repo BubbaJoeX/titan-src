@@ -212,7 +212,7 @@ void FarmRanchController::commandFarmPlant(Command const &, NetworkId const & ac
 	CreatureObject * const player = dynamic_cast<CreatureObject *>(NetworkIdManager::getObjectById(actor));
 	TangibleObject * const bed = dynamic_cast<TangibleObject *>(NetworkIdManager::getObjectById(target));
 	NetworkId const seedId = parseFirstOid(params);
-	ServerObject * const seedObj = NetworkIdManager::getObjectById(seedId);
+	ServerObject * const seedObj = dynamic_cast<ServerObject *>(NetworkIdManager::getObjectById(seedId));
 
 	if (!player || !bed || !seedObj || seedId == NetworkId::cms_invalid)
 	{

@@ -152,8 +152,8 @@ public:
 	static int                  getNumMoveLists(std::vector<int> & moveListSize);
 	static void                 setNumMoveLists(int numMoveLists);
 
-protected:
-	friend class ServerObjectLint;
+public:
+	friend class ServerWorldLint;
 	static ServerObject *       createObjectFromTemplate(const std::string &templateName, const NetworkId & newId);
 	static ServerObject *       createObjectFromTemplate(uint32 templateCrc, const NetworkId & newId);
 	static ServerObject *       createObjectFromTemplate(const ServerObjectTemplate &objectTemplate, const NetworkId & newId);

@@ -13,7 +13,8 @@
 
 #include "sharedFoundation/Tag.h"
 
-class ConstCharCrcString;
+#include "sharedFoundation/ConstCharCrcString.h"
+
 class CrcString;
 class CrcStringTable;
 class Iff;
@@ -76,4 +77,4 @@ private:
 
 // ======================================================================
 
-#endif	
+#endif
