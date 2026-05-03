@@ -65,6 +65,7 @@
 #include "sharedNetworkMessages/MessageQueueNetworkIdAndTransform.h"
 #include "sharedNetworkMessages/MessageQueueNetworkIdPair.h"
 #include "sharedNetworkMessages/MessageQueueNpcConversationMessage.h"
+#include "sharedNetworkMessages/MessageQueueNpcConversationCameraCommand.h"
 #include "sharedNetworkMessages/MessageQueueObjectMenuRequest.h"
 #include "sharedNetworkMessages/MessageQueueOpponentInfo.h"
 #include "sharedNetworkMessages/MessageQueuePosture.h"
@@ -389,6 +390,7 @@ void SetupSharedNetworkMessages::install ()
 	MessageQueueSpatialChat::install();
 	MessageQueueStartNpcConversation::install();
 	MessageQueueStopNpcConversation::install();
+	MessageQueueNpcConversationCameraCommand::install();
 	MessageQueueString::install();
 	MessageQueueStringList::install();
 	MessageQueueTeleportAck::install();

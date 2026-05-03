@@ -492,7 +492,7 @@ TangibleObject              m_count                  shared               int
 TangibleObject              m_damageTaken            shared               int
 TangibleObject              m_maxHitPoints           shared               int
 TangibleObject              m_visible                shared               bool
-TangibleObject              m_conversations          server_np            NetworkId
+TangibleObject              m_conversations          server_np            std::vector<NetworkId>
 TangibleObject              m_hideFromClient         server_np            bool
 TangibleObject              m_inCombat               shared_np            bool
 TangibleObject              m_combatStartTime        server_np            time_t
