@@ -6986,25 +6986,31 @@ bool CreatureObject::onContainerAboutToTransfer(ServerObject * destination, Serv
  */
 int CreatureObject::onContainerAboutToGainItem(ServerObject& item, ServerObject* transferer)
 {
-	TangibleObject const * const object = item.asTangibleObject();
-	if (object != nullptr)
+	// Rider containment (mountCreature) uses the same transfer path as equipping wearables.
+	// Do not apply appearance_table wear restrictions to another CreatureObject entering a
+	// mount's slots — dynamic mounts and non-playable mount species would spuriously reject riders.
+	CreatureObject const *const riderCandidate = item.asCreatureObject();
+	if (!riderCandidate || !isMountable())
 	{
-		// See if this item is equippable
-		const char *sharedTemplateName = item.getSharedTemplateName();
-		if (!isAppearanceEquippable(sharedTemplateName))
+		TangibleObject const * const object = item.asTangibleObject();
+		if (object != nullptr)
 		{
-			if (getClient() != nullptr)
+			// See if this item is equippable
+			const char *sharedTemplateName = item.getSharedTemplateName();
+			if (!isAppearanceEquippable(sharedTemplateName))
 			{
-				StringId message("shared", "item_not_equippable");
-				Unicode::String outOfBand;
-				Chat::sendSystemMessage(*this, message, outOfBand);
-				return Container::CEC_SilentError;
+				if (getClient() != nullptr)
+				{
+					StringId message("shared", "item_not_equippable");
+					Unicode::String outOfBand;
+					Chat::sendSystemMessage(*this, message, outOfBand);
+					return Container::CEC_SilentError;
+				}
+				else
+					return Container::CEC_BlockedByDestinationContainer;
 			}
-			else
-				return Container::CEC_BlockedByDestinationContainer;
 		}
 	}
-
 
 	return TangibleObject::onContainerAboutToGainItem(item, transferer);
 }	// CreatureObject::onContainerAboutToGainItem
