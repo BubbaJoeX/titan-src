@@ -170,7 +170,12 @@ jboolean JNICALL ScriptMethodsMountNamespace::makeDynamicMountable(JNIEnv *env, 
 		return JNI_FALSE;
 
 	if (creatureObject->isMountable())
+	{
+		//-- Already finalized: still (re)apply rider containment for mount.dm.* mounts so ride works
+		//   after template-only C_mount or older server builds that skipped SlottedContainer setup.
+		creatureObject->ensureDynamicMountRiderContainmentSlots();
 		return JNI_TRUE;
+	}
 
 	creatureObject->makeDynamicMountable();
 	return creatureObject->isMountable() ? JNI_TRUE : JNI_FALSE;
@@ -278,15 +283,25 @@ jboolean JNICALL ScriptMethodsMountNamespace::mountCreature(JNIEnv *env, jobject
 		return JNI_FALSE;
 	}
 
+	//-- mount.dm.* mounts may lack rider slots until this runs (see makeDynamicMountable / early JNI return).
+	mountObject->ensureDynamicMountRiderContainmentSlots();
+
 	//-- Check if mount has room;
-	if (mountObject->isMountableAndHasRoomForAnother())
+	if (!mountObject->isMountableAndHasRoomForAnother())
 	{
-		//-- Have the rider mount the creature.
-		bool const mountResult = riderObject->mountCreature(*mountObject);
-		return static_cast<jboolean>(mountResult);
+		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::mountCreature(): mount id=[%s] template=[%s] has no empty rider slot (volume-only container, missing rider slot ids, or slots full).",
+			mountObject->getNetworkId().getValueString().c_str(), mountObject->getObjectTemplateName()));
+		return JNI_FALSE;
 	}
 
-	return JNI_FALSE;
+	//-- Have the rider mount the creature.
+	bool const mountResult = riderObject->mountCreature(*mountObject);
+	if (!mountResult)
+	{
+		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::mountCreature(): CreatureObject::mountCreature transfer failed rider id=[%s] mount id=[%s] template=[%s].",
+			riderObject->getNetworkId().getValueString().c_str(), mountObject->getNetworkId().getValueString().c_str(), mountObject->getObjectTemplateName()));
+	}
+	return static_cast<jboolean>(mountResult);
 }
 
 // ----------------------------------------------------------------------
@@ -541,6 +556,7 @@ jboolean JNICALL ScriptMethodsMountNamespace::doesMountHaveRoom(JNIEnv * env, jo
 		return JNI_FALSE;
 	}
 
+	mountObject->ensureDynamicMountRiderContainmentSlots();
 	return static_cast<jboolean>(mountObject->isMountableAndHasRoomForAnother());
 }
 

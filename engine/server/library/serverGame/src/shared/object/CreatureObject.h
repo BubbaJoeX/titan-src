@@ -492,6 +492,8 @@ public:
 	void                                   makePetMountable();
 	/// Scripted open-world/designer mounts: uses mount.dm.* (no pet PCD requirement).
 	void                                   makeDynamicMountable();
+	/// When mount.dm.active is set, idempotently ensure rider slots / SlottedContainer exist (mount may already carry C_mount).
+	void                                   ensureDynamicMountRiderContainmentSlots();
 	bool                                   isMountable() const;
 	bool                                   isMountableAndHasRoomForAnother() const;
 	NetworkId                              getPetControlDeviceId() const;

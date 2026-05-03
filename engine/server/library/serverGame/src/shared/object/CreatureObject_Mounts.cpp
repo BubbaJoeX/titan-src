@@ -877,38 +877,51 @@ void CreatureObject::makeDynamicMountable()
 	//-- Set the Condition bit to indicate we're a mount.
 	setCondition(getCondition() | static_cast<int>(ServerTangibleObjectTemplate::C_mount));
 
+	ensureDynamicMountRiderContainmentSlots();
+
+	//-- Unlike pets, intentional world tooling mounts stay non-static.
+}
+
+// ----------------------------------------------------------------------
+
+void CreatureObject::ensureDynamicMountRiderContainmentSlots()
+{
+	if (!ConfigServerGame::getMountsEnabled())
+		return;
+
+	DynamicVariableList const &ovs = getObjVars();
+	int dmActive = 0;
+	if (!ovs.getItem(std::string("mount.dm.active"), dmActive) || dmActive == 0)
+		return;
+
 	//-- Dynamic mounts may be marked mountable via mount.dm.* while the creature template has no
 	//   rider slots (CT_none or slotted appearance without rider). Containment mounting still
 	//   requires a SlottedContainer with rider slot ids matching the mount system.
+	using namespace CreatureObjectNamespace;
+
+	int cap = getSaddleSeatingCapacity(this);
+	cap = std::max(cap, 1);
+	cap = std::min(cap, cs_totalNumberOfRiders);
+
+	std::vector<SlotId> riderSlots;
+	riderSlots.reserve(static_cast<size_t>(cap));
+	for (int i = 0; i < cap; ++i)
+		riderSlots.push_back(s_riderSlotId[i]);
+
+	SlottedContainer * const existingSlotted = getSlottedContainerProperty();
+	if (existingSlotted)
 	{
-		using namespace CreatureObjectNamespace;
-
-		int cap = getSaddleSeatingCapacity(this);
-		cap = std::max(cap, 1);
-		cap = std::min(cap, cs_totalNumberOfRiders);
-
-		std::vector<SlotId> riderSlots;
-		riderSlots.reserve(static_cast<size_t>(cap));
-		for (int i = 0; i < cap; ++i)
-			riderSlots.push_back(s_riderSlotId[i]);
-
-		SlottedContainer * const existingSlotted = getSlottedContainerProperty();
-		if (existingSlotted)
-		{
-			existingSlotted->ensureSlotsPresent(riderSlots);
-		}
-		else if (!getVolumeContainerProperty())
-		{
-			SlottedContainer * const newSlotted = new SlottedContainer(*this, riderSlots);
-			addProperty(*newSlotted, isInWorld());
-		}
-		else
-		{
-			LOG(cs_mountErrorChannelName, ("CreatureObject::makeDynamicMountable() id=[%s] template=[%s] has a volume container but no slotted container; cannot add rider slots for containment mount.", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
-		}
+		existingSlotted->ensureSlotsPresent(riderSlots);
 	}
-
-	//-- Unlike pets, intentional world tooling mounts stay non-static.
+	else if (!getVolumeContainerProperty())
+	{
+		SlottedContainer * const newSlotted = new SlottedContainer(*this, riderSlots);
+		addProperty(*newSlotted, isInWorld());
+	}
+	else
+	{
+		LOG(cs_mountErrorChannelName, ("CreatureObject::ensureDynamicMountRiderContainmentSlots() id=[%s] template=[%s] has a volume container but no slotted container; cannot add rider slots for containment mount.", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
+	}
 }
 
 // ----------------------------------------------------------------------

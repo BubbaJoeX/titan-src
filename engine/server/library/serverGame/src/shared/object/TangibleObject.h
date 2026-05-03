@@ -221,7 +221,8 @@ public:
 	/// Push dynamicLight.* objvars into m_dynamicLightState for client-local light tuning (housing switches, maintenance).
 	void                 updateDynamicLightFromObjvars();
 	/// Pack hp_dyn.* objvars into m_dynamicHardpointsState for client-local attachments (appearances, lights, effects).
-	/// Slots are nested lists: hp_dyn.<slot>.kind = "app" | "light" | "fx"; hp_dyn.<slot>.hp = hardpoint name or empty/"-" for object root;
+	/// Slots are nested lists: hp_dyn.<slot>.kind = "app" | "light" | "fx"; hp_dyn.<slot>.hp = hardpoint name; empty or "-" uses the
+	/// animated saddle bone on skeletal non-vehicles (client), or mount root on vehicles / non-skeletal tangibles.
 	/// app: .path = appearance template; optional .ox .oy .oz = local offset (meters in hardpoint space); light: .r .g .b .range .intensity;
 	/// fx: .path = particle template, .ox .oy .oz .scale
 	void                 updateDynamicHardpointsFromObjvars();
