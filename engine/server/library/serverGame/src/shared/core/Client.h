@@ -156,6 +156,14 @@ public:
 
     void assumeControl(CreatureObject &newCharacter);
 
+    /** Designer-only: swap primary controlled creature to {@code mount} (NPC template) for real client control. */
+    bool mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &mount);
+
+    /** Restore primary after {@link #mountMakerPossessionEnter}. */
+    bool mountMakerPossessionLeave(CreatureObject &avatar, CreatureObject &mount);
+
+    bool isMountMakerPossessionActive() const;
+
     void addSynchronizedUi(ServerSynchronizedUi *sync);
 
     void removeSynchronizedUi(ServerSynchronizedUi const *sync);
@@ -252,6 +260,8 @@ private:
 
     Client &operator=(const Client &);
 
+    void sendControlAssumedForPrimary(CreatureObject &creature, bool skipLoadScreen);
+
 private:
     std::string m_accountName;
     Unicode::String m_characterName;
@@ -309,6 +319,9 @@ private:
     bool m_isJediSlotCharacter;
 
     bool m_sendToStarport;
+
+    bool m_mountMakerPossessionActive;
+    CachedNetworkId m_mountMakerSavedPrimary;
 
     static std::map <std::string, uint32> sm_outgoingBytesMap_Working;  // working stats that will rotate after 1 minute
     static std::map <std::string, uint32> sm_outgoingBytesMap_Stats;    // computed stats from the last minute
@@ -369,6 +382,12 @@ inline MessageDispatch::Transceiver<ClientDestroy &> &Client::getDestroyNotifier
 
 inline bool Client::getIsReady() const {
     return m_isReady;
+}
+
+//-----------------------------------------------------------------------
+
+inline bool Client::isMountMakerPossessionActive() const {
+    return m_mountMakerPossessionActive;
 }
 
 //-----------------------------------------------------------------------

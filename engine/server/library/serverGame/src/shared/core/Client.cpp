@@ -38,6 +38,7 @@
 #include "serverGame/PvpUpdateObserver.h"
 #include "serverGame/ServerMessageForwarding.h"
 #include "serverGame/ServerSecureTrade.h"
+#include "serverGame/ServerCreatureObjectTemplate.h"
 #include "serverGame/ServerTangibleObjectTemplate.h"
 #include "serverGame/ServerUIManager.h"
 #include "serverGame/ServerUniverse.h"
@@ -206,7 +207,8 @@ Client::Client(ConnectionServerConnection &connection, const NetworkId &characte
           m_claimedRewardItems(claimedRewardItems), m_usingAdminLogin(usingAdminLogin),
           m_combatSpamFilter(combatSpamFilter), m_combatSpamRangeSquaredFilter(combatSpamRangeSquaredFilter),
           m_furnitureRotationDegree(furnitureRotationDegree), m_hasUnoccupiedJediSlot(hasUnoccupiedJediSlot),
-          m_isJediSlotCharacter(isJediSlotCharacter), m_sendToStarport(sendToStarport) {
+          m_isJediSlotCharacter(isJediSlotCharacter), m_sendToStarport(sendToStarport),
+          m_mountMakerPossessionActive(false), m_mountMakerSavedPrimary(NetworkId::cms_invalid) {
 
     connectToEmitter(connection, "ConnectionServerConnectionClosed");
     connectToEmitter(connection, "ConnectionServerConnectionDestroyed");
@@ -586,14 +588,99 @@ void Client::assumeControl(CreatureObject &newCharacter) {
     NameManager::getInstance().addPlayer(newCharacter.getNetworkId(), (playerObject ? playerObject->getStationId()
                                                                                     : static_cast<uint32>(m_stationId)), firstName, fullName, 0, Os::getRealSystemTime(), true);
 
+    sendControlAssumedForPrimary(newCharacter, m_isSkipLoadScreen);
+
+    m_isSkipLoadScreen = false;
+}
+
+//-----------------------------------------------------------------------
+
+void Client::sendControlAssumedForPrimary(CreatureObject &creature, bool const skipLoadScreen) {
+    DEBUG_FATAL(
+            creature.getNetworkId() != m_primaryControlledObject, ("Tried to send ControlAssumed for the wrong primary object?"));
+
     static const std::string loginTrace("TRACE_LOGIN");
     LOG(loginTrace, ("sending ControlAssumed(%s, %s)", m_primaryControlledObject.getValueString().c_str(), ConfigServerGame::getGroundScene()));
 
-    ControlAssumed const controlMessage(m_primaryControlledObject, ConfigServerGame::getGroundScene(), m_isSkipLoadScreen, newCharacter.getTransform_o2w().getPosition_p(), newCharacter.getObjectFrameK_w().theta(), newCharacter.getSharedTemplateName(), static_cast<int64>(ServerClock::getInstance().getGameTimeSeconds()));
+    ControlAssumed const controlMessage(m_primaryControlledObject, ConfigServerGame::getGroundScene(), skipLoadScreen, creature.getTransform_o2w().getPosition_p(), creature.getObjectFrameK_w().theta(), creature.getSharedTemplateName(), static_cast<int64>(ServerClock::getInstance().getGameTimeSeconds()));
 
     sendToConnectionServer(controlMessage);
+}
 
-    m_isSkipLoadScreen = false;
+//-----------------------------------------------------------------------
+
+bool Client::mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &mount) {
+    if (m_mountMakerPossessionActive) {
+        return false;
+    }
+    if (&avatar == &mount) {
+        return false;
+    }
+    if (avatar.getClient() != this || getCharacterObjectId() != avatar.getNetworkId()) {
+        return false;
+    }
+    if (!isGod()) {
+        return false;
+    }
+    if (mount.getClient() != nullptr && mount.getClient() != this) {
+        return false;
+    }
+    ServerCreatureObjectTemplate const *const mountTemplate = dynamic_cast<ServerCreatureObjectTemplate const *>(mount.getObjectTemplate());
+    if (!mountTemplate || mountTemplate->getCanCreateAvatar()) {
+        return false;
+    }
+
+    m_mountMakerSavedPrimary = m_primaryControlledObject;
+    m_mountMakerPossessionActive = true;
+
+    if (!isControlled(mount.getNetworkId())) {
+        addControlledObject(mount);
+    } else if (mount.getClient() != this) {
+        m_mountMakerPossessionActive = false;
+        m_mountMakerSavedPrimary = CachedNetworkId(NetworkId::cms_invalid);
+        return false;
+    }
+
+    mount.setController(new PlayerCreatureController(&mount));
+    safe_cast<ServerController *>(mount.getController())->onClientReady();
+
+    m_primaryControlledObject = CachedNetworkId(mount);
+    sendControlAssumedForPrimary(mount, true);
+    return true;
+}
+
+//-----------------------------------------------------------------------
+
+bool Client::mountMakerPossessionLeave(CreatureObject &avatar, CreatureObject &mount) {
+    if (!m_mountMakerPossessionActive) {
+        return false;
+    }
+    if (avatar.getClient() != this || getCharacterObjectId() != avatar.getNetworkId()) {
+        return false;
+    }
+    CreatureObject *const currentPrimary = safe_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+    if (!currentPrimary || currentPrimary->getNetworkId() != mount.getNetworkId()) {
+        return false;
+    }
+
+    m_primaryControlledObject = m_mountMakerSavedPrimary;
+    removeControlledObject(mount);
+    IGNORE_RETURN(mount.createDefaultController());
+
+    m_mountMakerPossessionActive = false;
+    m_mountMakerSavedPrimary = CachedNetworkId(NetworkId::cms_invalid);
+
+    CreatureObject *const restorePrimary = safe_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+    if (!restorePrimary || restorePrimary->getNetworkId() != avatar.getNetworkId()) {
+        DEBUG_WARNING(true, ("mountMakerPossessionLeave: saved primary was not the avatar."));
+        return false;
+    }
+
+    sendControlAssumedForPrimary(*restorePrimary, true);
+    if (ServerController *const sc = dynamic_cast<ServerController *>(avatar.getController())) {
+        sc->onClientReady();
+    }
+    return true;
 }
 
 //-----------------------------------------------------------------------

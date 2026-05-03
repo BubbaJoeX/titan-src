@@ -9,6 +9,7 @@
 #include "serverScript/FirstServerScript.h"
 #include "serverScript/JavaLibrary.h"
 
+#include "serverGame/Client.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/CreatureObject.h"
@@ -36,6 +37,8 @@ namespace ScriptMethodsMountNamespace
 	jboolean     JNICALL getMountsMultiSeaterEnabled(JNIEnv *env, jobject self);
 	jboolean     JNICALL makePetMountable(JNIEnv *env, jobject self, jlong petId);
 	jboolean     JNICALL makeDynamicMountable(JNIEnv *env, jobject self, jlong creatureId);
+	jboolean     JNICALL mountMakerPossessionEnter(JNIEnv *env, jobject self, jlong avatarId, jlong mountId);
+	jboolean     JNICALL mountMakerPossessionLeave(JNIEnv *env, jobject self, jlong avatarId, jlong mountId);
 	void         JNICALL updateMountWearableVisuals(JNIEnv *env, jobject self, jlong mountId);
 	jboolean     JNICALL mountCreature(JNIEnv *env, jobject self, jlong riderId, jlong mountId);
 	void         JNICALL dismountCreature(JNIEnv *env, jobject self, jlong riderId);
@@ -66,6 +69,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("getMountsMultiSeaterEnabled", "()Z", getMountsMultiSeaterEnabled),
 	JF("_makePetMountable", "(J)Z", makePetMountable),
 	JF("_makeDynamicMountable", "(J)Z", makeDynamicMountable),
+	JF("_mountMakerPossessionEnter", "(JJ)Z", mountMakerPossessionEnter),
+	JF("_mountMakerPossessionLeave", "(JJ)Z", mountMakerPossessionLeave),
 	JF("_updateMountWearableVisuals", "(J)V", updateMountWearableVisuals),
 	JF("_mountCreature", "(JJ)Z", mountCreature),
 	JF("_dismountCreature", "(J)V", dismountCreature),
@@ -175,6 +180,46 @@ jboolean JNICALL ScriptMethodsMountNamespace::makeDynamicMountable(JNIEnv *env, 
 
 	creatureObject->makeDynamicMountable();
 	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsMountNamespace::mountMakerPossessionEnter(JNIEnv *env, jobject self, jlong avatarId, jlong mountId)
+{
+	UNREF(self);
+
+	CreatureObject *const avatar = JavaLibrary::getCreatureThrow(env, avatarId, "mountMakerPossessionEnter(): avatarId");
+	CreatureObject *const mount = JavaLibrary::getCreatureThrow(env, mountId, "mountMakerPossessionEnter(): mountId");
+	if (!avatar || !mount) {
+		return JNI_FALSE;
+	}
+
+	Client *const client = avatar->getClient();
+	if (!client || !client->isGod()) {
+		return JNI_FALSE;
+	}
+
+	return client->mountMakerPossessionEnter(*avatar, *mount) ? JNI_TRUE : JNI_FALSE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsMountNamespace::mountMakerPossessionLeave(JNIEnv *env, jobject self, jlong avatarId, jlong mountId)
+{
+	UNREF(self);
+
+	CreatureObject *const avatar = JavaLibrary::getCreatureThrow(env, avatarId, "mountMakerPossessionLeave(): avatarId");
+	CreatureObject *const mount = JavaLibrary::getCreatureThrow(env, mountId, "mountMakerPossessionLeave(): mountId");
+	if (!avatar || !mount) {
+		return JNI_FALSE;
+	}
+
+	Client *const client = avatar->getClient();
+	if (!client) {
+		return JNI_FALSE;
+	}
+
+	return client->mountMakerPossessionLeave(*avatar, *mount) ? JNI_TRUE : JNI_FALSE;
 }
 
 // ----------------------------------------------------------------------
