@@ -577,6 +577,11 @@ void CellObject::getAttributes (std::vector<std::pair<std::string, Unicode::Stri
 
 bool CellObject::onContainerAboutToLoseItem(ServerObject * destination, ServerObject& item, ServerObject* transferer)
 {
+	// Same dm-mount rider path as ContainerInterface::checkTransferScripts: building TRIG_ABOUT_TO_LOSE_ITEM
+	// must not block rider slotting (otherwise transfer fails after script TRIG bypass).
+	if (ContainerInterface::isDynamicMountDmRiderContainmentTransfer(destination, item))
+		return ServerObject::onContainerAboutToLoseItem(destination, item, transferer);
+
 	//Cells should first check to see if the building will allow the item to be transferred.
 	ServerObject *obj = getOwner();
 

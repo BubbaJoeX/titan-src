@@ -83,6 +83,9 @@ public:
 
 	static bool               isNestedWithin(Object const &obj, NetworkId const &containerId);
 
+	/** Creature rider slot on a mount.dm.active mount: used to skip gates outside checkTransferScripts (cell/building/PoB). */
+	static bool               isDynamicMountDmRiderContainmentTransfer(ServerObject *destination, ServerObject &item);
+
 	static void sendContainerMessageToClient(ServerObject const &player, Container::ContainerErrorCode code, ServerObject const *target = 0);
 	static NetworkId const getLoadWithContainerId(ServerObject const &obj);
 

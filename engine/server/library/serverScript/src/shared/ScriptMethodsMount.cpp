@@ -203,7 +203,15 @@ jboolean JNICALL ScriptMethodsMountNamespace::mountMakerPossessionEnter(JNIEnv *
 		return JNI_FALSE;
 	}
 
-	return client->mountMakerPossessionEnter(*avatar, *mount) ? JNI_TRUE : JNI_FALSE;
+	bool const possessionOk = client->mountMakerPossessionEnter(*avatar, *mount);
+	if (!possessionOk)
+	{
+		LOG(LOCAL_LOG_CHANNEL, ("mountMakerPossessionEnter failed avatar id=[%s] mount id=[%s] mount template=[%s].",
+			avatar->getNetworkId().getValueString().c_str(),
+			mount->getNetworkId().getValueString().c_str(),
+			mount->getObjectTemplateName()));
+	}
+	return possessionOk ? JNI_TRUE : JNI_FALSE;
 }
 
 // ----------------------------------------------------------------------

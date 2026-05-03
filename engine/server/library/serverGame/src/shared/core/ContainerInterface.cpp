@@ -23,6 +23,7 @@
 #include "serverScript/ScriptFunctionTable.h"
 #include "serverScript/ScriptParameters.h"
 #include "sharedDebug/Profiler.h"
+#include "sharedFoundation/DynamicVariableList.h"
 #include "sharedFoundation/FormattedString.h"
 #include "sharedGame/GameObjectTypes.h"
 #include "sharedLog/Log.h"
@@ -38,6 +39,8 @@
 #include "sharedObject/SlotIdManager.h"
 #include "sharedObject/VolumeContainer.h"
 #include "sharedObject/VolumeContainmentProperty.h"
+
+#include <string>
 
 // ======================================================================
 
@@ -156,6 +159,8 @@ namespace ContainerInterfaceNamespace
 		NetworkId const &sourceId = source ? source->getNetworkId() : NetworkId::cms_invalid;
 		NetworkId const &destId = destination ? destination->getNetworkId() : NetworkId::cms_invalid;
 
+		bool const dmMountRiderXfer = ContainerInterface::isDynamicMountDmRiderContainmentTransfer(destination, item);
+
 		if (source)
 		{
 			if (source->getScriptObject())
@@ -168,7 +173,7 @@ namespace ContainerInterfaceNamespace
 				//-- Handle source container's scripts.
 				if (source->getScriptObject())
 				{
-					if (source->getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_LOSE_ITEM, params) == SCRIPT_OVERRIDE)
+					if (!dmMountRiderXfer && source->getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_LOSE_ITEM, params) == SCRIPT_OVERRIDE)
 					{
 						error = Container::CEC_BlockedByScript;
 						LOG("ScriptInvestigation", ("Source tried to prevent container transfer"));
@@ -289,7 +294,7 @@ namespace ContainerInterfaceNamespace
 				//-- Call scripts on destination container owner.
 				if (destination->getScriptObject())
 				{
-					if (destination->getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_RECEIVE_ITEM, params) == SCRIPT_OVERRIDE)
+					if (!dmMountRiderXfer && destination->getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_RECEIVE_ITEM, params) == SCRIPT_OVERRIDE)
 					{
 						LOG("ScriptInvestigation", ("Destination tried to prevent container transfer"));
 						error = Container::CEC_BlockedByScript;
@@ -312,7 +317,7 @@ namespace ContainerInterfaceNamespace
 			params.addParam(destId);
 			params.addParam(transfererId);
 
-			if (item.getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_BE_XFERRED, params) == SCRIPT_OVERRIDE)
+			if (!dmMountRiderXfer && item.getScriptObject()->trigAllScripts(Scripting::TRIG_ABOUT_TO_BE_XFERRED, params) == SCRIPT_OVERRIDE)
 			{
 				LOG("ScriptInvestigation", ("Item tried to prevent container transfer"));
 				error = Container::CEC_BlockedByScript;
@@ -481,6 +486,22 @@ namespace ContainerInterfaceNamespace
 }
 
 using namespace ContainerInterfaceNamespace;
+
+// ======================================================================
+
+bool ContainerInterface::isDynamicMountDmRiderContainmentTransfer(ServerObject *destination, ServerObject &item)
+{
+	if (!destination)
+		return false;
+	CreatureObject *const mount = destination->asCreatureObject();
+	if (!mount || !mount->isMountable())
+		return false;
+	DynamicVariableList const &ovs = mount->getObjVars();
+	int dm = 0;
+	if (!ovs.getItem(std::string("mount.dm.active"), dm) || dm == 0)
+		return false;
+	return item.asCreatureObject() != nullptr;
+}
 
 // ======================================================================
 

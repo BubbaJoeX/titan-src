@@ -627,8 +627,17 @@ bool Client::mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &m
         return false;
     }
     ServerCreatureObjectTemplate const *const mountTemplate = dynamic_cast<ServerCreatureObjectTemplate const *>(mount.getObjectTemplate());
-    if (!mountTemplate || mountTemplate->getCanCreateAvatar()) {
+    if (!mountTemplate) {
         return false;
+    }
+    // Authoring creatures often reuse templates flagged can_create_avatar; allow possession when mount.dm is active.
+    {
+        DynamicVariableList const &ovs = mount.getObjVars();
+        int dm = 0;
+        bool const mountDmActive = ovs.getItem(std::string("mount.dm.active"), dm) && dm != 0;
+        if (!mountDmActive && mountTemplate->getCanCreateAvatar()) {
+            return false;
+        }
     }
 
     m_mountMakerSavedPrimary = m_primaryControlledObject;

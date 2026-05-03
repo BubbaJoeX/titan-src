@@ -152,8 +152,10 @@ void TangibleObject::install()
 
 // ----------------------------------------------------------------------
 
-bool TangibleObject::onPobChildAboutToLoseItem(ServerObject *, ServerObject &, ServerObject *transferer)
+bool TangibleObject::onPobChildAboutToLoseItem(ServerObject *destination, ServerObject &item, ServerObject *transferer)
 {
+	if (ContainerInterface::isDynamicMountDmRiderContainmentTransfer(destination, item))
+		return true;
 	if (transferer && ContainerInterface::getTopmostContainer(*transferer) != this)
 		return false;
 	return true;
@@ -163,6 +165,9 @@ bool TangibleObject::onPobChildAboutToLoseItem(ServerObject *, ServerObject &, S
 
 bool TangibleObject::onPobChildAboutToGainItem(ServerObject &item, ServerObject *destination, ServerObject *transferer)
 {
+	if (destination && ContainerInterface::isDynamicMountDmRiderContainmentTransfer(destination, item))
+		return true;
+
 	// Only let people transfer stuff in a pob if they are in the pob
 	if (transferer && ContainerInterface::getTopmostContainer(*transferer) != this)
 		return false;
