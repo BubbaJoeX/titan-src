@@ -774,27 +774,12 @@ int CreatureObject::getMountabilityStatus() const
 		return static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable);
 
 	//-- Scripted dynamic mounts bypass MountValidScaleRangeTable sizing data (seat layout comes from replicated mount metadata).
+	// Templates may not yet expose physical rider containment slots; authoring still needs finalize/makeDynamicMountable.
 	{
 		DynamicVariableList const &ovs = getObjVars();
 		int dmActive = 0;
 		if (ovs.getItem(std::string("mount.dm.active"), dmActive) && dmActive != 0)
-		{
-			int cap = 1;
-			IGNORE_RETURN(ovs.getItem(std::string("mount.dm.capacity"), cap));
-
-			cap = std::max(cap, 1);
-			cap = std::min(cap, cs_totalNumberOfRiders);
-
-			SlottedContainer const *const slottedContainer = ContainerInterface::getSlottedContainer(*this);
-
-			for (int i = 0; i < cap; ++i)
-			{
-				if (!slottedContainer || !slottedContainer->hasSlot(s_riderSlotId[i]))
-					return static_cast<int>(MountValidScaleRangeTable::MS_speciesMountableMissingRiderSlot);
-			}
-
 			return static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable);
-		}
 	}
 
 	SharedObjectTemplate const *const sharedObjectTemplate = getSharedTemplate();

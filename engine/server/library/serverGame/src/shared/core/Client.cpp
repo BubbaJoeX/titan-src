@@ -1215,6 +1215,14 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                     LOG("AllowedObjControllerMsgs", ("Allowing player %s at %s controller message %d for object %s", PlayerObject::getAccountDescription(getCharacterObjectId()).c_str(), getIpAddress().c_str(), o.getMessage(), o.getNetworkId().getValueString().c_str()));
 
                     ServerObject *target = findControlledObject(o.getNetworkId());
+                    // Possessed mount: client may still tag ObjController with the avatar id while primary is the NPC.
+                    if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
+                        target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
+                    {
+                        ServerObject *const mountPrimary = m_primaryControlledObject.getObject();
+                        if (mountPrimary != nullptr)
+                            target = mountPrimary;
+                    }
                     if (target != 0) {
                         // apply the controller message
                         ServerController *controller = dynamic_cast<ServerController *>(target->getController());
@@ -1227,6 +1235,13 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                         }
                     } else if (isGod()) {
                         target = ServerWorld::findObjectByNetworkId(o.getNetworkId());
+                        if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
+                            target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
+                        {
+                            ServerObject *const mountPrimary = m_primaryControlledObject.getObject();
+                            if (mountPrimary != nullptr)
+                                target = mountPrimary;
+                        }
 
                         if (target) {
                             ServerController *controller = dynamic_cast<ServerController *>(target->getController());

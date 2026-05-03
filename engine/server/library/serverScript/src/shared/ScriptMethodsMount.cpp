@@ -169,17 +169,11 @@ jboolean JNICALL ScriptMethodsMountNamespace::makeDynamicMountable(JNIEnv *env, 
 	if (!creatureObject)
 		return JNI_FALSE;
 
-	if (creatureObject->getMountabilityStatus() != static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable))
-	{
-		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::makeDynamicMountable(): creature id [%s] not eligible (missing mount.dm rider slots?).", creatureObject->getNetworkId().getValueString().c_str()));
-		return JNI_FALSE;
-	}
-
 	if (creatureObject->isMountable())
 		return JNI_TRUE;
 
 	creatureObject->makeDynamicMountable();
-	return JNI_TRUE;
+	return creatureObject->isMountable() ? JNI_TRUE : JNI_FALSE;
 }
 
 // ----------------------------------------------------------------------
