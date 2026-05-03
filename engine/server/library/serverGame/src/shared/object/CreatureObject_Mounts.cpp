@@ -913,14 +913,11 @@ void CreatureObject::ensureDynamicMountRiderContainmentSlots()
 	{
 		existingSlotted->ensureSlotsPresent(riderSlots);
 	}
-	else if (!getVolumeContainerProperty())
-	{
-		SlottedContainer * const newSlotted = new SlottedContainer(*this, riderSlots);
-		addProperty(*newSlotted, isInWorld());
-	}
 	else
 	{
-		LOG(cs_mountErrorChannelName, ("CreatureObject::ensureDynamicMountRiderContainmentSlots() id=[%s] template=[%s] has a volume container but no slotted container; cannot add rider slots for containment mount.", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
+		// Templates may use only a volume container (loot/inventory) with no equipment slot map; mounts still need a SlottedContainer for rider containment.
+		SlottedContainer * const newSlotted = new SlottedContainer(*this, riderSlots);
+		addProperty(*newSlotted, isInWorld());
 	}
 }
 
@@ -1249,18 +1246,29 @@ bool CreatureObject::mountCreature(CreatureObject &mountObject)
 		return false;
 	}
 
-	//-- Reject if the player is not in the world cell
-	if (!isInWorldCell())
+	//-- Production mounts only exist on the exterior world cell; dynamic mount authoring (mount.dm.active) must allow houses/ships/interiors.
+	bool skipWorldCellChecks = false;
 	{
-		DEBUG_WARNING(true, ("mountCreature(): rider id=[%s] is not in the world cell, mounting aborted.", getNetworkId().getValueString().c_str()));
-		return false;
+		DynamicVariableList const &mountOvs = mountObject.getObjVars();
+		int dmActive = 0;
+		skipWorldCellChecks = mountOvs.getItem(std::string("mount.dm.active"), dmActive) && dmActive != 0;
 	}
 
-	//-- Reject if the mount is not in the world cell
-	if (!mountObject.isInWorldCell())
+	if (!skipWorldCellChecks)
 	{
-		DEBUG_WARNING(true, ("mountCreature(): mount id=[%s] is not in the world cell, mounting aborted.", mountObject.getNetworkId().getValueString().c_str()));
-		return false;
+		//-- Reject if the player is not in the world cell
+		if (!isInWorldCell())
+		{
+			DEBUG_WARNING(true, ("mountCreature(): rider id=[%s] is not in the world cell, mounting aborted.", getNetworkId().getValueString().c_str()));
+			return false;
+		}
+
+		//-- Reject if the mount is not in the world cell
+		if (!mountObject.isInWorldCell())
+		{
+			DEBUG_WARNING(true, ("mountCreature(): mount id=[%s] is not in the world cell, mounting aborted.", mountObject.getNetworkId().getValueString().c_str()));
+			return false;
+		}
 	}
 
 	// ... set the new mount-related states on the rider and mount.  This is necessary
