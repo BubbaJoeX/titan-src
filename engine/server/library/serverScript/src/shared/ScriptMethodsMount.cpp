@@ -547,9 +547,9 @@ jboolean JNICALL ScriptMethodsMountNamespace::doesMountHaveRoom(JNIEnv * env, jo
 		return JNI_FALSE;
 	}
 
-	//-- Get the rider object.
+	//-- Get the mount creature (non-const: may add rider containment for mount.dm.*).
 	bool const throwIfNotOnServer = false;
-	CreatureObject const * const mountObject = JavaLibrary::getCreatureThrow(env, mountId, "getRiderId(): error in mountId arg", throwIfNotOnServer);
+	CreatureObject *const mountObject = JavaLibrary::getCreatureThrow(env, mountId, "doesMountHaveRoom(): error in mountId arg", throwIfNotOnServer);
 
 	if (mountObject == 0)
 	{
