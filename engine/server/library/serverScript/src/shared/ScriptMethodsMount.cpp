@@ -35,6 +35,7 @@ namespace ScriptMethodsMountNamespace
 	jboolean     JNICALL getMountsEnabled(JNIEnv *env, jobject self);
 	jboolean     JNICALL getMountsMultiSeaterEnabled(JNIEnv *env, jobject self);
 	jboolean     JNICALL makePetMountable(JNIEnv *env, jobject self, jlong petId);
+	jboolean     JNICALL makeDynamicMountable(JNIEnv *env, jobject self, jlong creatureId);
 	void         JNICALL updateMountWearableVisuals(JNIEnv *env, jobject self, jlong mountId);
 	jboolean     JNICALL mountCreature(JNIEnv *env, jobject self, jlong riderId, jlong mountId);
 	void         JNICALL dismountCreature(JNIEnv *env, jobject self, jlong riderId);
@@ -64,6 +65,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("getMountsEnabled", "()Z", getMountsEnabled),
 	JF("getMountsMultiSeaterEnabled", "()Z", getMountsMultiSeaterEnabled),
 	JF("_makePetMountable", "(J)Z", makePetMountable),
+	JF("_makeDynamicMountable", "(J)Z", makeDynamicMountable),
 	JF("_updateMountWearableVisuals", "(J)V", updateMountWearableVisuals),
 	JF("_mountCreature", "(JJ)Z", mountCreature),
 	JF("_dismountCreature", "(J)V", dismountCreature),
@@ -143,6 +145,35 @@ jboolean JNICALL ScriptMethodsMountNamespace::makePetMountable(JNIEnv *env, jobj
 
 	//-- Do it.
 	petObject->makePetMountable();
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsMountNamespace::makeDynamicMountable(JNIEnv *env, jobject self, jlong creatureId)
+{
+	UNREF(self);
+
+	if (!ConfigServerGame::getMountsEnabled())
+	{
+		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::makeDynamicMountable(): mounts disabled."));
+		return JNI_FALSE;
+	}
+
+	CreatureObject *const creatureObject = JavaLibrary::getCreatureThrow(env, creatureId, "makeDynamicMountable(): creatureId");
+	if (!creatureObject)
+		return JNI_FALSE;
+
+	if (creatureObject->getMountabilityStatus() != static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable))
+	{
+		LOG(LOCAL_LOG_CHANNEL, ("JavaLibrary::makeDynamicMountable(): creature id [%s] not eligible (missing mount.dm rider slots?).", creatureObject->getNetworkId().getValueString().c_str()));
+		return JNI_FALSE;
+	}
+
+	if (creatureObject->isMountable())
+		return JNI_TRUE;
+
+	creatureObject->makeDynamicMountable();
 	return JNI_TRUE;
 }
 

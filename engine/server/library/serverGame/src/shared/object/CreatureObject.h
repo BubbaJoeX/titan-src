@@ -490,6 +490,8 @@ public:
 	// Called on mount creature.
 	int                                    getMountabilityStatus() const;
 	void                                   makePetMountable();
+	/// Scripted open-world/designer mounts: uses mount.dm.* (no pet PCD requirement).
+	void                                   makeDynamicMountable();
 	bool                                   isMountable() const;
 	bool                                   isMountableAndHasRoomForAnother() const;
 	NetworkId                              getPetControlDeviceId() const;

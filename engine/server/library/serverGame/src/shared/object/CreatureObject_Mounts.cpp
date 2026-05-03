@@ -187,7 +187,22 @@ int CreatureObjectNamespace::getSaddleSeatingCapacity(CreatureObject const * con
 {
 	NOT_NULL(mount);
 
-	// default to 1 seat...
+	// Explicit multi-seat configuration from dynamic mount authoring (does not rely on IFF saddle tables).
+	{
+		DynamicVariableList const &ovs = mount->getObjVars();
+		int dmActive = 0;
+		if (ovs.getItem(std::string("mount.dm.active"), dmActive) && dmActive != 0)
+		{
+			int capacity = 1;
+			IGNORE_RETURN(ovs.getItem(std::string("mount.dm.capacity"), capacity));
+
+			capacity = std::max(capacity, 1);
+			capacity = std::min(capacity, cs_totalNumberOfRiders);
+
+			return capacity;
+		}
+	}
+
 	int saddleSeatingCapacity = 1;
 
 	/*{
@@ -758,6 +773,30 @@ int CreatureObject::getMountabilityStatus() const
 	if (isMountable())
 		return static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable);
 
+	//-- Scripted dynamic mounts bypass MountValidScaleRangeTable sizing data (seat layout comes from replicated mount metadata).
+	{
+		DynamicVariableList const &ovs = getObjVars();
+		int dmActive = 0;
+		if (ovs.getItem(std::string("mount.dm.active"), dmActive) && dmActive != 0)
+		{
+			int cap = 1;
+			IGNORE_RETURN(ovs.getItem(std::string("mount.dm.capacity"), cap));
+
+			cap = std::max(cap, 1);
+			cap = std::min(cap, cs_totalNumberOfRiders);
+
+			SlottedContainer const *const slottedContainer = ContainerInterface::getSlottedContainer(*this);
+
+			for (int i = 0; i < cap; ++i)
+			{
+				if (!slottedContainer || !slottedContainer->hasSlot(s_riderSlotId[i]))
+					return static_cast<int>(MountValidScaleRangeTable::MS_speciesMountableMissingRiderSlot);
+			}
+
+			return static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable);
+		}
+	}
+
 	SharedObjectTemplate const *const sharedObjectTemplate = getSharedTemplate();
 
 	// Note: multi-seater mount support will need to change saddle capacity.
@@ -827,6 +866,36 @@ void CreatureObject::makePetMountable()
 }
 
 // ----------------------------------------------------------------------
+
+/**
+ * Mark a creature as rideable via the containment mount system without requiring pet control devices.
+ *
+ * Scripts must populate mount.dm.* (seat metadata) plus optional hp_dyn.* (saddle appearance attachment);
+ * callers should verify getMountabilityStatus() beforehand.
+ */
+
+void CreatureObject::makeDynamicMountable()
+{
+	//-- Ensure mounts are enabled.
+	if (!ConfigServerGame::getMountsEnabled())
+	{
+		LOG(cs_mountInfoChannelName, ("CreatureObject::makeDynamicMountable() called on object id=[%s] when mounts are disabled, ignoring call.", getNetworkId().getValueString().c_str()));
+		return;
+	}
+
+	//-- Validate preconditions.
+	DEBUG_FATAL(!isAuthoritative(), ("makeDynamicMountable(): called on non-authoritative creature id=[%s],template=[%s].", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
+	DEBUG_FATAL(getMountabilityStatus() != static_cast<int>(MountValidScaleRangeTable::MS_creatureMountable), ("makeDynamicMountable(): creature id=[%s],template=[%s] missing rider slots/capacity. Caller should validate getMountabilityStatus().", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
+	DEBUG_FATAL(isMountable(), ("makeDynamicMountable(): creature id=[%s],template=[%s] already is mountable.", getNetworkId().getValueString().c_str(), getObjectTemplateName()));
+
+	//-- Set the Condition bit to indicate we're a mount.
+	setCondition(getCondition() | static_cast<int>(ServerTangibleObjectTemplate::C_mount));
+
+	//-- Unlike pets, intentional world tooling mounts stay non-static.
+}
+
+// ----------------------------------------------------------------------
+
 /**
  * Determine if this creature is a mount.
  */

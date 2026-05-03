@@ -1380,29 +1380,77 @@ namespace TangibleObjectHpDynNamespace
 void TangibleObject::updateDynamicHardpointsFromObjvars()
 {
 	using namespace TangibleObjectHpDynNamespace;
-	DynamicVariableListNestedList const hpRoot(getObjVars(), cs_hpDynRoot);
-	if (hpRoot.empty())
+
+	auto appendMountDynamicMetadata = [&](std::string &outPack)
 	{
-		if (!m_dynamicHardpointsState.get().empty())
-			m_dynamicHardpointsState = std::string();
-		return;
-	}
+		DynamicVariableList const &vars = getObjVars();
+		int dmActive = 0;
+		if (!vars.getItem("mount.dm.active", dmActive) || !dmActive)
+			return;
+
+		int capacity = 1;
+		IGNORE_RETURN(vars.getItem("mount.dm.capacity", capacity));
+		if (capacity < 1)
+			capacity = 1;
+		if (capacity > 8)
+			capacity = 8;
+
+		outPack.push_back('\n');
+		outPack += "mount_dm";
+		outPack.push_back('\t');
+		char capBuf[32];
+		IGNORE_RETURN(snprintf(capBuf, sizeof(capBuf), "%d", capacity));
+		outPack += capBuf;
+
+		std::vector<std::string> slotNamesFromLists;
+		DynamicVariableListNestedList const seatRoot(vars, std::string("mount.dm.seat"));
+		if (!seatRoot.empty())
+		{
+			for (DynamicVariableListNestedList::const_iterator it = seatRoot.begin(); it != seatRoot.end(); ++it)
+			{
+				if (it.getType() == DynamicVariable::LIST)
+					slotNamesFromLists.push_back(it.getName());
+			}
+			std::sort(slotNamesFromLists.begin(), slotNamesFromLists.end(), slotNameLess);
+		}
+
+		for (int seatIdx = 0; seatIdx < capacity; ++seatIdx)
+		{
+			std::string pose("normal");
+			float ox = 0.f;
+			float oy = 0.f;
+			float oz = 0.f;
+			if (seatIdx >= 0 && seatIdx < static_cast<int>(slotNamesFromLists.size()))
+			{
+				DynamicVariableListNestedList const slotList(seatRoot, slotNamesFromLists[static_cast<size_t>(seatIdx)]);
+				IGNORE_RETURN(slotList.getItem("pose", pose));
+				if (pose.empty())
+					pose = "normal";
+				IGNORE_RETURN(slotList.getItem("ox", ox));
+				IGNORE_RETURN(slotList.getItem("oy", oy));
+				IGNORE_RETURN(slotList.getItem("oz", oz));
+			}
+			outPack.push_back('\t');
+			appendSanitizedField(outPack, pose);
+			char nums[96];
+			IGNORE_RETURN(snprintf(nums, sizeof(nums), "\t%f\t%f\t%f", ox, oy, oz));
+			outPack += nums;
+		}
+	};
+
+	DynamicVariableListNestedList const hpRoot(getObjVars(), cs_hpDynRoot);
 
 	std::vector<std::string> slotNames;
-	for (DynamicVariableListNestedList::const_iterator it = hpRoot.begin(); it != hpRoot.end(); ++it)
+	if (!hpRoot.empty())
 	{
-		if (it.getType() != DynamicVariable::LIST)
-			continue;
-		slotNames.push_back(it.getName());
+		for (DynamicVariableListNestedList::const_iterator it = hpRoot.begin(); it != hpRoot.end(); ++it)
+		{
+			if (it.getType() != DynamicVariable::LIST)
+				continue;
+			slotNames.push_back(it.getName());
+		}
+		std::sort(slotNames.begin(), slotNames.end(), slotNameLess);
 	}
-	if (slotNames.empty())
-	{
-		if (!m_dynamicHardpointsState.get().empty())
-			m_dynamicHardpointsState = std::string();
-		return;
-	}
-
-	std::sort(slotNames.begin(), slotNames.end(), slotNameLess);
 
 	std::string pack;
 	pack.reserve(512);
@@ -1496,6 +1544,8 @@ void TangibleObject::updateDynamicHardpointsFromObjvars()
 			pack += tail;
 		}
 	}
+
+	appendMountDynamicMetadata(pack);
 
 	if (pack == "v1")
 	{
