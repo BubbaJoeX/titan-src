@@ -1219,9 +1219,9 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                     if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
                         target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
                     {
-                        ServerObject *const mountPrimary = m_primaryControlledObject.getObject();
-                        if (mountPrimary != nullptr)
-                            target = mountPrimary;
+                        CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+                        if (mountCreature != nullptr)
+                            target = mountCreature;
                     }
                     if (target != 0) {
                         // apply the controller message
@@ -1238,9 +1238,9 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                         if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
                             target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
                         {
-                            ServerObject *const mountPrimary = m_primaryControlledObject.getObject();
-                            if (mountPrimary != nullptr)
-                                target = mountPrimary;
+                            CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+                            if (mountCreature != nullptr)
+                                target = mountCreature;
                         }
 
                         if (target) {
