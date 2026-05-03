@@ -727,14 +727,8 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtTarget(JN
 	if (!controller)
 		return JNI_FALSE;
 
-	// Safety check: Ensure we can safely allocate memory before creating message
-	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
-	if (msg == nullptr)
-	{
-		// Memory allocation failed - system likely not initialized properly
-		return JNI_FALSE;
-	}
+	// MessageQueueNpcConversationCameraCommand uses MemoryBlockManager pool operator new (no nothrow overload).
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtTarget);
 	msg->setTargetId(targetId);
@@ -784,15 +778,7 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtPosition(
 	if (!controller)
 		return JNI_FALSE;
 
-	// Safety check: Ensure we can safely allocate memory before creating message
-	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
-	if (msg == nullptr)
-	{
-
-		// Memory allocation failed - system likely not initialized properly
-		return JNI_FALSE;
-	}
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtPosition);
 	msg->setPosition(x, y, z);
@@ -837,14 +823,7 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraReturnToSpeaker
 	if (!controller)
 		return JNI_FALSE;
 
-	// Safety check: Ensure we can safely allocate memory before creating message
-	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
-	if (msg == nullptr)
-	{
-		// Memory allocation failed - system likely not initialized properly
-		return JNI_FALSE;
-	}
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_ReturnToSpeaker);
 	msg->setTransitionDuration(1.2f);
