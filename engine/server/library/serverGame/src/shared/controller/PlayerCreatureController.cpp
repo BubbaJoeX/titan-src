@@ -2010,10 +2010,24 @@ void PlayerCreatureController::updateMaxMoveSpeed()
 	//-- If owner is riding a mount/vehicle, use the mount/vehicle's movement rate;
 	//   otherwise, use the owner's movement rate..
 	CreatureObject *const mountForOwner        = owner->getMountedCreature();
-	CreatureObject *const movementSourceObject = mountForOwner ? mountForOwner : owner;
+	CreatureObject *movementSourceObject = mountForOwner ? mountForOwner : owner;
 	
 	float walkSpeed = movementSourceObject->getWalkSpeed();
 	float runSpeed = movementSourceObject->getRunSpeed();
+
+	// Creature mounts (including dynamic mount.dm.* NPCs): client locomotion uses the primary rider's
+	// speeds (see client CreatureObject::_getMountedWalkSpeed / _getMountedRunSpeed). The mount template
+	// often has placeholder/zero speeds; validating against it causes constant "too fast" snaps.
+	if (mountForOwner && !GameObjectTypes::isTypeOf(mountForOwner->getGameObjectType(), SharedObjectTemplate::GOT_vehicle))
+	{
+		CreatureObject *const primaryRider = mountForOwner->getPrimaryMountingRider();
+		if (primaryRider)
+		{
+			walkSpeed = primaryRider->getWalkSpeed();
+			runSpeed = primaryRider->getRunSpeed();
+		}
+	}
+
 	float speed = runSpeed > 0.0f ? runSpeed : walkSpeed;
 
 	if (mountForOwner && mountForOwner->getObjVars().hasItem("airspeeder.active"))
