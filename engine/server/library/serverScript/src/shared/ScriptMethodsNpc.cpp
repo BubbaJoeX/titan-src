@@ -729,7 +729,7 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtTarget(JN
 
 	// Safety check: Ensure we can safely allocate memory before creating message
 	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 	if (msg == nullptr)
 	{
 		// Memory allocation failed - system likely not initialized properly
@@ -786,7 +786,7 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtPosition(
 
 	// Safety check: Ensure we can safely allocate memory before creating message
 	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 	if (msg == nullptr)
 	{
 
@@ -839,7 +839,7 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraReturnToSpeaker
 
 	// Safety check: Ensure we can safely allocate memory before creating message
 	// This prevents crashes during server initialization when memory managers aren't ready
-	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
 	if (msg == nullptr)
 	{
 		// Memory allocation failed - system likely not initialized properly
