@@ -179,6 +179,37 @@ namespace PlayerCreatureControllerNamespace
 
 		return (primaryRider != &creature);
 	}
+
+	/**
+	 * ObjController targets the rider, but sendTransformUsingParent carries the mount's transform + cell.
+	 * Comparing that to the rider's slot-local position_p is never stable (especially tall mounts), which
+	 * spams warmup cancel / moving state.
+	 */
+	bool clientNutwpMovementDeltaSignificant(MessageQueueDataTransformWithParent const &msg, CreatureObject const &owner)
+	{
+		if (!owner.getState(States::RidingMount))
+		{
+			Vector const p1(msg.getTransform().getPosition_p());
+			Vector const p2(owner.getPosition_p());
+			return p1.magnitudeBetweenSquared(p2) > 0.0001f;
+		}
+
+		CreatureObject const *const rm = owner.getMountedCreature();
+		if (!rm)
+		{
+			Vector const p1(msg.getTransform().getPosition_p());
+			Vector const p2(owner.getPosition_p());
+			return p1.magnitudeBetweenSquared(p2) > 0.0001f;
+		}
+
+		ServerObject const *const mountParent = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(*rm));
+		if (!mountParent || msg.getParent() != mountParent->getNetworkId())
+			return true;
+
+		Vector const p1(msg.getTransform().getPosition_p());
+		Vector const p2(rm->getPosition_p());
+		return p1.magnitudeBetweenSquared(p2) > 0.0001f;
+	}
 }
 // ======================================================================
 
@@ -470,11 +501,15 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 {
 	uint32 const currentClientSyncStamp = m.getSyncStamp();
 	CreatureObject * const creature = NON_NULL(getCreature());
+	CreatureObject *const riddenMount = creature->getMountedCreature();
+	// Client sends the mount's transform on the rider's ObjController (see ClientController::sendTransformUsingParent).
+	// Snapshot positions are mount-centric; comparing to the rider's feet causes bogus deltas on tall/large mounts.
+	Vector const referenceWorldPos_w = riddenMount ? riddenMount->getPosition_w() : creature->getPosition_w();
 
 	// update the velocity in the serverController
 	if (creature != nullptr)
 	{
-		Vector moveDistance = m.getPosition_w() - creature->getPosition_w();
+		Vector moveDistance = m.getPosition_w() - referenceWorldPos_w;
 		moveDistance.y = 0.0f;
 
 		int moveTimeDiffMs = syncStampLongDeltaTime(m_lastMoveSyncStamp, currentClientSyncStamp);
@@ -531,10 +566,10 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 		}
 	}
 
-	Vector distanceToMoveSnapshot = m.getPosition_w() - creature->getPosition_w();
+	Vector distanceToMoveSnapshot = m.getPosition_w() - referenceWorldPos_w;
 	distanceToMoveSnapshot.y = 0.0f;
 
-	CreatureObject * const airspeederMount = creature->getMountedCreature();
+	CreatureObject * const airspeederMount = riddenMount;
 	bool const inAirspeederMode = airspeederMount && airspeederMount->getObjVars().hasItem("airspeeder.active");
 
 	if (distanceToMoveSnapshot.magnitudeSquared () > sqr(ConfigServerGame::getMoveMaxDistance()) && !isCreaturePassenger(*creature) && !inAirspeederMode)
@@ -575,10 +610,12 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 	{
 		// We don't have a valid last verified move, so assume our current
 		// location is valid, but don't do a speed check since we have no idea
-		// when this move occurred.  
+		// when this move occurred.
+		// While mounted, client packets describe the mount cell transform — seed from the mount, not the saddle slot.
+		CreatureObject *const seedCreature = riddenMount ? riddenMount : creature;
 		m_lastVerifiedMove = MoveSnapshot(
-			creature->getPosition_p(),
-			safe_cast<CellObject *>(creature->getAttachedTo()),
+			seedCreature->getPosition_p(),
+			safe_cast<CellObject *>(seedCreature->getAttachedTo()),
 			currentServerSyncStamp);
 		doSpeedCheck = false;
 	}
@@ -954,15 +991,17 @@ void PlayerCreatureController::handleMessage (const int message, const float val
 					}
 				}
 
-				Vector p1(msg->getTransform().getPosition_p());
-				Vector p2(owner->getPosition_p());
-				if (p1.magnitudeBetweenSquared(p2) > 0.0001f)
+				// nut without parent while mounted is uncommon; rider vs transform coords disagree — skip false positives.
+				if (!(owner->getState(States::RidingMount) && owner->getMountedCreature()))
 				{
-					if ( fromClient )
+					Vector const p1(msg->getTransform().getPosition_p());
+					Vector const p2(owner->getPosition_p());
+					if (p1.magnitudeBetweenSquared(p2) > 0.0001f)
 					{
-						playerMovedAndNeedsToCancelWarmup( *owner );
+						if (fromClient)
+							playerMovedAndNeedsToCancelWarmup(*owner);
+						m_movingTimeout = 2.0f;
 					}
-					m_movingTimeout = 2.0f;
 				}
 				m_lastSpeed = msg->getSpeed();
 			}
@@ -996,12 +1035,10 @@ void PlayerCreatureController::handleMessage (const int message, const float val
 					}
 				}
 
-				if (msg->getTransform().getPosition_p() != owner->getPosition_p())
+				if (clientNutwpMovementDeltaSignificant(*msg, *owner))
 				{
-					if ( fromClient )
-					{
-						playerMovedAndNeedsToCancelWarmup( *owner );
-					}
+					if (fromClient)
+						playerMovedAndNeedsToCancelWarmup(*owner);
 					m_movingTimeout = 2.0f;
 				}
 			}
@@ -2025,6 +2062,21 @@ void PlayerCreatureController::updateMaxMoveSpeed()
 		{
 			walkSpeed = primaryRider->getWalkSpeed();
 			runSpeed = primaryRider->getRunSpeed();
+		}
+	}
+	else if (!mountForOwner)
+	{
+		// Mount maker possession: primary controlled object is the mount NPC; client still drives with rider speeds.
+		Client *const client = owner->getClient();
+		if (client && client->isMountMakerPossessionActive())
+		{
+			ServerObject *const charObj = client->getCharacterObject();
+			CreatureObject *const avatar = charObj ? charObj->asCreatureObject() : nullptr;
+			if (avatar && avatar->getMountedCreature() == owner)
+			{
+				walkSpeed = avatar->getWalkSpeed();
+				runSpeed = avatar->getRunSpeed();
+			}
 		}
 	}
 
