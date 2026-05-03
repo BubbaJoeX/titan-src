@@ -619,9 +619,10 @@ bool Client::mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &m
     if (avatar.getClient() != this || getCharacterObjectId() != avatar.getNetworkId()) {
         return false;
     }
-    if (!isGod()) {
-        return false;
-    }
+	// Match script mount_maker.isDesignerAuthorized: god client or test_center objvar on the character.
+	if (!isGod() && !avatar.getObjVars().hasItem("test_center")) {
+		return false;
+	}
     if (mount.getClient() != nullptr && mount.getClient() != this) {
         return false;
     }

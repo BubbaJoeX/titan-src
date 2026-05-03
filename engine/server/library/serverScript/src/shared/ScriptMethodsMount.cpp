@@ -189,7 +189,12 @@ jboolean JNICALL ScriptMethodsMountNamespace::mountMakerPossessionEnter(JNIEnv *
 	}
 
 	Client *const client = avatar->getClient();
-	if (!client || !client->isGod()) {
+	if (!client) {
+		return JNI_FALSE;
+	}
+
+	bool const canMountMakerPossess = client->isGod() || avatar->getObjVars().hasItem("test_center");
+	if (!canMountMakerPossess) {
 		return JNI_FALSE;
 	}
 
