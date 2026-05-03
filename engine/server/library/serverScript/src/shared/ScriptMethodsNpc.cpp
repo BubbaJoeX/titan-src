@@ -634,24 +634,24 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcEndConversationWithMessage(JNIEnv
 	TangibleObject * playerObject = nullptr;
 	if(!JavaLibrary::getObject(player, playerObject))
 		return JNI_FALSE;
-	
+
 	if(!playerObject->isInNpcConversation())
 		return JNI_FALSE;
-	
+
 	StringId responseStringId;
 	bool responseIsValid = false;
 	if(response)
 	{
 		responseIsValid = static_cast<bool>(ScriptConversion::convert(response, responseStringId));
 	}
-	
+
 	bool oobIsValid = false;
 	Unicode::String oob;
 	if(responseOob)
 	{
 		oobIsValid = static_cast<bool>(JavaLibrary::convert(JavaStringParam(responseOob), oob));
 	}
-	
+
 	if(responseIsValid || oobIsValid)
 	{
 		playerObject->endNpcConversation(responseStringId, oob);
@@ -671,17 +671,17 @@ jboolean     JNICALL ScriptMethodsNpcNamespace::setNpcDifficulty(JNIEnv *env, jo
 	TangibleObject * npcObject = nullptr;
 	if (!JavaLibrary::getObject(npc, npcObject))
 		return JNI_FALSE;
-	
+
 	CreatureObject *creature = npcObject->asCreatureObject();
 
 	if (!creature)
 		return JNI_FALSE;
-	
+
 	if (difficulty < 0 || difficulty > 2)
 		return JNI_FALSE;
-	
+
 	creature->setDifficulty(static_cast<CreatureObject::Difficulty> (difficulty));
-	
+
 	return JNI_TRUE;
 }
 
@@ -727,7 +727,15 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtTarget(JN
 	if (!controller)
 		return JNI_FALSE;
 
-	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	// Safety check: Ensure we can safely allocate memory before creating message
+	// This prevents crashes during server initialization when memory managers aren't ready
+	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	if (msg == nullptr)
+	{
+		// Memory allocation failed - system likely not initialized properly
+		return JNI_FALSE;
+	}
+
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtTarget);
 	msg->setTargetId(targetId);
 	msg->setHoldTime(holdTime);
@@ -776,7 +784,16 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraLookAtPosition(
 	if (!controller)
 		return JNI_FALSE;
 
-	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	// Safety check: Ensure we can safely allocate memory before creating message
+	// This prevents crashes during server initialization when memory managers aren't ready
+	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	if (msg == nullptr)
+	{
+
+		// Memory allocation failed - system likely not initialized properly
+		return JNI_FALSE;
+	}
+
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_LookAtPosition);
 	msg->setPosition(x, y, z);
 	msg->setHoldTime(holdTime);
@@ -820,7 +837,15 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraReturnToSpeaker
 	if (!controller)
 		return JNI_FALSE;
 
-	MessageQueueNpcConversationCameraCommand * const msg = new MessageQueueNpcConversationCameraCommand;
+	// Safety check: Ensure we can safely allocate memory before creating message
+	// This prevents crashes during server initialization when memory managers aren't ready
+	MessageQueueNpcConversationCameraCommand * const msg = new(std::nothrow) MessageQueueNpcConversationCameraCommand;
+	if (msg == nullptr)
+	{
+		// Memory allocation failed - system likely not initialized properly
+		return JNI_FALSE;
+	}
+
 	msg->setCommandType(MessageQueueNpcConversationCameraCommand::CT_ReturnToSpeaker);
 	msg->setTransitionDuration(1.2f);
 
@@ -835,4 +860,3 @@ jboolean JNICALL ScriptMethodsNpcNamespace::npcConversationCameraReturnToSpeaker
 
 	return JNI_TRUE;
 }
-
