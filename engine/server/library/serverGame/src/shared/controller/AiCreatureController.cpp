@@ -66,6 +66,7 @@
 #include "sharedObject/ObjectTemplateList.h"
 #include "sharedObject/NetworkIdManager.h"
 #include "sharedUtility/Location.h"
+#include "swgSharedUtility/States.h"
 #include "UnicodeUtils.h"
 
 #include <algorithm>
@@ -557,6 +558,29 @@ float AICreatureController::realAlter(float time)
 	    && creatureOwner->isAuthoritative())
 	{
 		PROFILER_AUTO_BLOCK_DEFINE("AiCreatureController::realAlter: !creatureOwner->isDead() && creatureOwner->isAuthoritative()");
+
+		// Mount + player primary rider: driver authority goes through the rider (transferRiderPositionToMount on the
+		// player). Do not run creature AI movement / retreat — it fights rider-driven motion (rubberband, snap-back).
+		CreatureObject const * const primaryRider = creatureOwner->getPrimaryMountingRider();
+		bool const playerDrivingCreatureMount =
+			creatureOwner->getState(States::MountedCreature)
+			&& (primaryRider != nullptr)
+			&& primaryRider->isPlayerControlled();
+
+		if (playerDrivingCreatureMount)
+		{
+#ifdef _DEBUG
+			if (aiDebugString != nullptr)
+			{
+				sendDebugAiToClients(*aiDebugString);
+				delete aiDebugString;
+			}
+#endif // _DEBUG
+			m_lastStartPosition = newStartPosition;
+			m_lastEndPosition = creatureOwner->getPosition_w();
+			updateMovementType();
+			return alterResult;
+		}
 
 		// This is to help catch and prevent bugs with retreating until all the kinks are worked out
 		{
