@@ -11,6 +11,7 @@
 #include "serverGame/CreatureObject.h"
 #include "sharedObject/AlterResult.h"
 #include "sharedTerrain/TerrainObject.h"
+#include "swgSharedUtility/States.h"
 
 //-----------------------------------------------------------------------
 
@@ -69,10 +70,22 @@ float MoveSimController::realAlter(float time)
 {
 	const float retval = CreatureController::realAlter (time);
 
-	const CreatureObject * const creature = safe_cast<CreatureObject *>(getOwner ());
+	CreatureObject * const creature = safe_cast<CreatureObject *>(getOwner ());
 
 	if (!creature || !creature->isAuthoritative ())
 		return retval;
+
+	// Player-driven mount: position and facing come from the primary rider; move-sim wander fights
+	// transferRiderPositionToMount and causes rubberband. (See AICreatureController::realAlter same check.)
+	{
+		CreatureObject * const primaryRider = creature->getPrimaryMountingRider();
+		if (   creature->getState(States::MountedCreature)
+		    && (primaryRider != nullptr)
+		    && primaryRider->isPlayerControlled())
+		{
+			return retval;
+		}
+	}
 
 	const float runspeed = creature->getRunSpeed ();
 	const float frameDistance = runspeed * time;

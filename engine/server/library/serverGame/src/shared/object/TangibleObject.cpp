@@ -1416,7 +1416,7 @@ void TangibleObject::updateDynamicHardpointsFromObjvars()
 
 		for (int seatIdx = 0; seatIdx < capacity; ++seatIdx)
 		{
-			std::string pose("normal");
+			std::string pose;
 			float ox = 0.f;
 			float oy = 0.f;
 			float oz = 0.f;
@@ -1424,8 +1424,6 @@ void TangibleObject::updateDynamicHardpointsFromObjvars()
 			{
 				DynamicVariableListNestedList const slotList(seatRoot, slotNamesFromLists[static_cast<size_t>(seatIdx)]);
 				IGNORE_RETURN(slotList.getItem("pose", pose));
-				if (pose.empty())
-					pose = "normal";
 				IGNORE_RETURN(slotList.getItem("ox", ox));
 				IGNORE_RETURN(slotList.getItem("oy", oy));
 				IGNORE_RETURN(slotList.getItem("oz", oz));
