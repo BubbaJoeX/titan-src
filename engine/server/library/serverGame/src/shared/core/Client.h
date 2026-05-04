@@ -156,10 +156,10 @@ public:
 
     void assumeControl(CreatureObject &newCharacter);
 
-    /** Designer-only: give the mount a PlayerCreatureController while keeping primary as {@code avatar} (vehicle-style). */
+    /** Designer-only: mountCreature + swap primary to {@code mount} (same client sync as riding / vehicles). */
     bool mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &mount);
 
-    /** End possession: remove mount from controlled list and restore its default controller. */
+    /** End possession: restore saved primary (avatar) and the mount's default controller. */
     bool mountMakerPossessionLeave(CreatureObject &avatar, CreatureObject &mount);
 
     bool isMountMakerPossessionActive() const;
@@ -321,8 +321,8 @@ private:
     bool m_sendToStarport;
 
     bool m_mountMakerPossessionActive;
-    /**While possessing a dynamic-mount creature for authoring, locomotion uses the mount's controller; primary stays the avatar (like pilot vs ship).*/
-    CachedNetworkId m_mountMakerPossessedMount;
+    /** Avatar primary before mount-maker possession ({@code mount} becomes primary for client sync). */
+    CachedNetworkId m_mountMakerSavedPrimary;
 
     static std::map <std::string, uint32> sm_outgoingBytesMap_Working;  // working stats that will rotate after 1 minute
     static std::map <std::string, uint32> sm_outgoingBytesMap_Stats;    // computed stats from the last minute
