@@ -208,7 +208,7 @@ Client::Client(ConnectionServerConnection &connection, const NetworkId &characte
           m_combatSpamFilter(combatSpamFilter), m_combatSpamRangeSquaredFilter(combatSpamRangeSquaredFilter),
           m_furnitureRotationDegree(furnitureRotationDegree), m_hasUnoccupiedJediSlot(hasUnoccupiedJediSlot),
           m_isJediSlotCharacter(isJediSlotCharacter), m_sendToStarport(sendToStarport),
-          m_mountMakerPossessionActive(false), m_mountMakerSavedPrimary(NetworkId::cms_invalid) {
+          m_mountMakerPossessionActive(false), m_mountMakerPossessedMount(NetworkId::cms_invalid) {
 
     connectToEmitter(connection, "ConnectionServerConnectionClosed");
     connectToEmitter(connection, "ConnectionServerConnectionDestroyed");
@@ -640,22 +640,22 @@ bool Client::mountMakerPossessionEnter(CreatureObject &avatar, CreatureObject &m
         }
     }
 
-    m_mountMakerSavedPrimary = m_primaryControlledObject;
     m_mountMakerPossessionActive = true;
+    m_mountMakerPossessedMount = CachedNetworkId(mount);
 
     if (!isControlled(mount.getNetworkId())) {
         addControlledObject(mount);
     } else if (mount.getClient() != this) {
         m_mountMakerPossessionActive = false;
-        m_mountMakerSavedPrimary = CachedNetworkId(NetworkId::cms_invalid);
+        m_mountMakerPossessedMount = CachedNetworkId(NetworkId::cms_invalid);
         return false;
     }
 
     mount.setController(new PlayerCreatureController(&mount));
     safe_cast<ServerController *>(mount.getController())->onClientReady();
 
-    m_primaryControlledObject = CachedNetworkId(mount);
-    sendControlAssumedForPrimary(mount, true);
+    // Keep m_primaryControlledObject as the avatar so scripts, GM commands, and UI resolve the player
+    // by character network id (same idea as pilot vs ship). Movement uses mount via ObjController remap below.
     return true;
 }
 
@@ -668,25 +668,17 @@ bool Client::mountMakerPossessionLeave(CreatureObject &avatar, CreatureObject &m
     if (avatar.getClient() != this || getCharacterObjectId() != avatar.getNetworkId()) {
         return false;
     }
-    CreatureObject *const currentPrimary = safe_cast<CreatureObject *>(m_primaryControlledObject.getObject());
-    if (!currentPrimary || currentPrimary->getNetworkId() != mount.getNetworkId()) {
+    CreatureObject *const possessed = safe_cast<CreatureObject *>(m_mountMakerPossessedMount.getObject());
+    if (!possessed || possessed->getNetworkId() != mount.getNetworkId()) {
         return false;
     }
 
-    m_primaryControlledObject = m_mountMakerSavedPrimary;
     removeControlledObject(mount);
     IGNORE_RETURN(mount.createDefaultController());
 
     m_mountMakerPossessionActive = false;
-    m_mountMakerSavedPrimary = CachedNetworkId(NetworkId::cms_invalid);
+    m_mountMakerPossessedMount = CachedNetworkId(NetworkId::cms_invalid);
 
-    CreatureObject *const restorePrimary = safe_cast<CreatureObject *>(m_primaryControlledObject.getObject());
-    if (!restorePrimary || restorePrimary->getNetworkId() != avatar.getNetworkId()) {
-        DEBUG_WARNING(true, ("mountMakerPossessionLeave: saved primary was not the avatar."));
-        return false;
-    }
-
-    sendControlAssumedForPrimary(*restorePrimary, true);
     if (ServerController *const sc = dynamic_cast<ServerController *>(avatar.getController())) {
         sc->onClientReady();
     }
@@ -1225,11 +1217,11 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                     LOG("AllowedObjControllerMsgs", ("Allowing player %s at %s controller message %d for object %s", PlayerObject::getAccountDescription(getCharacterObjectId()).c_str(), getIpAddress().c_str(), o.getMessage(), o.getNetworkId().getValueString().c_str()));
 
                     ServerObject *target = findControlledObject(o.getNetworkId());
-                    // Possessed mount: client may still tag ObjController with the avatar id while primary is the NPC.
-                    if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
-                        target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
+                    // Possessed mount: client tags ObjController with the avatar id; route to the mount's PlayerCreatureController.
+                    if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerPossessedMount.isValid() &&
+                        target->getNetworkId() == m_characterObjectId)
                     {
-                        CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+                        CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_mountMakerPossessedMount.getObject());
                         if (mountCreature != nullptr)
                             target = mountCreature;
                     }
@@ -1245,10 +1237,10 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                         }
                     } else if (isGod()) {
                         target = ServerWorld::findObjectByNetworkId(o.getNetworkId());
-                        if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerSavedPrimary.isValid() &&
-                            target->getNetworkId() == static_cast<NetworkId const &>(m_mountMakerSavedPrimary))
+                        if (target != nullptr && m_mountMakerPossessionActive && m_mountMakerPossessedMount.isValid() &&
+                            target->getNetworkId() == m_characterObjectId)
                         {
-                            CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_primaryControlledObject.getObject());
+                            CreatureObject *const mountCreature = dynamic_cast<CreatureObject *>(m_mountMakerPossessedMount.getObject());
                             if (mountCreature != nullptr)
                                 target = mountCreature;
                         }
