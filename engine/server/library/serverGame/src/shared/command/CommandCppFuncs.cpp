@@ -7127,7 +7127,7 @@ static void commandFuncSetPlayerAppearance(Command const &, NetworkId const &act
 	NetworkId subjectNetworkId = useTarget ? target : actor;
 
 	LOG("setPlayerAppearance",
-		("commandFuncSetPlayerAppearance(): command called by actor id=[%s]: attempting to change appearance for player id=[%s], using appearance info from object template=[%s], subject=[%s]",
+		("commandFuncSetPlayerAppearance(): command called by actor id=[%s]: attempting to change appearance for player id=[%s], using object template or appearance asset path=[%s], subject=[%s]",
 			actor.getValueString().c_str(),
 			subjectNetworkId.getValueString().c_str(),
 			objectTemplateName.c_str(),

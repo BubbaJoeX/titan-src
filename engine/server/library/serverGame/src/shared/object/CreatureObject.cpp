@@ -12420,6 +12420,27 @@ bool CreatureObject::hasBountyMissionForTarget(const NetworkId & targetId) const
 
 // ----------------------------------------------------------------------
 
+namespace
+{
+	bool endsWithIgnoreCase(std::string const &s, char const *ext)
+	{
+		size_t const el = strlen(ext);
+		size_t const len = s.length();
+		if (len < el)
+			return false;
+		return _stricmp(s.c_str() + len - el, ext) == 0;
+	}
+
+	bool isDirectAppearanceAssetPath(std::string const &path)
+	{
+		return endsWithIgnoreCase(path, ".apt")
+		    || endsWithIgnoreCase(path, ".sat")
+		    || endsWithIgnoreCase(path, ".lod");
+	}
+}
+
+// ----------------------------------------------------------------------
+
 void CreatureObject::setAlternateAppearance(std::string const &sharedObjectTemplateName)
 {
 	//-- Ensure we're authoritative.
@@ -12470,6 +12491,31 @@ void CreatureObject::setAlternateAppearance(std::string const &sharedObjectTempl
 		return;
 	}
 
+	//-- Direct appearance template path (.apt / .sat / .lod): replicate to clients as-is (e.g. player default skeleton + alternate component .apt mesh).
+	if (isDirectAppearanceAssetPath(sharedObjectTemplateName))
+	{
+		GameScriptObject *const scriptObject = getScriptObject();
+		if (scriptObject)
+		{
+			ScriptParams params;
+			params.addParam(getNetworkId());
+			params.addParam(sharedObjectTemplateName.c_str());
+
+			if (scriptObject->trigAllScripts(Scripting::TRIG_ON_ABOUT_TO_CHANGE_APPEARANCE, params) == SCRIPT_OVERRIDE)
+				return;
+
+			m_alternateAppearanceSharedObjectTemplateName.set(sharedObjectTemplateName);
+
+			setState(States::Disguised, true);
+
+			params.clear();
+			params.addParam(getNetworkId());
+
+			IGNORE_RETURN(scriptObject->trigAllScripts(Scripting::TRIG_CHANGED_APPEARANCE, params));
+		}
+
+		return;
+	}
 
 	ObjectTemplate const *sharedObjectTemplate = ObjectTemplateList::fetch(sharedObjectTemplateName);
 	SharedCreatureObjectTemplate const *const sharedObjectTemplateAsCreature = dynamic_cast<SharedCreatureObjectTemplate const*>(sharedObjectTemplate);
