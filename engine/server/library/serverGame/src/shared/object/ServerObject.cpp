@@ -88,6 +88,7 @@
 #include "sharedFoundation/ConstCharCrcLowerString.h"
 #include "sharedFoundation/Clock.h"
 #include "sharedFoundation/ConstCharCrcString.h"
+#include "sharedFoundation/DynamicVariable.h"
 #include "sharedFoundation/DynamicVariableLocationData.h"
 #include "sharedFoundation/FormattedString.h"
 #include "sharedFoundation/GameControllerMessage.h"
@@ -6313,6 +6314,97 @@ void ServerObject::scriptTransferBankCreditsFrom(const std::string &target, int 
 	}
 }
 
+namespace ServerObjectGodExamineNamespace
+{
+	static char const * const cms_examineObjvarPrefix = "examine.objvar.";
+
+	static char const * typeTagForDynamicVariable(DynamicVariable const & dv)
+	{
+		switch (dv.getType ())
+		{
+		case DynamicVariable::INT:             return "int";
+		case DynamicVariable::INT_ARRAY:       return "int_arr";
+		case DynamicVariable::REAL:            return "float";
+		case DynamicVariable::REAL_ARRAY:      return "float_arr";
+		case DynamicVariable::STRING:          return "string";
+		case DynamicVariable::STRING_ARRAY:    return "string_arr";
+		case DynamicVariable::NETWORK_ID:      return "networkId";
+		case DynamicVariable::NETWORK_ID_ARRAY:return "networkId_arr";
+		case DynamicVariable::LOCATION:        return "location";
+		case DynamicVariable::LOCATION_ARRAY:  return "location_arr";
+		case DynamicVariable::LIST:            return "list";
+		case DynamicVariable::STRING_ID:       return "stringId";
+		case DynamicVariable::STRING_ID_ARRAY: return "stringId_arr";
+		case DynamicVariable::TRANSFORM:       return "transform";
+		case DynamicVariable::TRANSFORM_ARRAY: return "transform_arr";
+		case DynamicVariable::VECTOR:          return "vector";
+		case DynamicVariable::VECTOR_ARRAY:    return "vector_arr";
+		default:                               return "unknown";
+		}
+	}
+
+	static Unicode::String formatDynamicVariableValue(DynamicVariable const & dv)
+	{
+		switch (dv.getType ())
+		{
+		case DynamicVariable::INT:
+			{
+				int v = 0;
+				if (dv.get (v))
+					return Unicode::narrowToWide (FormattedString ("%d", v));
+			}
+			break;
+		case DynamicVariable::REAL:
+			{
+				float v = 0.f;
+				if (dv.get (v))
+					return Unicode::narrowToWide (FormattedString ("%g", static_cast<double>(v)));
+			}
+			break;
+		case DynamicVariable::STRING:
+			{
+				Unicode::String u;
+				if (dv.get (u))
+					return u;
+				std::string n;
+				if (dv.get (n))
+					return Unicode::narrowToWide (n);
+			}
+			break;
+		case DynamicVariable::NETWORK_ID:
+			{
+				NetworkId nid;
+				if (dv.get (nid))
+					return Unicode::narrowToWide (nid.getValueString ());
+			}
+			break;
+		case DynamicVariable::STRING_ID:
+			{
+				StringId sid;
+				if (dv.get (sid))
+					return sid.localize ();
+			}
+			break;
+		default:
+			break;
+		}
+		return dv.getPackedValueString ();
+	}
+
+	static void appendGodExamineObjvars(ServerObject const & obj, AttributeVector & data)
+	{
+		DynamicVariableList const & ovl = obj.getObjVars ();
+		for (DynamicVariableList::MapType::const_iterator i = ovl.begin (); i != ovl.end (); ++i)
+		{
+			std::string const & name = (*i).first;
+			DynamicVariable const & dv = (*i).second;
+			char const * const typeTag = typeTagForDynamicVariable (dv);
+			std::string const attrKey = std::string (cms_examineObjvarPrefix) + typeTag + std::string (".") + name;
+			data.push_back (std::make_pair (attrKey, formatDynamicVariableValue (dv)));
+		}
+	}
+}
+
 //----------------------------------------------------------------------
 
 void ServerObject::getAttributes(const NetworkId & playerId, AttributeVector &data) const
@@ -6377,11 +6469,11 @@ void ServerObject::getAttributes(const NetworkId & playerId, AttributeVector &da
 			else
 				break;
 		}
-
-		// if the requestor is a gm, add objvars and scriptvars
-		// to result data (ignore max attribs as well!)
-
 	}
+
+	const CreatureObject * const playerForGod = safe_cast<const CreatureObject *>(ServerWorld::findObjectByNetworkId (playerId));
+	if (playerForGod && playerForGod->getClient () && playerForGod->getClient ()->isGod ())
+		ServerObjectGodExamineNamespace::appendGodExamineObjvars (*this, data);
 }
 
 // ----------------------------------------------------------------------
