@@ -6351,14 +6351,20 @@ namespace ServerObjectGodExamineNamespace
 			{
 				int v = 0;
 				if (dv.get (v))
-					return Unicode::narrowToWide (FormattedString ("%d", v));
+				{
+					FormattedString<32> s;
+					return Unicode::narrowToWide (s.sprintf ("%d", v));
+				}
 			}
 			break;
 		case DynamicVariable::REAL:
 			{
 				float v = 0.f;
 				if (dv.get (v))
-					return Unicode::narrowToWide (FormattedString ("%g", static_cast<double>(v)));
+				{
+					FormattedString<64> s;
+					return Unicode::narrowToWide (s.sprintf ("%g", static_cast<double>(v)));
+				}
 			}
 			break;
 		case DynamicVariable::STRING:
@@ -6391,7 +6397,7 @@ namespace ServerObjectGodExamineNamespace
 		return dv.getPackedValueString ();
 	}
 
-	static void appendGodExamineObjvars(ServerObject const & obj, AttributeVector & data)
+	static void appendGodExamineObjvars(ServerObject const & obj, ServerObject::AttributeVector & data)
 	{
 		DynamicVariableList const & ovl = obj.getObjVars ();
 		for (DynamicVariableList::MapType::const_iterator i = ovl.begin (); i != ovl.end (); ++i)
