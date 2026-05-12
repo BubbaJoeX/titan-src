@@ -38,6 +38,62 @@
 #include "sharedPathfinding/PathGraph.h"
 #include "sharedPathfinding/PathNode.h"
 
+namespace CellObjectLightVarsNamespace
+{
+	char const *const cs_cellLightBase = "lights.cell";
+
+	ServerObject * findPortalStructureRoot(ServerObject &childInPortalHierarchy)
+	{
+		// Prefer the outermost (topmost) object on the containment chain that owns the pob portal graph.
+		// Ship interiors sometimes insert an intermediate PortalProperty node between hull and cell; taking
+		// the first match targeted that inner node, whose observer set is often empty — lighting RPCs never fired.
+		ServerObject *portalRoot = nullptr;
+		Object *walk = ContainerInterface::getContainedByObject(childInPortalHierarchy);
+		for (int depth = 0; walk && depth < 64; ++depth)
+		{
+			ServerObject *const so = walk->asServerObject();
+			if (so && so->getPortalProperty())
+				portalRoot = so;
+
+			walk = ContainerInterface::getContainedByObject(*walk);
+		}
+		return portalRoot;
+	}
+
+	bool readCellLightingValues(
+		CellObject const &cell,
+		int cellNumber,
+		ServerObject const *const pobRoot,
+		float &r,
+		float &g,
+		float &b,
+		float &brightness)
+	{
+		std::string const base(cs_cellLightBase);
+		DynamicVariableList const &cellVars = cell.getObjVars();
+		if (cellVars.getItem(base + ".r", r))
+		{
+			cellVars.getItem(base + ".g", g);
+			cellVars.getItem(base + ".b", b);
+			cellVars.getItem(base + ".brightness", brightness);
+			return true;
+		}
+		if (pobRoot)
+		{
+			std::string const legacyBase = "cellLights." + std::to_string(cellNumber);
+			DynamicVariableList const &rootVars = pobRoot->getObjVars();
+			if (rootVars.getItem(legacyBase + ".r", r))
+			{
+				rootVars.getItem(legacyBase + ".g", g);
+				rootVars.getItem(legacyBase + ".b", b);
+				rootVars.getItem(legacyBase + ".brightness", brightness);
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 const SharedObjectTemplate * CellObject::m_defaultSharedTemplate = nullptr;
 
 // ======================================================================
@@ -784,15 +840,24 @@ CellObject const * CellObject::asCellObject(Object const * object)
 
 void CellObject::setCellLightColor(float r, float g, float b, float brightness)
 {
-	BuildingObject * const building = getOwnerBuilding();
-	if (!building)
+	using namespace CellObjectLightVarsNamespace;
+
+	ServerObject *const pobRoot = findPortalStructureRoot(*this);
+	if (!pobRoot)
 		return;
 
-	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
-	building->setObjVarItem(objvarBase + ".r", r);
-	building->setObjVarItem(objvarBase + ".g", g);
-	building->setObjVarItem(objvarBase + ".b", b);
-	building->setObjVarItem(objvarBase + ".brightness", brightness);
+	std::string const base(cs_cellLightBase);
+	setObjVarItem(base + ".r", r);
+	setObjVarItem(base + ".g", g);
+	setObjVarItem(base + ".b", b);
+	setObjVarItem(base + ".brightness", brightness);
+
+	// Previous builds stored lighting on the portal root (building/ship). Prefer cell storage now.
+	std::string const legacyBase = "cellLights." + std::to_string(m_cellNumber.get());
+	pobRoot->removeObjVarItem(legacyBase + ".r");
+	pobRoot->removeObjVarItem(legacyBase + ".g");
+	pobRoot->removeObjVarItem(legacyBase + ".b");
+	pobRoot->removeObjVarItem(legacyBase + ".brightness");
 
 	sendCellLightColorToAllObservers();
 }
@@ -801,19 +866,18 @@ void CellObject::setCellLightColor(float r, float g, float b, float brightness)
 
 void CellObject::sendCellLightColorToClient(Client const &client) const
 {
-	BuildingObject const * const building = getOwnerBuilding();
-	if (!building)
+	using namespace CellObjectLightVarsNamespace;
+
+	ServerObject *const pobRoot = findPortalStructureRoot(const_cast<CellObject &>(*this));
+	if (!pobRoot)
 		return;
 
-	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
-	float r = 1.0f, g = 1.0f, b = 1.0f, brightness = 1.0f;
-
-	if (!building->getObjVars().getItem(objvarBase + ".r", r))
+	float r = 1.0f;
+	float g = 1.0f;
+	float b = 1.0f;
+	float brightness = 1.0f;
+	if (!readCellLightingValues(*this, m_cellNumber.get(), pobRoot, r, g, b, brightness))
 		return;
-
-	building->getObjVars().getItem(objvarBase + ".g", g);
-	building->getObjVars().getItem(objvarBase + ".b", b);
-	building->getObjVars().getItem(objvarBase + ".brightness", brightness);
 
 	UpdateCellLightsMessage const message(getNetworkId(), r, g, b, brightness);
 	client.send(message, true);
@@ -823,28 +887,38 @@ void CellObject::sendCellLightColorToClient(Client const &client) const
 
 void CellObject::sendCellLightColorToAllObservers() const
 {
-	BuildingObject const * const building = getOwnerBuilding();
-	if (!building)
+	using namespace CellObjectLightVarsNamespace;
+
+	ServerObject *const pobRoot = findPortalStructureRoot(const_cast<CellObject &>(*this));
+	if (!pobRoot)
 		return;
 
-	const std::string objvarBase = "cellLights." + std::to_string(m_cellNumber.get());
-	float r = 1.0f, g = 1.0f, b = 1.0f, brightness = 1.0f;
-
-	if (!building->getObjVars().getItem(objvarBase + ".r", r))
+	float r = 1.0f;
+	float g = 1.0f;
+	float b = 1.0f;
+	float brightness = 1.0f;
+	if (!readCellLightingValues(*this, m_cellNumber.get(), pobRoot, r, g, b, brightness))
 		return;
-
-	building->getObjVars().getItem(objvarBase + ".g", g);
-	building->getObjVars().getItem(objvarBase + ".b", b);
-	building->getObjVars().getItem(objvarBase + ".brightness", brightness);
 
 	UpdateCellLightsMessage const message(getNetworkId(), r, g, b, brightness);
 
-	const std::set<Client *> &observers = building->getObservers();
-	for (auto * observer : observers)
+	std::set<Client *> recipients;
+	if (pobRoot)
+	{
+		for (Client *observer : pobRoot->getObservers())
+		{
+			if (observer)
+				recipients.insert(observer);
+		}
+	}
+	for (Client *observer : getObservers())
 	{
 		if (observer)
-			observer->send(message, true);
+			recipients.insert(observer);
 	}
+
+	for (Client *observer : recipients)
+		observer->send(message, true);
 }
 
 // ======================================================================
