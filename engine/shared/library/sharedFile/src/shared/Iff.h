@@ -161,6 +161,9 @@ public:
 	bool isCurrentForm(void) const;
 	bool atEndOfForm(void) const;
 
+	/// If the current form has 1..7 bytes left (incomplete tag+length), advance used to length so later code does not read off the end.
+	void discardIncompleteTrailingIFFBlockHeadersInCurrentForm(void);
+
 	// get the number of blocks left in the current enclosing form	
 	int getNumberOfBlocksLeft(void) const;
 
