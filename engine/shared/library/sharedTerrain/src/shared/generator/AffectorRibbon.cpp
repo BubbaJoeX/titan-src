@@ -190,8 +190,7 @@ void AffectorRibbon::generateEndCapPointList ()
 
 unsigned AffectorRibbon::getAffectedMaps() const
 {
-	return unsigned(TGM_ALL);
-	// TODO - make this correctly report the maps set by 'affect'
+	return TGM_shader;
 }
 
 //-------------------------------------------------------------------

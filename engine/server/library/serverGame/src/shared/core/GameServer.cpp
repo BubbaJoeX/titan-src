@@ -5060,6 +5060,18 @@ void GameServer::getObjectsWithClients(std::vector<ServerObject *> &objects) con
 
 // ----------------------------------------------------------------------
 
+void GameServer::spamAllClients(GameNetworkMessage const & message, bool const reliable) const
+{
+	for (ClientMap::const_iterator i = m_clients->begin(); i != m_clients->end(); ++i)
+	{
+		Client * const client = (*i).second;
+		if (client)
+			client->send(message, reliable);
+	}
+}
+
+// ----------------------------------------------------------------------
+
 void GameServer::setDone(char const *reasonfmt, ...)
 {
 	if (!m_done)

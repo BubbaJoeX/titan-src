@@ -15,6 +15,7 @@
 #include "serverGame/Chat.h"
 #include "serverGame/CityInterface.h"
 #include "serverGame/CityTerrainService.h"
+#include "serverGame/ProceduralTerrainReplicationService.h"
 #include "serverGame/CommoditiesMarket.h"
 #include "serverGame/ConnectionServerConnection.h"
 #include "serverGame/ConsentManager.h"
@@ -80,6 +81,7 @@
 #include "sharedNetworkMessages/BidAuctionMessage.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
 #include "sharedNetworkMessages/CityTerrainMessages.h"
+#include "sharedNetworkMessages/ProceduralTerrainSyncMessages.h"
 #include "sharedNetworkMessages/CancelLiveAuctionMessage.h"
 #include "sharedNetworkMessages/ChatAvatarId.h"
 #include "sharedNetworkMessages/ChatEnum.h"
@@ -1171,6 +1173,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 CityTerrainSyncRequestMessage const syncMsg(ri);
                 CityTerrainService::handleSyncRequest(*this, syncMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
+            case constcrc("ProceduralTerrainSyncChunkMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                ProceduralTerrainSyncChunkMessage const proceduralTerrainChunk(ri);
+                ProceduralTerrainReplicationService::handleSyncChunk(*this, proceduralTerrainChunk);
                 break;
             }
 
