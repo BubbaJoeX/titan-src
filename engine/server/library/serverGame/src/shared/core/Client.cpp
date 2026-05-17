@@ -566,6 +566,10 @@ void Client::onLoadPlayer(CreatureObject &newCharacter) {
     if (m_primaryControlledObject != NetworkId::cms_invalid) {
         DEBUG_WARNING(true, ("Already have a primary object!"));
         if (m_primaryControlledObject == newCharacter.getNetworkId()) {
+			ClaimManager::getInstance().syncFootprintsToClient(this);
+			CreatureObject const *const co = newCharacter.asCreatureObject();
+			if (co)
+				ClaimManager::getInstance().syncManipulateStateToClient(this, co);
             return;
         }
     }

@@ -255,6 +255,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/ClaimFootprintSyncMessage.h
 	shared/clientGameServer/ClaimManipulateStateMessage.cpp
 	shared/clientGameServer/ClaimManipulateStateMessage.h
+	shared/clientGameServer/ClaimClientMessageDispatch.cpp
+	shared/clientGameServer/ClaimClientMessageDispatch.h
 	shared/clientGameServer/EnterStructurePlacementModeMessage.cpp
 	shared/clientGameServer/EnterStructurePlacementModeMessage.h
 	shared/clientGameServer/EnterTicketPurchaseModeMessage.cpp

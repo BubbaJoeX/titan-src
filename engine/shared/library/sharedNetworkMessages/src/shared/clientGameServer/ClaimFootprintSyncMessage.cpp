@@ -35,7 +35,7 @@ ClaimFootprintSyncMessage::ClaimFootprintSyncMessage(Archive::ReadIterator & sou
 	addVariable(m_markerId);
 	addVariable(m_radiusMeters);
 	addVariable(m_active);
-	unpack(source);
+	AutoByteStream::unpack(source);
 }
 
 // ----------------------------------------------------------------------

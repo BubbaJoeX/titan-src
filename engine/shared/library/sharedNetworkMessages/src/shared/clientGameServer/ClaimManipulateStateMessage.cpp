@@ -15,7 +15,7 @@ char const * const ClaimManipulateStateMessage::cms_name = "ClaimManipulateState
 
 ClaimManipulateStateMessage::ClaimManipulateStateMessage(bool const canManipulate) :
 	GameNetworkMessage(cms_name),
-	m_canManipulate(canManipulate ? static_cast<int8>(1) : static_cast<int8>(0))
+	m_canManipulate(canManipulate ? static_cast<unsigned char>(1) : static_cast<unsigned char>(0))
 {
 	addVariable(m_canManipulate);
 }
@@ -24,10 +24,10 @@ ClaimManipulateStateMessage::ClaimManipulateStateMessage(bool const canManipulat
 
 ClaimManipulateStateMessage::ClaimManipulateStateMessage(Archive::ReadIterator & source) :
 	GameNetworkMessage(cms_name),
-	m_canManipulate(static_cast<int8>(0))
+	m_canManipulate(static_cast<unsigned char>(0))
 {
 	addVariable(m_canManipulate);
-	unpack(source);
+	AutoByteStream::unpack(source);
 }
 
 // ----------------------------------------------------------------------

@@ -28,7 +28,7 @@ public:
 	bool getCanManipulate() const;
 
 private:
-	Archive::AutoVariable<int8> m_canManipulate;
+	Archive::AutoVariable<unsigned char> m_canManipulate;
 
 	ClaimManipulateStateMessage(ClaimManipulateStateMessage const &);
 	ClaimManipulateStateMessage & operator=(ClaimManipulateStateMessage const &);

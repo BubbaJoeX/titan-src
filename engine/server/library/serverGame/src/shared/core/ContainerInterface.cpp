@@ -996,10 +996,27 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 
 	if (transferer && transferer->getClient() && !transferer->getClient()->isGod())
 	{
-		// Only GMs are allowed to drop things into the world.
-		DEBUG_REPORT_LOG(true, ("Player tried to drop something in world, but they are not a god.\n"));
-		error = Container::CEC_NoPermission;
-		return false;
+		bool allowedDrop = false;
+		if (ConfigServerGame::getClaimSystemEnabled())
+		{
+			CreatureObject const * const creature = transferer->asCreatureObject();
+			if (creature)
+			{
+				Vector const dropPos = pos.getPosition_p();
+				std::string const scene = creature->getSceneId();
+				uint32 const claimId = ClaimManager::getInstance().findClaimIdAtPosition(scene, dropPos);
+				if (claimId != 0 && ClaimManager::getInstance().canManipulateInClaim(creature, claimId))
+					allowedDrop = true;
+			}
+		}
+
+		if (!allowedDrop)
+		{
+			// Only GMs (or players with claim decorate permission in the footprint) may drop to the world.
+			DEBUG_REPORT_LOG(true, ("Player tried to drop something in world without permission.\n"));
+			error = Container::CEC_NoPermission;
+			return false;
+		}
 	}
 
 	if (!item.canDropInWorld())
