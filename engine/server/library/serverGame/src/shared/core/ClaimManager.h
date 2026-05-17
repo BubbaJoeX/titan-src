@@ -45,7 +45,21 @@ public:
 
 	void unregisterClaim(uint32 claimId);
 
+	/// Full server-side teardown: footprint sync, observation refresh, optional world object cleanup, registry removal.
+	bool removeClaim(uint32 claimId, bool destroyWorldObjects);
+
+	/// Removes every claim owned by the account (all characters on that station).
+	int purgeClaimsForAccount(StationId ownerAccount, bool destroyWorldObjects);
+
+	/// Removes every claim whose owner character matches.
+	int purgeClaimsForCharacter(NetworkId const &ownerCharacter, bool destroyWorldObjects);
+
+	uint32 findClaimIdByMarker(NetworkId const &markerId) const;
+	void collectClaimIdsForAccount(StationId ownerAccount, std::vector<uint32> &out) const;
+	void collectClaimIdsForCharacter(NetworkId const &ownerCharacter, std::vector<uint32> &out) const;
+
 	uint32 findClaimIdAtPosition(std::string const &sceneId, Vector const &worldPosition) const;
+	uint32 findClaimIdForObject(ServerObject const &obj) const;
 	bool getClaimFootprint(uint32 claimId, std::string &sceneIdOut, Vector &centerOut, float &radiusOut) const;
 	bool getClaimOwnerAccount(uint32 claimId, StationId &outAccount) const;
 	NetworkId getClaimMarker(uint32 claimId) const;
@@ -91,6 +105,12 @@ public:
 	//-- Transfer permission: returns false to block the transfer.
 	bool allowContainerTransfer(ServerObject *transferer, ServerObject *destination, ServerObject &item) const;
 
+	/// noTrade / nomove items may not be dropped into the open world (claim ground cell).
+	bool isItemBlockedFromOpenWorldPlacement(ServerObject const &item) const;
+
+	/// Allows depositing noTrade items into a claim container when the actor has decorate permission (not extraction to inventory).
+	bool canDepositNoTradeIntoClaimContainer(CreatureObject const *actor, ServerObject const *destination, ServerObject const &item) const;
+
 	//-- Furniture / manipulation permission for claim-bound objects.
 	bool allowWorldManipulation(ServerObject const *actorCreature, ServerObject const &targetObject) const;
 
@@ -132,6 +152,8 @@ public:
 	void runRepossession(uint32 claimId);
 	void broadcastFootprintSync(ClaimRecord const &rec, bool active) const;
 	void sendManipulateStateToClient(Client *client, bool canManipulate) const;
+	void refreshClaimObservationForAllClients(uint32 claimId, bool wantObserve) const;
+	void clearClaimObjvarsOnObject(ServerObject &obj) const;
 };
 
 // ======================================================================

@@ -16,6 +16,7 @@
 #include "serverGame/CellObject.h"
 #include "serverGame/CharacterMatchManager.h"
 #include "serverGame/Chat.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/CitizenInfo.h"
 #include "serverGame/CityInfo.h"
 #include "serverGame/CityInterface.h"
@@ -717,6 +718,134 @@ static void commandFuncConsoleSkill(Command const &command, NetworkId const &act
 	UNREF(command);
 	UNREF(target);
 	commandFuncConsoleCategory(actor, "skill", params);
+}
+
+// ----------------------------------------------------------------------
+
+static bool isClaimAdminActor(CreatureObject const *actor)
+{
+	if (!actor)
+		return false;
+
+	Client *const client = actor->getClient();
+	if (client && client->isGod())
+		return true;
+
+	int testCenter = 0;
+	return actor->getObjVars().getItem("test_center", testCenter) && testCenter != 0;
+}
+
+// ----------------------------------------------------------------------
+
+static void commandFuncAdminPurgeClaim(Command const &, NetworkId const &actor,
+	NetworkId const &target, Unicode::String const &params)
+{
+	if (!ConfigServerGame::getClaimSystemEnabled())
+		return;
+
+	CreatureObject *const actorObj = dynamic_cast<CreatureObject *>(NetworkIdManager::getObjectById(actor));
+	if (!isClaimAdminActor(actorObj))
+		return;
+
+	size_t pos = 0;
+	uint32 claimId = static_cast<uint32>(nextIntParm(params, pos));
+	bool destroyWorldObjects = true;
+
+	if (claimId == 0)
+	{
+		NetworkId markerId(target);
+		if (markerId == NetworkId::cms_invalid)
+			markerId = nextOidParm(params, pos);
+		if (markerId.isValid())
+			claimId = ClaimManager::getInstance().findClaimIdByMarker(markerId);
+	}
+
+	if (claimId == 0)
+	{
+		if (actorObj)
+			Chat::sendSystemMessage(*actorObj, Unicode::narrowToWide("Usage: /purgeClaim <claimId> or target a claim marker."), Unicode::emptyString);
+		return;
+	}
+
+	if (ClaimManager::getInstance().removeClaim(claimId, destroyWorldObjects))
+	{
+		if (actorObj)
+		{
+			Chat::sendSystemMessage(*actorObj,
+				Unicode::narrowToWide(FormattedString<256>().sprintf("Removed claim %u.", claimId)),
+				Unicode::emptyString);
+		}
+	}
+	else if (actorObj)
+	{
+		Chat::sendSystemMessage(*actorObj,
+			Unicode::narrowToWide(FormattedString<256>().sprintf("Claim %u not found.", claimId)),
+			Unicode::emptyString);
+	}
+}
+
+// ----------------------------------------------------------------------
+
+static void commandFuncAdminPurgeClaimsForPlayer(Command const &, NetworkId const &actor,
+	NetworkId const &target, Unicode::String const &params)
+{
+	if (!ConfigServerGame::getClaimSystemEnabled())
+		return;
+
+	CreatureObject *const actorObj = dynamic_cast<CreatureObject *>(NetworkIdManager::getObjectById(actor));
+	if (!isClaimAdminActor(actorObj))
+		return;
+
+	size_t pos = 0;
+	NetworkId targetId(target);
+	if (targetId == NetworkId::cms_invalid)
+		targetId = nextOidParm(params, pos);
+	if (targetId == NetworkId::cms_invalid && actorObj)
+		targetId = actorObj->getNetworkId();
+
+	bool allAccountClaims = false;
+	bool destroyWorldObjects = true;
+
+	while (pos < params.size())
+	{
+		std::string const flag = nextStringParm(params, pos);
+		if (flag == "account")
+			allAccountClaims = true;
+		else if (flag == "nodecor")
+			destroyWorldObjects = false;
+	}
+
+	CreatureObject *const targetCreature = dynamic_cast<CreatureObject *>(NetworkIdManager::getObjectById(targetId));
+	if (!targetCreature)
+	{
+		if (actorObj)
+			Chat::sendSystemMessage(*actorObj, Unicode::narrowToWide("Target player not found."), Unicode::emptyString);
+		return;
+	}
+
+	int removed = 0;
+	if (allAccountClaims)
+	{
+		PlayerObject const *const po = PlayerCreatureController::getPlayerObject(targetCreature);
+		if (!po)
+		{
+			if (actorObj)
+				Chat::sendSystemMessage(*actorObj, Unicode::narrowToWide("Target has no player object."), Unicode::emptyString);
+			return;
+		}
+		removed = ClaimManager::getInstance().purgeClaimsForAccount(po->getStationId(), destroyWorldObjects);
+	}
+	else
+	{
+		removed = ClaimManager::getInstance().purgeClaimsForCharacter(targetCreature->getNetworkId(), destroyWorldObjects);
+	}
+
+	if (actorObj)
+	{
+		Chat::sendSystemMessage(*actorObj,
+			Unicode::narrowToWide(FormattedString<256>().sprintf("Purged %d claim(s).", removed)),
+			Unicode::emptyString);
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -9735,6 +9864,8 @@ void CommandCppFuncs::install()
 
 	// admin commands
 	CommandTable::addCppFunction("admin_setGodMode", commandFuncAdminSetGodMode);
+	CommandTable::addCppFunction("admin_purgeClaim", commandFuncAdminPurgeClaim);
+	CommandTable::addCppFunction("admin_purgeClaimsForPlayer", commandFuncAdminPurgeClaimsForPlayer);
 	CommandTable::addCppFunction("admin_kick", commandFuncAdminKick);
 	CommandTable::addCppFunction("admin_planetwarp", commandFuncAdminPlanetwarp);
 	CommandTable::addCppFunction("admin_teleport", commandFuncAdminTeleport);

@@ -212,80 +212,99 @@ namespace ContainerInterfaceNamespace
 		{
 			if (transferer)
 			{
+				CreatureObject const *const transfererCreature = transferer->asCreatureObject();
+				bool const claimNoTradeDeposit = transfererCreature
+					&& ClaimManager::getInstance().canDepositNoTradeIntoClaimContainer(*transfererCreature, *destination, item);
+
 				// if the item contains any no trade items, the item
 				// and destination must be owned by the transferer
 				if (item.markedNoTradeRecursive(false, true))
 				{
-					// the item and destination must be owned by the transferer
-					if (   destination->getOwnerId() != transferer->getNetworkId()
-						&& (   !transferer->getClient()
-						|| !transferer->getClient()->isGod()))
+					if (!claimNoTradeDeposit)
 					{
-						error = Container::CEC_NoPermission;
-						return false;
-					}
-
-					if (   item.getOwnerId() != transferer->getNetworkId()
-						&& (   !transferer->getClient()
-						|| !transferer->getClient()->isGod()))
-					{
-						error = Container::CEC_NoPermission;
-						return false;
-					}
-				}
-				// item doesn't contain any no trade items, but the item itself is no trade
-				else if (!item.isPlayerControlled() && item.markedNoTrade())
-				{
-					// item is no trade, the destination must be owned by the transferer
-					if (   destination->getOwnerId() != transferer->getNetworkId()
-						&& (   !transferer->getClient()
-						|| !transferer->getClient()->isGod()))
-					{
-						error = Container::CEC_NoPermission;
-						return false;
-					}
-
-					if (item.markedNoTradeShared(true))
-					{
-						// if the no trade item is a "shared" no trade item and is immediately
-						// contained in a structure cell, and is being transferred to the
-						// transferer's inventory (i.e. picked up), also allow the transfer if
-						// the transferer is on the same account as the current owner of the item
-						bool blockedByNoTrade = false;
-						if (item.getOwnerId() != transferer->getNetworkId())
-						{
-							blockedByNoTrade = true;
-
-							ServerObject const * const containedBy = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(item));
-							if (containedBy && containedBy->asCellObject())
-							{
-								CreatureObject const * const transfererCreatureObject = transferer->asCreatureObject();
-								if (transfererCreatureObject && (transfererCreatureObject->getInventory() == destination))
-								{
-									PlayerObject const * const playerObject = PlayerCreatureController::getPlayerObject(transfererCreatureObject);
-									if (playerObject && (playerObject->getStationId() == NameManager::getInstance().getPlayerStationId(item.getOwnerId())))
-										blockedByNoTrade = false;
-								}
-							}
-						}
-
-						if (   blockedByNoTrade
+						// the item and destination must be owned by the transferer
+						if (   destination->getOwnerId() != transferer->getNetworkId()
 							&& (   !transferer->getClient()
 							|| !transferer->getClient()->isGod()))
 						{
 							error = Container::CEC_NoPermission;
 							return false;
 						}
-					}
-					else
-					{
-						// just regular no trade item, so the item must be owned by the transferer
+
 						if (   item.getOwnerId() != transferer->getNetworkId()
 							&& (   !transferer->getClient()
 							|| !transferer->getClient()->isGod()))
 						{
 							error = Container::CEC_NoPermission;
 							return false;
+						}
+					}
+				}
+				// item doesn't contain any no trade items, but the item itself is no trade
+				else if (!item.isPlayerControlled() && item.markedNoTrade())
+				{
+					if (!claimNoTradeContainerXfer)
+					{
+						// item is no trade, the destination must be owned by the transferer
+						if (   destination->getOwnerId() != transferer->getNetworkId()
+							&& (   !transferer->getClient()
+							|| !transferer->getClient()->isGod()))
+						{
+							error = Container::CEC_NoPermission;
+							return false;
+						}
+					}
+
+					if (!claimNoTradeDeposit)
+					{
+						if (item.markedNoTradeShared(true))
+						{
+							// if the no trade item is a "shared" no trade item and is immediately
+							// contained in a structure cell, and is being transferred to the
+							// transferer's inventory (i.e. picked up), also allow the transfer if
+							// the transferer is on the same account as the current owner of the item
+							bool blockedByNoTrade = false;
+							if (item.getOwnerId() != transferer->getNetworkId())
+							{
+								blockedByNoTrade = true;
+
+								ServerObject const * const containedBy = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(item));
+								CreatureObject const * const transfererCreatureObject = transferer->asCreatureObject();
+								if (transfererCreatureObject && (transfererCreatureObject->getInventory() == destination))
+								{
+									PlayerObject const * const playerObject = PlayerCreatureController::getPlayerObject(transfererCreatureObject);
+									if (playerObject && (playerObject->getStationId() == NameManager::getInstance().getPlayerStationId(item.getOwnerId())))
+									{
+										if (containedBy && containedBy->asCellObject())
+											blockedByNoTrade = false;
+										else if (ConfigServerGame::getClaimSystemEnabled())
+										{
+											uint32 const claimId = ClaimManager::getInstance().findClaimIdForObject(item);
+											if (claimId != 0 && ClaimManager::getInstance().canManipulateInClaim(transfererCreatureObject, claimId))
+												blockedByNoTrade = false;
+										}
+									}
+								}
+							}
+
+							if (   blockedByNoTrade
+								&& (   !transferer->getClient()
+								|| !transferer->getClient()->isGod()))
+							{
+								error = Container::CEC_NoPermission;
+								return false;
+							}
+						}
+						else
+						{
+							// just regular no trade item, so the item must be owned by the transferer
+							if (   item.getOwnerId() != transferer->getNetworkId()
+								&& (   !transferer->getClient()
+								|| !transferer->getClient()->isGod()))
+							{
+								error = Container::CEC_NoPermission;
+								return false;
+							}
 						}
 					}
 				}
@@ -1014,6 +1033,14 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 		{
 			// Only GMs (or players with claim decorate permission in the footprint) may drop to the world.
 			DEBUG_REPORT_LOG(true, ("Player tried to drop something in world without permission.\n"));
+			error = Container::CEC_NoPermission;
+			return false;
+		}
+
+		if (ConfigServerGame::getClaimSystemEnabled()
+			&& ClaimManager::getInstance().isItemBlockedFromOpenWorldPlacement(item))
+		{
+			DEBUG_REPORT_LOG(true, ("Player tried to drop a noTrade/nomove item into the open world.\n"));
 			error = Container::CEC_NoPermission;
 			return false;
 		}

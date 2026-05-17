@@ -17,6 +17,7 @@
 #include "serverGame/PlayerCreatureController.h"
 #include "serverGame/PlayerObject.h"
 #include "serverGame/ServerWorld.h"
+#include "serverScript/GameScriptObject.h"
 #include "serverUtility/ServerClock.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedLog/Log.h"
@@ -222,6 +223,178 @@ void ClaimManager::unregisterClaim(uint32 claimId)
 
 // ----------------------------------------------------------------------
 
+void ClaimManager::clearClaimObjvarsOnObject(ServerObject &obj) const
+{
+	obj.removeObjVarItem(ClaimObjvars::ms_claimId);
+	obj.removeObjVarItem(ClaimObjvars::ms_claimMarker);
+	obj.removeObjVarItem(ClaimObjvars::ms_claimTerminal);
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::refreshClaimObservationForAllClients(uint32 const claimId, bool const wantObserve) const
+{
+	static std::vector<NetworkId> tmp;
+	tmp.clear();
+	getClaimContentObjects(claimId, tmp);
+	if (tmp.empty())
+		return;
+
+	std::vector<ServerObject *> players;
+	GameServer::getInstance().getObjectsWithClients(players);
+	for (size_t i = 0; i < players.size(); ++i)
+	{
+		CreatureObject *const creature = players[i] ? players[i]->asCreatureObject() : nullptr;
+		if (!creature)
+			continue;
+		Client *const client = creature->getClient();
+		if (client)
+			ObserveTracker::claimRefreshObservation(*client, tmp, wantObserve);
+	}
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::removeClaim(uint32 const claimId, bool const destroyWorldObjects)
+{
+	ClaimRecord *const record = findRecord(claimId);
+	if (!record)
+		return false;
+
+	ClaimRecord const rec = *record;
+
+	LOG("ClaimManager", ("Removing claim %u (scene=%s, marker=%s, destroyWorldObjects=%d).",
+		rec.id, rec.sceneId.c_str(), rec.markerId.getValueString().c_str(), destroyWorldObjects ? 1 : 0));
+
+	refreshClaimObservationForAllClients(claimId, false);
+	broadcastFootprintSync(rec, false);
+
+	NetworkId const markerId = rec.markerId;
+	std::set<NetworkId> const contentCopy = rec.contentObjects;
+
+	for (std::set<NetworkId>::const_iterator i = contentCopy.begin(); i != contentCopy.end(); ++i)
+	{
+		ServerObject *const obj = ServerWorld::findObjectByNetworkId(*i);
+		if (!obj)
+			continue;
+
+		clearClaimObjvarsOnObject(*obj);
+
+		if (!destroyWorldObjects || *i == markerId)
+			continue;
+
+		if (obj->asCreatureObject())
+			continue;
+
+		obj->kill();
+	}
+
+	if (markerId.isValid())
+	{
+		ServerObject *const marker = ServerWorld::findObjectByNetworkId(markerId);
+		if (marker)
+			MessageToQueue::getInstance().sendMessageToC(markerId, "handleClaimRepossession", "", 1, false);
+	}
+
+	removeClaimIdFromScene(m_claimsByScene, rec.sceneId, claimId);
+	m_claims.erase(claimId);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+int ClaimManager::purgeClaimsForAccount(StationId const ownerAccount, bool const destroyWorldObjects)
+{
+	if (ownerAccount == 0)
+		return 0;
+
+	std::vector<uint32> claimIds;
+	collectClaimIdsForAccount(ownerAccount, claimIds);
+
+	int removed = 0;
+	for (size_t i = 0; i < claimIds.size(); ++i)
+	{
+		if (removeClaim(claimIds[i], destroyWorldObjects))
+			++removed;
+	}
+	return removed;
+}
+
+// ----------------------------------------------------------------------
+
+int ClaimManager::purgeClaimsForCharacter(NetworkId const &ownerCharacter, bool const destroyWorldObjects)
+{
+	if (!ownerCharacter.isValid())
+		return 0;
+
+	std::vector<uint32> claimIds;
+	collectClaimIdsForCharacter(ownerCharacter, claimIds);
+
+	int removed = 0;
+	for (size_t i = 0; i < claimIds.size(); ++i)
+	{
+		if (removeClaim(claimIds[i], destroyWorldObjects))
+			++removed;
+	}
+	return removed;
+}
+
+// ----------------------------------------------------------------------
+
+uint32 ClaimManager::findClaimIdByMarker(NetworkId const &markerId) const
+{
+	if (!markerId.isValid())
+		return 0;
+
+	for (ClaimMap::const_iterator i = m_claims.begin(); i != m_claims.end(); ++i)
+	{
+		if (i->second.markerId == markerId)
+			return i->first;
+	}
+
+	ServerObject const *const marker = ServerWorld::findObjectByNetworkId(markerId);
+	if (marker)
+	{
+		int claimIdInt = 0;
+		if (tryGetClaimId(*marker, claimIdInt) && claimIdInt > 0)
+			return static_cast<uint32>(claimIdInt);
+	}
+
+	return 0;
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::collectClaimIdsForAccount(StationId const ownerAccount, std::vector<uint32> &out) const
+{
+	out.clear();
+	if (ownerAccount == 0)
+		return;
+
+	for (ClaimMap::const_iterator i = m_claims.begin(); i != m_claims.end(); ++i)
+	{
+		if (i->second.ownerAccount == ownerAccount)
+			out.push_back(i->first);
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::collectClaimIdsForCharacter(NetworkId const &ownerCharacter, std::vector<uint32> &out) const
+{
+	out.clear();
+	if (!ownerCharacter.isValid())
+		return;
+
+	for (ClaimMap::const_iterator i = m_claims.begin(); i != m_claims.end(); ++i)
+	{
+		if (i->second.ownerCharacter == ownerCharacter)
+			out.push_back(i->first);
+	}
+}
+
+// ----------------------------------------------------------------------
+
 void ClaimManager::broadcastFootprintSync(ClaimRecord const &rec, bool const active) const
 {
 	if (!rec.markerId.isValid())
@@ -282,6 +455,13 @@ void ClaimManager::syncManipulateStateToClient(Client *const client, CreatureObj
 	uint32 const claimId = findClaimIdAtPosition(creature->getSceneId(), pos);
 	bool const canManipulate = claimId != 0 && canManipulateInClaim(creature, claimId);
 	sendManipulateStateToClient(client, canManipulate);
+}
+
+// ----------------------------------------------------------------------
+
+uint32 ClaimManager::findClaimIdForObject(ServerObject const &obj) const
+{
+	return findClaimIdAtPosition(obj.getSceneId(), getObjectWorldPosition(&obj));
 }
 
 // ----------------------------------------------------------------------
@@ -663,6 +843,48 @@ void ClaimManager::onCreatureMoved(Client *client, CreatureObject const *creatur
 
 // ----------------------------------------------------------------------
 
+bool ClaimManager::isItemBlockedFromOpenWorldPlacement(ServerObject const &item) const
+{
+	if (item.markedNoTradeRecursive(false, true))
+		return true;
+
+	GameScriptObject const *const script = item.getScriptObject();
+	if (script && script->hasScript("item.special.nomove"))
+		return true;
+
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::canDepositNoTradeIntoClaimContainer(CreatureObject const *actor, ServerObject const *destination, ServerObject const &item) const
+{
+	if (!ConfigServerGame::getClaimSystemEnabled() || !actor || !destination)
+		return false;
+
+	if (actor->getClient() && actor->getClient()->isGod())
+		return true;
+
+	// Pickup/extraction to inventory keeps normal noTrade / noTradeShared rules.
+	if (actor->getInventory() == destination)
+		return false;
+
+	Vector const destPos = getObjectWorldPosition(destination);
+	std::string const scene = destination->getSceneId();
+	uint32 const destClaim = findClaimIdAtPosition(scene, destPos);
+	if (destClaim == 0)
+		return false;
+
+	if (!canManipulateInClaim(actor, destClaim))
+		return false;
+
+	Vector const itemPos = getObjectWorldPosition(&item);
+	uint32 const itemClaim = findClaimIdAtPosition(scene, itemPos);
+	return itemClaim == destClaim;
+}
+
+// ----------------------------------------------------------------------
+
 bool ClaimManager::allowContainerTransfer(ServerObject *transferer, ServerObject *destination, ServerObject &item) const
 {
 	if (!ConfigServerGame::getClaimSystemEnabled())
@@ -804,32 +1026,8 @@ bool ClaimManager::tryEjectBannedCreature(CreatureObject &creature)
 
 void ClaimManager::runRepossession(uint32 claimId)
 {
-	ClaimRecord *const r = findRecord(claimId);
-	if (!r)
-		return;
-
-	broadcastFootprintSync(*r, false);
-
-	r->status = 1;
-
-	if (r->markerId.isValid())
-		MessageToQueue::getInstance().sendMessageToC(r->markerId, "handleClaimRepossession", "", 1, false);
-
-	for (std::set<NetworkId>::const_iterator i = r->contentObjects.begin(); i != r->contentObjects.end(); ++i)
-	{
-		ServerObject *const o = ServerWorld::findObjectByNetworkId(*i);
-		if (o)
-		{
-			o->removeObjVarItem(ClaimObjvars::ms_claimId);
-			o->removeObjVarItem(ClaimObjvars::ms_claimMarker);
-			o->removeObjVarItem(ClaimObjvars::ms_claimTerminal);
-		}
-	}
-	std::string const sceneCopy = r->sceneId;
-	uint32 const idCopy = r->id;
-	r->contentObjects.clear();
-	removeClaimIdFromScene(m_claimsByScene, sceneCopy, idCopy);
-	m_claims.erase(idCopy);
+	// Maintenance failure: remove marker and registry; leave placed furniture in world (unbound).
+	IGNORE_RETURN(removeClaim(claimId, false));
 }
 
 // ----------------------------------------------------------------------

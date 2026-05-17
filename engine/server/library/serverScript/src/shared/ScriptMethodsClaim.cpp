@@ -37,6 +37,9 @@ namespace ScriptMethodsClaimNamespace
 	jboolean JNICALL claimValidateWorldPosition(JNIEnv *env, jobject self, jlong player, jlong target, jfloat x, jfloat y, jfloat z);
 	jboolean JNICALL claimAddAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed);
 	jboolean JNICALL claimRemoveAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed);
+	jboolean JNICALL claimRemoveClaim(JNIEnv *env, jobject self, jlong admin, jint claimId, jboolean destroyWorldObjects);
+	jint JNICALL claimPurgeClaimsForPlayer(JNIEnv *env, jobject self, jlong admin, jlong targetPlayer, jboolean destroyWorldObjects, jboolean allAccountClaims);
+	jint JNICALL claimFindClaimIdByMarker(JNIEnv *env, jobject self, jlong marker);
 }
 
 bool ScriptMethodsClaimNamespace::install()
@@ -56,9 +59,30 @@ bool ScriptMethodsClaimNamespace::install()
 		JF("_claimValidateWorldPosition", "(JJFFF)Z", claimValidateWorldPosition),
 		JF("_claimAddAllowed", "(JJJ)Z", claimAddAllowed),
 		JF("_claimRemoveAllowed", "(JJJ)Z", claimRemoveAllowed),
+		JF("_claimRemoveClaim", "(JIZ)Z", claimRemoveClaim),
+		JF("_claimPurgeClaimsForPlayer", "(JJZZ)I", claimPurgeClaimsForPlayer),
+		JF("_claimFindClaimIdByMarker", "(J)I", claimFindClaimIdByMarker),
 #undef JF
 	};
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES) / sizeof(NATIVES[0]));
+}
+
+static bool validateClaimAdminAccess(JNIEnv *env, jlong admin, CreatureObject const *&adminCreatureOut)
+{
+	adminCreatureOut = nullptr;
+	ServerObject *adminObj = nullptr;
+	if (!JavaLibrary::getObject(admin, adminObj) || !adminObj)
+		return false;
+	adminCreatureOut = adminObj->asCreatureObject();
+	if (!adminCreatureOut)
+		return false;
+
+	Client *const client = adminCreatureOut->getClient();
+	if (client && client->isGod())
+		return true;
+
+	int testCenter = 0;
+	return adminCreatureOut->getObjVars().getItem("test_center", testCenter) && testCenter != 0;
 }
 
 static bool validateClaimTerminalAccess(JNIEnv *env, jlong player, jlong terminal, uint32 &claimIdOut)
@@ -361,4 +385,65 @@ jboolean JNICALL ScriptMethodsClaimNamespace::claimRemoveAllowed(JNIEnv *env, jo
 
 	ClaimManager::getInstance().removeAllowed(claimId, allowedId);
 	return JNI_TRUE;
+}
+
+jboolean JNICALL ScriptMethodsClaimNamespace::claimRemoveClaim(JNIEnv *env, jobject self, jlong admin, jint claimId, jboolean destroyWorldObjects)
+{
+	UNREF(self);
+	UNREF(env);
+
+	if (!ConfigServerGame::getClaimSystemEnabled() || claimId <= 0)
+		return JNI_FALSE;
+
+	CreatureObject const *adminCreature = nullptr;
+	if (!validateClaimAdminAccess(env, admin, adminCreature))
+		return JNI_FALSE;
+	UNREF(adminCreature);
+
+	return ClaimManager::getInstance().removeClaim(static_cast<uint32>(claimId), destroyWorldObjects == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+}
+
+jint JNICALL ScriptMethodsClaimNamespace::claimPurgeClaimsForPlayer(JNIEnv *env, jobject self, jlong admin, jlong targetPlayer, jboolean destroyWorldObjects, jboolean allAccountClaims)
+{
+	UNREF(self);
+	UNREF(env);
+
+	if (!ConfigServerGame::getClaimSystemEnabled())
+		return 0;
+
+	CreatureObject const *adminCreature = nullptr;
+	if (!validateClaimAdminAccess(env, admin, adminCreature))
+		return 0;
+
+	ServerObject *targetObj = nullptr;
+	if (!JavaLibrary::getObject(targetPlayer, targetObj) || !targetObj)
+		return 0;
+
+	CreatureObject *const targetCreature = targetObj->asCreatureObject();
+	if (!targetCreature)
+		return 0;
+
+	bool const destroyContent = destroyWorldObjects == JNI_TRUE;
+	if (allAccountClaims == JNI_TRUE)
+	{
+		PlayerObject const *const po = PlayerCreatureController::getPlayerObject(targetCreature);
+		if (!po)
+			return 0;
+		return ClaimManager::getInstance().purgeClaimsForAccount(po->getStationId(), destroyContent);
+	}
+
+	return ClaimManager::getInstance().purgeClaimsForCharacter(targetCreature->getNetworkId(), destroyContent);
+}
+
+jint JNICALL ScriptMethodsClaimNamespace::claimFindClaimIdByMarker(JNIEnv *env, jobject self, jlong marker)
+{
+	UNREF(self);
+	UNREF(env);
+
+	if (!ConfigServerGame::getClaimSystemEnabled())
+		return 0;
+
+	NetworkId const markerId(marker);
+	uint32 const claimId = ClaimManager::getInstance().findClaimIdByMarker(markerId);
+	return static_cast<jint>(claimId);
 }
