@@ -30,6 +30,8 @@ class ServerObject;
 class ClaimManager : public Singleton2<ClaimManager>
 {
 public:
+	struct ClaimRecord;
+
 	ClaimManager();
 	~ClaimManager();
 
@@ -73,7 +75,10 @@ public:
 	void removeAllowed(uint32 claimId, NetworkId const &allowedCharacter);
 
 	bool hasManipulatePermission(CreatureObject const *actor, uint32 claimId) const;
+	bool isClaimOwner(CreatureObject const *actor, ClaimRecord const &claim) const;
 	bool canManipulateInClaim(CreatureObject const *actor, uint32 claimId) const;
+	bool canManipulateInClaim(CreatureObject const *actor, uint32 claimId, Vector const &operationPos) const;
+	bool canManipulateClaimObject(CreatureObject const *actor, ServerObject const &obj) const;
 	bool validateManipulateWorldPosition(CreatureObject const *actor, ServerObject const &targetObject, Vector const &newWorldPos) const;
 
 	int getTaxBalance(uint32 claimId, std::string const &resourceKey) const;

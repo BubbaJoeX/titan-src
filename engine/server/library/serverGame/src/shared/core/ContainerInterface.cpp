@@ -276,8 +276,7 @@ namespace ContainerInterfaceNamespace
 											blockedByNoTrade = false;
 										else if (ConfigServerGame::getClaimSystemEnabled())
 										{
-											uint32 const claimId = ClaimManager::getInstance().findClaimIdForObject(item);
-											if (claimId != 0 && ClaimManager::getInstance().canManipulateInClaim(transfererCreatureObject, claimId))
+											if (ClaimManager::getInstance().canManipulateClaimObject(transfererCreatureObject, item))
 												blockedByNoTrade = false;
 										}
 									}
@@ -1021,7 +1020,7 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 				Vector const dropPos = pos.getPosition_p();
 				std::string const scene = creature->getSceneId();
 				uint32 const claimId = ClaimManager::getInstance().findClaimIdAtPosition(scene, dropPos);
-				if (claimId != 0 && ClaimManager::getInstance().canManipulateInClaim(creature, claimId))
+				if (claimId != 0 && ClaimManager::getInstance().canManipulateInClaim(creature, claimId, dropPos))
 					allowedDrop = true;
 			}
 		}

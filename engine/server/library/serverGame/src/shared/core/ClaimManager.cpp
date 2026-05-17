@@ -602,7 +602,35 @@ bool ClaimManager::hasManipulatePermission(CreatureObject const *actor, uint32 c
 
 // ----------------------------------------------------------------------
 
+bool ClaimManager::isClaimOwner(CreatureObject const *actor, ClaimRecord const &claim) const
+{
+	if (!actor)
+		return false;
+
+	StationId const actorAccount = getStationIdForCreature(actor);
+	if (actorAccount != 0 && actorAccount == claim.ownerAccount)
+		return true;
+
+	return actor->getNetworkId() == claim.ownerCharacter;
+}
+
+// ----------------------------------------------------------------------
+
 bool ClaimManager::canManipulateInClaim(CreatureObject const *actor, uint32 const claimId) const
+{
+	if (!actor || claimId == 0)
+		return false;
+
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return false;
+
+	return canManipulateInClaim(actor, claimId, getObjectWorldPosition(actor));
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::canManipulateInClaim(CreatureObject const *actor, uint32 const claimId, Vector const &operationPos) const
 {
 	if (!hasManipulatePermission(actor, claimId))
 		return false;
@@ -611,8 +639,21 @@ bool ClaimManager::canManipulateInClaim(CreatureObject const *actor, uint32 cons
 	if (!r)
 		return false;
 
+	if (isClaimOwner(actor, *r))
+		return pointInsideClaimXZ(*r, operationPos);
+
 	Vector const actorPos = getObjectWorldPosition(actor);
-	return pointInsideClaimXZ(*r, actorPos);
+	return pointInsideClaimXZ(*r, actorPos) && pointInsideClaimXZ(*r, operationPos);
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::canManipulateClaimObject(CreatureObject const *actor, ServerObject const &obj) const
+{
+	uint32 const claimId = findClaimIdForObject(obj);
+	if (claimId == 0)
+		return false;
+	return canManipulateInClaim(actor, claimId, getObjectWorldPosition(&obj));
 }
 
 // ----------------------------------------------------------------------
@@ -630,7 +671,7 @@ bool ClaimManager::validateManipulateWorldPosition(CreatureObject const *actor, 
 		return true;
 
 	uint32 const claimId = static_cast<uint32>(claimIdInt);
-	if (!canManipulateInClaim(actor, claimId))
+	if (!canManipulateInClaim(actor, claimId, newWorldPos))
 		return false;
 
 	ClaimRecord const *const r = findRecord(claimId);
@@ -905,7 +946,7 @@ bool ClaimManager::canDepositNoTradeIntoClaimContainer(CreatureObject const *act
 	if (destClaim == 0)
 		return false;
 
-	if (!canManipulateInClaim(actor, destClaim))
+	if (!canManipulateInClaim(actor, destClaim, destPos))
 		return false;
 
 	Vector const itemPos = getObjectWorldPosition(&item);
@@ -945,17 +986,17 @@ bool ClaimManager::allowContainerTransfer(ServerObject *transferer, ServerObject
 	if (itemClaim == 0 && destClaim == 0)
 		return true;
 
-	auto canAccessClaim = [&](uint32 const claimId) -> bool
+	auto canAccessClaim = [&](uint32 const claimId, Vector const &pos) -> bool
 	{
 		if (claimId == 0)
 			return true;
-		return canManipulateInClaim(actor, claimId);
+		return canManipulateInClaim(actor, claimId, pos);
 	};
 
-	if (!canAccessClaim(itemClaim))
+	if (!canAccessClaim(itemClaim, itemPos))
 		return false;
 
-	if (!canAccessClaim(destClaim))
+	if (!canAccessClaim(destClaim, destSamplePos))
 		return false;
 
 	// Deny transfers that would place a claim-bound item outside the footprint.
@@ -997,7 +1038,7 @@ bool ClaimManager::allowWorldManipulation(ServerObject const *actorCreature, Ser
 			return true;
 	}
 
-	return canManipulateInClaim(actor, static_cast<uint32>(claimIdInt));
+	return canManipulateInClaim(actor, static_cast<uint32>(claimIdInt), getObjectWorldPosition(&targetObject));
 }
 
 // ----------------------------------------------------------------------
