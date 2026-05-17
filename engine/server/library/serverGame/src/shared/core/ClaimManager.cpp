@@ -9,6 +9,7 @@
 
 #include "serverGame/Client.h"
 #include "serverGame/ConfigServerGame.h"
+#include "serverGame/GameServer.h"
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/MessageToQueue.h"
@@ -19,6 +20,8 @@
 #include "serverUtility/ServerClock.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedLog/Log.h"
+#include "sharedNetworkMessages/ClaimFootprintSyncMessage.h"
+#include "sharedNetworkMessages/ClaimManipulateStateMessage.h"
 #include <algorithm>
 #include <cmath>
 
@@ -199,6 +202,7 @@ uint32 ClaimManager::tryRegisterClaim(
 	rec.status = 0;
 	m_claims[id] = rec;
 	m_claimsByScene[sceneId].push_back(id);
+	broadcastFootprintSync(rec, true);
 	return id;
 }
 
@@ -209,9 +213,75 @@ void ClaimManager::unregisterClaim(uint32 claimId)
 	ClaimMap::iterator i = m_claims.find(claimId);
 	if (i == m_claims.end())
 		return;
-	std::string const sceneId = i->second.sceneId;
+	ClaimRecord const rec = i->second;
+	std::string const sceneId = rec.sceneId;
+	broadcastFootprintSync(rec, false);
 	removeClaimIdFromScene(m_claimsByScene, sceneId, claimId);
 	m_claims.erase(i);
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::broadcastFootprintSync(ClaimRecord const &rec, bool const active) const
+{
+	if (!rec.markerId.isValid())
+		return;
+	ClaimFootprintSyncMessage const msg(rec.markerId, rec.radius, active);
+	GameServer::getInstance().spamAllClients(msg, true);
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::syncFootprintsToClient(Client *const client) const
+{
+	if (!client)
+		return;
+	std::string const & sceneId = ServerWorld::getSceneId();
+	for (ClaimMap::const_iterator i = m_claims.begin(); i != m_claims.end(); ++i)
+	{
+		ClaimRecord const &rec = i->second;
+		if (rec.status != 0)
+			continue;
+		if (rec.sceneId != sceneId)
+			continue;
+		if (!rec.markerId.isValid())
+			continue;
+		ClaimFootprintSyncMessage const msg(rec.markerId, rec.radius, true);
+		client->send(msg, true);
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::sendManipulateStateToClient(Client *const client, bool const canManipulate) const
+{
+	if (!client || !ConfigServerGame::getClaimSystemEnabled())
+		return;
+
+	ClaimManipulateStateMessage const msg(canManipulate);
+	client->send(msg, true);
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::syncManipulateStateToClient(Client *const client, CreatureObject const *creature) const
+{
+	if (!client || !creature || !ConfigServerGame::getClaimSystemEnabled())
+	{
+		sendManipulateStateToClient(client, false);
+		return;
+	}
+
+	if (client->isGod())
+	{
+		sendManipulateStateToClient(client, true);
+		return;
+	}
+
+	Vector const pos = getObjectWorldPosition(creature);
+	uint32 const claimId = findClaimIdAtPosition(creature->getSceneId(), pos);
+	bool const canManipulate = claimId != 0 && canManipulateInClaim(creature, claimId);
+	sendManipulateStateToClient(client, canManipulate);
 }
 
 // ----------------------------------------------------------------------
@@ -293,6 +363,101 @@ void ClaimManager::removeBan(uint32 claimId, NetworkId const &bannedCharacter)
 	if (!r)
 		return;
 	r->banned.erase(bannedCharacter);
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::isCharacterAllowed(uint32 claimId, NetworkId const &characterId) const
+{
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return false;
+	return r->allowed.find(characterId) != r->allowed.end();
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::addAllowed(uint32 claimId, NetworkId const &allowedCharacter)
+{
+	ClaimRecord *const r = findRecord(claimId);
+	if (!r)
+		return;
+	r->allowed.insert(allowedCharacter);
+	r->banned.erase(allowedCharacter);
+}
+
+// ----------------------------------------------------------------------
+
+void ClaimManager::removeAllowed(uint32 claimId, NetworkId const &allowedCharacter)
+{
+	ClaimRecord *const r = findRecord(claimId);
+	if (!r)
+		return;
+	r->allowed.erase(allowedCharacter);
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::hasManipulatePermission(CreatureObject const *actor, uint32 const claimId) const
+{
+	if (!actor || claimId == 0)
+		return false;
+
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r || r->status != 0)
+		return false;
+
+	if (isCharacterBanned(claimId, actor->getNetworkId()))
+		return false;
+
+	StationId const actorAccount = getStationIdForCreature(actor);
+	if (actorAccount != 0 && actorAccount == r->ownerAccount)
+		return true;
+
+	if (actor->getNetworkId() == r->ownerCharacter)
+		return true;
+
+	return isCharacterAllowed(claimId, actor->getNetworkId());
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::canManipulateInClaim(CreatureObject const *actor, uint32 const claimId) const
+{
+	if (!hasManipulatePermission(actor, claimId))
+		return false;
+
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return false;
+
+	Vector const actorPos = getObjectWorldPosition(actor);
+	return pointInsideClaimXZ(*r, actorPos);
+}
+
+// ----------------------------------------------------------------------
+
+bool ClaimManager::validateManipulateWorldPosition(CreatureObject const *actor, ServerObject const &targetObject, Vector const &newWorldPos) const
+{
+	int claimIdInt = 0;
+	if (!tryGetClaimId(targetObject, claimIdInt))
+	{
+		std::string const scene = targetObject.getSceneId();
+		claimIdInt = static_cast<int>(findClaimIdAtPosition(scene, getObjectWorldPosition(targetObject)));
+	}
+
+	if (claimIdInt <= 0)
+		return true;
+
+	uint32 const claimId = static_cast<uint32>(claimIdInt);
+	if (!canManipulateInClaim(actor, claimId))
+		return false;
+
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return true;
+
+	return pointInsideClaimXZ(*r, newWorldPos);
 }
 
 // ----------------------------------------------------------------------
@@ -467,10 +632,15 @@ void ClaimManager::onCreatureMoved(Client *client, CreatureObject const *creatur
 	uint32 const startClaim = findClaimIdAtPosition(scene, start_w);
 	uint32 const endClaim = findClaimIdAtPosition(scene, end_w);
 
+	bool const startCanManipulate = startClaim != 0 && canManipulateInClaim(creature, startClaim);
+	bool const endCanManipulate = endClaim != 0 && canManipulateInClaim(creature, endClaim);
+
 	if (startClaim == endClaim)
 	{
 		if (endClaim != 0)
 			IGNORE_RETURN(tryEjectBannedCreature(const_cast<CreatureObject &>(*creature)));
+		if (startCanManipulate != endCanManipulate)
+			sendManipulateStateToClient(client, endCanManipulate);
 		return;
 	}
 
@@ -485,6 +655,8 @@ void ClaimManager::onCreatureMoved(Client *client, CreatureObject const *creatur
 		getClaimContentObjects(endClaim, tmp);
 		ObserveTracker::claimRefreshObservation(*client, tmp, true);
 	}
+
+	sendManipulateStateToClient(client, endCanManipulate);
 
 	IGNORE_RETURN(tryEjectBannedCreature(const_cast<CreatureObject &>(*creature)));
 }
@@ -521,17 +693,28 @@ bool ClaimManager::allowContainerTransfer(ServerObject *transferer, ServerObject
 	if (itemClaim == 0 && destClaim == 0)
 		return true;
 
-	auto accountOwnsClaim = [&](uint32 claimId) -> bool
+	auto canAccessClaim = [&](uint32 const claimId) -> bool
 	{
-		ClaimRecord const *const r = findRecord(claimId);
-		return r && r->status == 0 && r->ownerAccount == actorAccount;
+		if (claimId == 0)
+			return true;
+		return canManipulateInClaim(actor, claimId);
 	};
 
-	if (itemClaim != 0 && !accountOwnsClaim(itemClaim))
+	if (!canAccessClaim(itemClaim))
 		return false;
 
-	if (destClaim != 0 && !accountOwnsClaim(destClaim))
+	if (!canAccessClaim(destClaim))
 		return false;
+
+	// Deny transfers that would place a claim-bound item outside the footprint.
+	if (itemClaim != 0)
+	{
+		ClaimRecord const *const r = findRecord(itemClaim);
+		if (r && r->status == 0 && !pointInsideClaimXZ(*r, destSamplePos))
+			return false;
+	}
+
+	UNREF(actorAccount);
 
 	return true;
 }
@@ -556,13 +739,13 @@ bool ClaimManager::allowWorldManipulation(ServerObject const *actorCreature, Ser
 
 	int claimIdInt = 0;
 	if (!tryGetClaimId(targetObject, claimIdInt))
-		return true;
+	{
+		claimIdInt = static_cast<int>(findClaimIdAtPosition(targetObject.getSceneId(), getObjectWorldPosition(targetObject)));
+		if (claimIdInt == 0)
+			return true;
+	}
 
-	ClaimRecord const *const r = findRecord(static_cast<uint32>(claimIdInt));
-	if (!r || r->status != 0)
-		return true;
-
-	return r->ownerAccount == actorAccount;
+	return canManipulateInClaim(actor, static_cast<uint32>(claimIdInt));
 }
 
 // ----------------------------------------------------------------------
@@ -624,6 +807,8 @@ void ClaimManager::runRepossession(uint32 claimId)
 	ClaimRecord *const r = findRecord(claimId);
 	if (!r)
 		return;
+
+	broadcastFootprintSync(*r, false);
 
 	r->status = 1;
 

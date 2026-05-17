@@ -54,6 +54,14 @@ public:
 	void addBan(uint32 claimId, NetworkId const &bannedCharacter);
 	void removeBan(uint32 claimId, NetworkId const &bannedCharacter);
 
+	bool isCharacterAllowed(uint32 claimId, NetworkId const &characterId) const;
+	void addAllowed(uint32 claimId, NetworkId const &allowedCharacter);
+	void removeAllowed(uint32 claimId, NetworkId const &allowedCharacter);
+
+	bool hasManipulatePermission(CreatureObject const *actor, uint32 claimId) const;
+	bool canManipulateInClaim(CreatureObject const *actor, uint32 claimId) const;
+	bool validateManipulateWorldPosition(CreatureObject const *actor, ServerObject const &targetObject, Vector const &newWorldPos) const;
+
 	int getTaxBalance(uint32 claimId, std::string const &resourceKey) const;
 	void addTaxBalance(uint32 claimId, std::string const &resourceKey, int amount);
 	bool withdrawTaxBalance(uint32 claimId, std::string const &resourceKey, int amount);
@@ -88,7 +96,9 @@ public:
 
 	bool tryEjectBannedCreature(CreatureObject &creature);
 
-private:
+	void syncFootprintsToClient(Client *client) const;
+	void syncManipulateStateToClient(Client *client, CreatureObject const *creature) const;
+
 	struct ClaimRecord
 	{
 		uint32 id;
@@ -103,6 +113,7 @@ private:
 		int maintenancePrepayCredits;
 		int status; // 0 = active, 1 = suspended / repossessed
 		std::set<NetworkId> banned;
+		std::set<NetworkId> allowed;
 		std::map<std::string, int> taxBalances;
 		std::set<NetworkId> contentObjects;
 	};
@@ -119,6 +130,8 @@ private:
 	ClaimRecord *findRecord(uint32 id);
 	ClaimRecord const *findRecord(uint32 id) const;
 	void runRepossession(uint32 claimId);
+	void broadcastFootprintSync(ClaimRecord const &rec, bool active) const;
+	void sendManipulateStateToClient(Client *client, bool canManipulate) const;
 };
 
 // ======================================================================

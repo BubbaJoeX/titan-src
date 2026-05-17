@@ -34,6 +34,9 @@ namespace ScriptMethodsClaimNamespace
 	jboolean JNICALL claimRemoveBan(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong banned);
 	jint JNICALL claimGetTaxBalance(JNIEnv *env, jobject self, jint claimId, jstring resourceKey);
 	jboolean JNICALL claimCanManipulateFurniture(JNIEnv *env, jobject self, jlong player, jlong target);
+	jboolean JNICALL claimValidateWorldPosition(JNIEnv *env, jobject self, jlong player, jlong target, jfloat x, jfloat y, jfloat z);
+	jboolean JNICALL claimAddAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed);
+	jboolean JNICALL claimRemoveAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed);
 }
 
 bool ScriptMethodsClaimNamespace::install()
@@ -50,6 +53,9 @@ bool ScriptMethodsClaimNamespace::install()
 		JF("_claimRemoveBan", "(JJJ)Z", claimRemoveBan),
 		JF("_claimGetTaxBalance", "(ILjava/lang/String;)I", claimGetTaxBalance),
 		JF("_claimCanManipulateFurniture", "(JJ)Z", claimCanManipulateFurniture),
+		JF("_claimValidateWorldPosition", "(JJFFF)Z", claimValidateWorldPosition),
+		JF("_claimAddAllowed", "(JJJ)Z", claimAddAllowed),
+		JF("_claimRemoveAllowed", "(JJJ)Z", claimRemoveAllowed),
 #undef JF
 	};
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES) / sizeof(NATIVES[0]));
@@ -137,9 +143,11 @@ jint JNICALL ScriptMethodsClaimNamespace::claimFinalizePlacement(JNIEnv *env, jo
 
 	markerObj->setObjVarItem("claim.id", static_cast<int>(claimId));
 	markerObj->setObjVarItem("claim.is_marker", 1);
+	markerObj->setObjVarItem("claim.footprint_radius_m", useRadius);
 	ClaimManager::getInstance().bindObjectToClaim(claimId, markerObj->getNetworkId());
 
-	if (terminalId.isValid())
+	NetworkId const markerId = markerObj->getNetworkId();
+	if (terminalId.isValid() && terminalId != markerId)
 	{
 		ServerObject *tobj = ServerWorld::findObjectByNetworkId(terminalId);
 		if (tobj)
@@ -148,6 +156,10 @@ jint JNICALL ScriptMethodsClaimNamespace::claimFinalizePlacement(JNIEnv *env, jo
 			tobj->setObjVarItem("claim.is_terminal", 1);
 			ClaimManager::getInstance().bindObjectToClaim(claimId, terminalId);
 		}
+	}
+	else
+	{
+		markerObj->setObjVarItem("claim.is_terminal", 1);
 	}
 
 	return static_cast<jint>(claimId);
@@ -301,4 +313,52 @@ jboolean JNICALL ScriptMethodsClaimNamespace::claimCanManipulateFurniture(JNIEnv
 		return JNI_FALSE;
 
 	return ClaimManager::getInstance().allowWorldManipulation(creature, *tobj) ? JNI_TRUE : JNI_FALSE;
+}
+
+jboolean JNICALL ScriptMethodsClaimNamespace::claimValidateWorldPosition(JNIEnv *env, jobject self, jlong player, jlong target, jfloat x, jfloat y, jfloat z)
+{
+	UNREF(self);
+	if (!ConfigServerGame::getClaimSystemEnabled())
+		return JNI_TRUE;
+
+	CreatureObject const *creature = JavaLibrary::getCreatureThrow(env, player, "claimValidateWorldPosition", false);
+	if (!creature)
+		return JNI_FALSE;
+
+	ServerObject *tobj = nullptr;
+	if (!JavaLibrary::getObject(target, tobj) || !tobj)
+		return JNI_FALSE;
+
+	Vector const newPos(x, y, z);
+	return ClaimManager::getInstance().validateManipulateWorldPosition(creature, *tobj, newPos) ? JNI_TRUE : JNI_FALSE;
+}
+
+jboolean JNICALL ScriptMethodsClaimNamespace::claimAddAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed)
+{
+	UNREF(self);
+	uint32 claimId = 0;
+	if (!validateClaimTerminalAccess(env, player, terminal, claimId))
+		return JNI_FALSE;
+
+	NetworkId const allowedId(allowed);
+	if (!allowedId.isValid())
+		return JNI_FALSE;
+
+	ClaimManager::getInstance().addAllowed(claimId, allowedId);
+	return JNI_TRUE;
+}
+
+jboolean JNICALL ScriptMethodsClaimNamespace::claimRemoveAllowed(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong allowed)
+{
+	UNREF(self);
+	uint32 claimId = 0;
+	if (!validateClaimTerminalAccess(env, player, terminal, claimId))
+		return JNI_FALSE;
+
+	NetworkId const allowedId(allowed);
+	if (!allowedId.isValid())
+		return JNI_FALSE;
+
+	ClaimManager::getInstance().removeAllowed(claimId, allowedId);
+	return JNI_TRUE;
 }

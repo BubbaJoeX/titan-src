@@ -8,6 +8,7 @@
 
 #include "serverGame/FirstServerGame.h"
 #include "serverGame/Client.h"
+#include "serverGame/ClaimManager.h"
 
 #include "Archive/ByteStream.h"
 #include "LocalizationManager.h"
@@ -572,6 +573,11 @@ void Client::onLoadPlayer(CreatureObject &newCharacter) {
     m_primaryControlledObject = CachedNetworkId(newCharacter);
 
     assumeControl(newCharacter);
+
+	ClaimManager::getInstance().syncFootprintsToClient(this);
+	CreatureObject const *const co = newCharacter.asCreatureObject();
+	if (co)
+		ClaimManager::getInstance().syncManipulateStateToClient(this, co);
 }
 
 //-----------------------------------------------------------------------
