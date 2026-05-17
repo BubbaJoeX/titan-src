@@ -214,7 +214,7 @@ namespace ContainerInterfaceNamespace
 			{
 				CreatureObject const *const transfererCreature = transferer->asCreatureObject();
 				bool const claimNoTradeDeposit = transfererCreature
-					&& ClaimManager::getInstance().canDepositNoTradeIntoClaimContainer(*transfererCreature, *destination, item);
+					&& ClaimManager::getInstance().canDepositNoTradeIntoClaimContainer(transfererCreature, destination, item);
 
 				// if the item contains any no trade items, the item
 				// and destination must be owned by the transferer
@@ -243,7 +243,7 @@ namespace ContainerInterfaceNamespace
 				// item doesn't contain any no trade items, but the item itself is no trade
 				else if (!item.isPlayerControlled() && item.markedNoTrade())
 				{
-					if (!claimNoTradeContainerXfer)
+					if (!claimNoTradeDeposit)
 					{
 						// item is no trade, the destination must be owned by the transferer
 						if (   destination->getOwnerId() != transferer->getNetworkId()
@@ -253,10 +253,7 @@ namespace ContainerInterfaceNamespace
 							error = Container::CEC_NoPermission;
 							return false;
 						}
-					}
 
-					if (!claimNoTradeDeposit)
-					{
 						if (item.markedNoTradeShared(true))
 						{
 							// if the no trade item is a "shared" no trade item and is immediately
