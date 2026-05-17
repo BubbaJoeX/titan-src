@@ -112,7 +112,7 @@ jint JNICALL ScriptMethodsClaimNamespace::claimFinalizePlacement(JNIEnv *env, jo
 
 	float useRadius = radius;
 	if (useRadius <= 0.f)
-		useRadius = ConfigServerGame::getClaimDefaultFootprintRadius();
+		useRadius = ConfigServerGame::getClaimDefaultFootprintRadiusMeters();
 	if (useRadius <= 0.f)
 		useRadius = 32.f;
 
@@ -234,11 +234,11 @@ jboolean JNICALL ScriptMethodsClaimNamespace::claimPayMaintenance(JNIEnv *env, j
 	if (playerObj->getBankBalance() < credits)
 		return JNI_FALSE;
 
-	if (!ClaimManager::getInstance().payMaintenance(claimId, credits))
+	// Same sink account as player structure maintenance (see money.ACCT_STRUCTURE_MAINTENANCE).
+	if (!playerObj->transferBankCreditsTo(std::string("structureMaintanence"), credits))
 		return JNI_FALSE;
 
-	playerObj->internalAdjustBankBalance(-credits, true);
-	return JNI_TRUE;
+	return ClaimManager::getInstance().payMaintenance(claimId, credits) ? JNI_TRUE : JNI_FALSE;
 }
 
 jboolean JNICALL ScriptMethodsClaimNamespace::claimAddBan(JNIEnv *env, jobject self, jlong player, jlong terminal, jlong banned)
