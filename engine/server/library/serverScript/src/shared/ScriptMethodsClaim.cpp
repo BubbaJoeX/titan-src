@@ -43,7 +43,7 @@ bool ScriptMethodsClaimNamespace::install()
 		JF("_claimFinalizePlacement", "(JJFFFFJ)I", claimFinalizePlacement),
 		JF("_claimBindObject", "(JI)V", claimBindObject),
 		JF("_claimUnbindObject", "(J)V", claimUnbindObject),
-		JF("_claimApplyVisitorResourceTax", "(JFFFFLjava/lang/String;I)I", claimApplyVisitorResourceTax),
+		JF("_claimApplyVisitorResourceTax", "(JFFFLjava/lang/String;I)I", claimApplyVisitorResourceTax),
 		JF("_claimWithdrawTax", "(JJLjava/lang/String;I)Z", claimWithdrawTax),
 		JF("_claimPayMaintenance", "(JJI)Z", claimPayMaintenance),
 		JF("_claimAddBan", "(JJJ)Z", claimAddBan),

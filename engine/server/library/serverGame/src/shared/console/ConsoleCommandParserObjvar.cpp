@@ -19,7 +19,7 @@
 #include "sharedFoundation/FormattedString.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedGame/GameObjectTypes.h"
-#include "localization/StringId.h"
+#include "StringId.h"
 #include "sharedMath/Transform.h"
 #include "sharedMath/Vector.h"
 #include <cctype>
