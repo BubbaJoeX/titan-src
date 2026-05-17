@@ -11,7 +11,9 @@
 #include "serverGame/AiCombatPulseQueue.h"
 #include "serverGame/AiCreatureController.h"
 #include "serverGame/Chat.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/Client.h"
+#include "serverGame/ConfigServerGame.h"
 #include "serverGame/CommoditiesMarket.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/CreatureObject.h"
@@ -146,6 +148,8 @@ static const CommandParser::CmdInfo cmds[] =
 	{"displayTerrain",           1, "<range in meters>",                  "Display the generated/ungenerated status of terrain chunks around the current location"},
 	{"generateTerrain",          1, "<range in meters>",                  "Generate terrain chunks (if the terrain chunks are not currently generated) around the current location"},
 	{"purgeTerrain",             0, "",                                   "Purge all generated terrain chunks (***FOR DEBUGGING ONLY***)"},
+	{"purgeClaim",               1, "<claimId|markerOid> [nodecor]",        "Remove one open-world claim by id or marker object id."},
+	{"purgeClaims",              0, "[playerName] [account] [nodecor]",     "Purge all claims for a player character (default: self)."},
 	{"listConnectedCharacters",  0, "",                                   "List all characters currently connected to the cluster."},
 	{"listConnectedCharacterData", 1, "<oid>",                            "List the character data for a connected character."},
 	{"listTravelPoints",         0, "[<planet name> <x> <y> <z>]",        "List all the travel points on the current or specified planet sorted by the distance from the current or specified location"},
@@ -991,6 +995,101 @@ bool ConsoleCommandParserServer::performParsing(const NetworkId & userId, const 
 		float z2 = static_cast<float>(strtod(Unicode::wideToNarrow(argv[6]).c_str(), nullptr));
 		if (scene == ConfigServerGame::getSceneID() && user->getClient())
 			ServerBuildoutManager::clientSaveArea(*user->getClient(), areaName, x1, z1, x2, z2);
+	}
+	else if (isAbbrev(argv[0], "purgeClaim"))
+	{
+		if (!ConfigServerGame::getClaimSystemEnabled())
+		{
+			result += Unicode::narrowToWide("Claim system is disabled.\n");
+			return true;
+		}
+
+		bool destroyWorldObjects = true;
+		uint32 claimId = 0;
+
+		if (argv.size() >= 2)
+		{
+			std::string const arg1 = Unicode::wideToNarrow(argv[1]);
+			if (arg1 == "nodecor")
+				destroyWorldObjects = false;
+			else
+			{
+				claimId = static_cast<uint32>(strtoul(arg1.c_str(), nullptr, 10));
+				if (claimId == 0)
+				{
+					NetworkId const markerId(arg1);
+					if (markerId.isValid())
+						claimId = ClaimManager::getInstance().findClaimIdByMarker(markerId);
+				}
+				if (argv.size() >= 3 && Unicode::wideToNarrow(argv[2]) == "nodecor")
+					destroyWorldObjects = false;
+			}
+		}
+
+		if (claimId == 0)
+		{
+			result += Unicode::narrowToWide("Usage: server purgeClaim <claimId|markerOid> [nodecor]\n");
+			return true;
+		}
+
+		if (ClaimManager::getInstance().removeClaim(claimId, destroyWorldObjects))
+			result += Unicode::narrowToWide(FormattedString<256>().sprintf("Removed claim %u.\n", claimId));
+		else
+			result += Unicode::narrowToWide(FormattedString<256>().sprintf("Claim %u not found.\n", claimId));
+	}
+	else if (isAbbrev(argv[0], "purgeClaims"))
+	{
+		if (!ConfigServerGame::getClaimSystemEnabled())
+		{
+			result += Unicode::narrowToWide("Claim system is disabled.\n");
+			return true;
+		}
+
+		NetworkId targetId = userId;
+		bool allAccountClaims = false;
+		bool destroyWorldObjects = true;
+
+		for (size_t i = 1; i < argv.size(); ++i)
+		{
+			std::string const token = Unicode::wideToNarrow(argv[i]);
+			if (token == "account")
+				allAccountClaims = true;
+			else if (token == "nodecor")
+				destroyWorldObjects = false;
+			else if (targetId == userId)
+			{
+				NetworkId const byName(token);
+				if (byName.isValid())
+					targetId = byName;
+				else
+					targetId = NameManager::getInstance().getPlayerId(NameManager::normalizeName(token));
+			}
+		}
+
+		CreatureObject *const targetCreature = dynamic_cast<CreatureObject *>(NetworkIdManager::getObjectById(targetId));
+		if (!targetCreature)
+		{
+			result += Unicode::narrowToWide("Target player not found.\n");
+			return true;
+		}
+
+		int removed = 0;
+		if (allAccountClaims)
+		{
+			PlayerObject const *const po = PlayerCreatureController::getPlayerObject(targetCreature);
+			if (!po)
+			{
+				result += Unicode::narrowToWide("Target has no player object.\n");
+				return true;
+			}
+			removed = ClaimManager::getInstance().purgeClaimsForAccount(po->getStationId(), destroyWorldObjects);
+		}
+		else
+		{
+			removed = ClaimManager::getInstance().purgeClaimsForCharacter(targetCreature->getNetworkId(), destroyWorldObjects);
+		}
+
+		result += Unicode::narrowToWide(FormattedString<256>().sprintf("Purged %d claim(s).\n", removed));
 	}
 	else
 	{
