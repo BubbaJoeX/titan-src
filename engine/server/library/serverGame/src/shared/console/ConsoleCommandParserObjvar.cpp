@@ -19,7 +19,12 @@
 #include "sharedFoundation/FormattedString.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedGame/GameObjectTypes.h"
+#include "localization/StringId.h"
+#include "sharedMath/Transform.h"
+#include "sharedMath/Vector.h"
+#include <cctype>
 #include <cstdio>
+#include <vector>
 
 // ======================================================================
 
@@ -42,8 +47,266 @@ static const CommandParser::CmdInfo cmds[] =
 	{"list",   0, "",                      "Lists all the objvars on an object."},
 	{"listWithPacking", 1, "<oid>",      "Lists all the objvars on an object, showing which are packed into the OBJECTS table in the database."},
 	{"remove", 2, "<oid> <name>",          "Removes an objvar from an object."},
+	{"setex",  4, "<oid> <name> <type> <value>", "Sets a typed objvar (god client)."},
 	{"", 0, "", ""} // this must be last
 };
+
+namespace ObjvarSetexNamespace
+{
+	std::string trim(std::string const & s)
+	{
+		std::string::size_type b = s.find_first_not_of(" \t\r\n");
+		if (b == std::string::npos)
+			return std::string();
+		std::string::size_type e = s.find_last_not_of(" \t\r\n");
+		return s.substr(b, e - b + 1);
+	}
+
+	void split(std::string const & s, char sep, std::vector<std::string> & out)
+	{
+		out.clear();
+		std::string token;
+		for (size_t i = 0; i < s.size(); ++i)
+		{
+			if (s[i] == sep)
+			{
+				out.push_back(trim(token));
+				token.clear();
+			}
+			else
+				token += s[i];
+		}
+		if (!token.empty() || !s.empty())
+			out.push_back(trim(token));
+	}
+
+	bool applySetex(ServerObject * object, std::string const & objvarName, std::string const & type, std::string const & value)
+	{
+		if (!object || objvarName.empty() || type.empty())
+			return false;
+
+		if (type == "int")
+		{
+			IGNORE_RETURN(object->setObjVarItem(objvarName, atoi(value.c_str())));
+			return true;
+		}
+		if (type == "float")
+		{
+			IGNORE_RETURN(object->setObjVarItem(objvarName, static_cast<real>(atof(value.c_str()))));
+			return true;
+		}
+		if (type == "string")
+		{
+			IGNORE_RETURN(object->setObjVarItem(objvarName, Unicode::narrowToWide(value)));
+			return true;
+		}
+		if (type == "networkid")
+		{
+			IGNORE_RETURN(object->setObjVarItem(objvarName, NetworkId(value.c_str())));
+			return true;
+		}
+		if (type == "vector")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			if (p.size() < 3)
+				return false;
+			Vector v(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str())));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "location")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			if (p.size() < 5)
+				return false;
+			DynamicVariableLocationData loc(
+				Vector(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str()))),
+				p[3],
+				NetworkId(p[4].c_str()));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, loc));
+			return true;
+		}
+		if (type == "stringid")
+		{
+			std::string::size_type pipe = value.find('|');
+			if (pipe == std::string::npos)
+				IGNORE_RETURN(object->setObjVarItem(objvarName, StringId(value)));
+			else
+				IGNORE_RETURN(object->setObjVarItem(objvarName, StringId(value.substr(0, pipe), value.substr(pipe + 1))));
+			return true;
+		}
+		if (type == "transform")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			if (p.size() < 9)
+				return false;
+			Transform t;
+			t.setPosition_p(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str())));
+			t.yaw_l(static_cast<real>(atof(p[3].c_str())));
+			t.pitch_l(static_cast<real>(atof(p[4].c_str())));
+			t.roll_l(static_cast<real>(atof(p[5].c_str())));
+			t.setToScale(Vector(static_cast<real>(atof(p[6].c_str())), static_cast<real>(atof(p[7].c_str())), static_cast<real>(atof(p[8].c_str()))));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, t));
+			return true;
+		}
+		if (type == "intarray")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			std::vector<int> v;
+			for (size_t i = 0; i < p.size(); ++i)
+				if (!p[i].empty())
+					v.push_back(atoi(p[i].c_str()));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "floatarray")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			std::vector<float> v;
+			for (size_t i = 0; i < p.size(); ++i)
+				if (!p[i].empty())
+					v.push_back(static_cast<float>(atof(p[i].c_str())));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "stringarray")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			std::vector<Unicode::String> v;
+			for (size_t i = 0; i < p.size(); ++i)
+				if (!p[i].empty())
+					v.push_back(Unicode::narrowToWide(p[i]));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "networkidarray")
+		{
+			std::vector<std::string> p;
+			split(value, ',', p);
+			std::vector<NetworkId> v;
+			for (size_t i = 0; i < p.size(); ++i)
+				if (!p[i].empty())
+					v.push_back(NetworkId(p[i].c_str()));
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "locationarray")
+		{
+			std::vector<std::string> entries;
+			split(value, ';', entries);
+			std::vector<DynamicVariableLocationData> v;
+			for (size_t i = 0; i < entries.size(); ++i)
+			{
+				if (entries[i].empty())
+					continue;
+				std::vector<std::string> p;
+				split(entries[i], ',', p);
+				if (p.size() < 5)
+					continue;
+				v.push_back(DynamicVariableLocationData(
+					Vector(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str()))),
+					p[3],
+					NetworkId(p[4].c_str())));
+			}
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "vectorarray")
+		{
+			std::vector<std::string> entries;
+			split(value, ';', entries);
+			std::vector<Vector> v;
+			for (size_t i = 0; i < entries.size(); ++i)
+			{
+				if (entries[i].empty())
+					continue;
+				std::vector<std::string> p;
+				split(entries[i], ',', p);
+				if (p.size() < 3)
+					continue;
+				v.push_back(Vector(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str()))));
+			}
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "stringidarray")
+		{
+			std::vector<std::string> entries;
+			split(value, ';', entries);
+			std::vector<StringId> v;
+			for (size_t i = 0; i < entries.size(); ++i)
+			{
+				if (entries[i].empty())
+					continue;
+				std::string::size_type pipe = entries[i].find('|');
+				if (pipe == std::string::npos)
+					v.push_back(StringId(entries[i]));
+				else
+					v.push_back(StringId(entries[i].substr(0, pipe), entries[i].substr(pipe + 1)));
+			}
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		if (type == "transformarray")
+		{
+			std::vector<std::string> entries;
+			split(value, ';', entries);
+			std::vector<Transform> v;
+			for (size_t i = 0; i < entries.size(); ++i)
+			{
+				if (entries[i].empty())
+					continue;
+				std::vector<std::string> p;
+				split(entries[i], ',', p);
+				if (p.size() < 9)
+					continue;
+				Transform t;
+				t.setPosition_p(static_cast<real>(atof(p[0].c_str())), static_cast<real>(atof(p[1].c_str())), static_cast<real>(atof(p[2].c_str())));
+				t.yaw_l(static_cast<real>(atof(p[3].c_str())));
+				t.pitch_l(static_cast<real>(atof(p[4].c_str())));
+				t.roll_l(static_cast<real>(atof(p[5].c_str())));
+				t.setToScale(Vector(static_cast<real>(atof(p[6].c_str())), static_cast<real>(atof(p[7].c_str())), static_cast<real>(atof(p[8].c_str()))));
+				v.push_back(t);
+			}
+			IGNORE_RETURN(object->setObjVarItem(objvarName, v));
+			return true;
+		}
+		return false;
+	}
+
+	char const * getTypeName(DynamicVariable::DynamicVariableType t)
+	{
+		switch (t)
+		{
+		case DynamicVariable::INT: return "int";
+		case DynamicVariable::INT_ARRAY: return "intarray";
+		case DynamicVariable::REAL: return "float";
+		case DynamicVariable::REAL_ARRAY: return "floatarray";
+		case DynamicVariable::STRING: return "string";
+		case DynamicVariable::STRING_ARRAY: return "stringarray";
+		case DynamicVariable::NETWORK_ID: return "networkid";
+		case DynamicVariable::NETWORK_ID_ARRAY: return "networkidarray";
+		case DynamicVariable::LOCATION: return "location";
+		case DynamicVariable::LOCATION_ARRAY: return "locationarray";
+		case DynamicVariable::LIST: return "list";
+		case DynamicVariable::STRING_ID: return "stringid";
+		case DynamicVariable::STRING_ID_ARRAY: return "stringidarray";
+		case DynamicVariable::TRANSFORM: return "transform";
+		case DynamicVariable::TRANSFORM_ARRAY: return "transformarray";
+		case DynamicVariable::VECTOR: return "vector";
+		case DynamicVariable::VECTOR_ARRAY: return "vectorarray";
+		default: return "unknown";
+		}
+	}
+}
+
+using namespace ObjvarSetexNamespace;
 
 //-----------------------------------------------------------------
 
@@ -427,6 +690,39 @@ bool ConsoleCommandParserObjvar::performParsing (const NetworkId & userId, const
 
 	//-----------------------------------------------------------------
 
+	else if (isAbbrev(argv[0], "setex"))
+	{
+		if (argv.size() < 5)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_SYNTAX);
+			return true;
+		}
+
+		NetworkId const oid(Unicode::wideToNarrow(argv[1]));
+		ServerObject * const object = ServerWorld::findObjectByNetworkId(oid);
+		if (object == nullptr)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_OBJECT);
+			return true;
+		}
+
+		std::string const objvarName = Unicode::wideToNarrow(argv[2]);
+		std::string const type = Unicode::wideToNarrow(argv[3]);
+		std::string valueStr = Unicode::wideToNarrow(argv[4]);
+		for (size_t i = 5; i < argv.size(); ++i)
+		{
+			valueStr += " ";
+			valueStr += Unicode::wideToNarrow(argv[i]);
+		}
+
+		if (applySetex(object, objvarName, type, valueStr))
+			result += getErrorMessage(argv[0], ERR_SUCCESS);
+		else
+			result += Unicode::narrowToWide("objvar setex failed (bad type or value format)\n");
+	}
+
+	//-----------------------------------------------------------------
+
 	else
 	{
 		result += getErrorMessage(argv[0], ERR_NO_HANDLER);
@@ -492,8 +788,10 @@ char buffer[32];
 		for (int j = 0; j < tabCount; ++j)
 			result += spaces;
 
-		// print the name
-		result += Unicode::narrowToWide(objVar.getName());
+		// print the name (full dotted path), type, and value
+		result += Unicode::narrowToWide(objVar.getNameWithPath());
+		result += tabs;
+		result += Unicode::narrowToWide(getTypeName(objVar.getType()));
 		result += tabs;
 		if (withPackingData)
 		{

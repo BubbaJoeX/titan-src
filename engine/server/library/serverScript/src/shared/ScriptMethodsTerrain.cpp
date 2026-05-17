@@ -109,7 +109,7 @@ namespace ScriptMethodsTerrainNamespace
 	jfloat       JNICALL getCoverAtLocation (JNIEnv* env, jobject self, jfloat x, jfloat z);
 	jobject      JNICALL getGoodLocation (JNIEnv* env, jobject self, jfloat hintX, jfloat hintY, jobject searchRectLowerLeftLocation, jobject searchRectUpperRightLocation, jboolean dontCheckWater, jboolean dontCheckSlope);
 	jobject      JNICALL getGoodLocationAvoidCollidables (JNIEnv* env, jobject self, jfloat hintX, jfloat hintY, jobject searchRectLowerLeftLocation, jobject searchRectUpperRightLocation, jboolean dontCheckWater, jboolean dontCheckSlope, jfloat staticObjDistance);
-	jboolean     JNICALL enterClientStructurePlacementMode (JNIEnv* env, jobject self, jlong player, jlong deed, jstring serverObjectTemplateName);
+	jboolean     JNICALL enterClientStructurePlacementMode (JNIEnv* env, jobject self, jlong player, jlong deed, jstring serverObjectTemplateName, jfloat claimFootprintRadiusMeters);
 	jboolean     JNICALL showAirspeederPanel (JNIEnv* env, jobject self, jlong player, jboolean show);
 	jboolean     JNICALL sendAutoPilotEngage (JNIEnv* env, jobject self, jlong player, jfloat targetX, jfloat targetZ);
 	jboolean     JNICALL sendAutoPilotDisengage (JNIEnv* env, jobject self, jlong player);
@@ -153,7 +153,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("getCoverAtLocation",                "(FF)F",                                                     getCoverAtLocation),
 	JF("getGoodLocation",                   "(FFLscript/location;Lscript/location;ZZ)Lscript/location;", getGoodLocation),
 	JF("getGoodLocationAvoidCollidables",   "(FFLscript/location;Lscript/location;ZZF)Lscript/location;", getGoodLocationAvoidCollidables),
-	JF("_enterClientStructurePlacementMode", "(JJLjava/lang/String;)Z",       enterClientStructurePlacementMode),
+	JF("_enterClientStructurePlacementMode", "(JJLjava/lang/String;F)Z",       enterClientStructurePlacementMode),
 	JF("_showAirspeederPanel", "(JZ)Z",                                       showAirspeederPanel),
 	JF("_sendAutoPilotEngage", "(JFF)Z",                                     sendAutoPilotEngage),
 	JF("_sendAutoPilotDisengage", "(J)Z",                                    sendAutoPilotDisengage),
@@ -337,7 +337,7 @@ jobject JNICALL ScriptMethodsTerrainNamespace::getGoodLocationAvoidCollidables(J
 }
 // ----------------------------------------------------------------------
 
-jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMode (JNIEnv* /*env*/, jobject /*self*/, jlong jobject_player, jlong jobject_deed, jstring jstring_serverObjectTemplateName)
+jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMode (JNIEnv* /*env*/, jobject /*self*/, jlong jobject_player, jlong jobject_deed, jstring jstring_serverObjectTemplateName, jfloat claimFootprintRadiusMeters)
 {
 	//-- get the player object
 	ServerObject* player = 0;
@@ -407,7 +407,7 @@ jboolean JNICALL ScriptMethodsTerrainNamespace::enterClientStructurePlacementMod
 	}
 
 	//-- send the message to the client
-	client->send (EnterStructurePlacementModeMessage (deedNetworkId, sharedObjectTemplateName), true);
+	client->send (EnterStructurePlacementModeMessage (deedNetworkId, sharedObjectTemplateName, claimFootprintRadiusMeters), true);
 
 	return JNI_TRUE;
 }
