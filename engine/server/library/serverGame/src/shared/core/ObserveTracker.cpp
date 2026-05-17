@@ -10,6 +10,7 @@
 #include "serverGame/ObserveTracker.h"
 
 #include "serverGame/BaselineDistributionListPool.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/Client.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ContainerInterface.h"
@@ -37,6 +38,7 @@
 #include <map>
 #include <deque>
 #include <set>
+#include <vector>
 
 // ======================================================================
 
@@ -61,6 +63,7 @@ namespace ObserveTrackerNamespace
 	void observeContentsIfObservedWithParent(Client &client, ServerObject &obj, std::set<NetworkId> const *oldObserveList);
 	bool shouldObserveCellContentsDueToClientContainmentChain(Client const &client, ServerObject const &portallizedObject);
 	void observeMissionCriticalObjects(Client &client, CreatureObject const &clientCreature);
+	void claimRefreshObservationForClient(Client &client, std::vector<NetworkId> const &objects, bool wantObserve);
 	void handleUnobserveCallback(void const *);
 }
 using namespace ObserveTrackerNamespace;
@@ -656,6 +659,9 @@ bool ObserveTrackerNamespace::observe(Client &client, ServerObject &obj, std::se
 			return false;
 	}
 
+	if (ClaimManager::getInstance().shouldSuppressClaimContentsObservation(client, obj))
+		return false;
+
 	bool isVisible = obj.isVisibleOnClient(client);
 	bool isPatrol = obj.isPatrolPathNode();
 	if (!isVisible && !isPatrol)
@@ -976,5 +982,26 @@ void ObserveTrackerNamespace::observeMissionCriticalObjects(Client &client, Crea
 	}
 }
 
+// ----------------------------------------------------------------------
+
+void ObserveTrackerNamespace::claimRefreshObservationForClient(Client &client, std::vector<NetworkId> const &objects, bool wantObserve)
+{
+	for (size_t i = 0; i < objects.size(); ++i)
+	{
+		ServerObject *const o = ServerWorld::findObjectByNetworkId(objects[i]);
+		if (!o)
+			continue;
+		if (wantObserve)
+			IGNORE_RETURN(observe(client, *o, 0));
+		else
+			unobserve(client, *o, true);
+	}
+}
+
 // ======================================================================
+
+void ObserveTracker::claimRefreshObservation(Client &client, std::vector<NetworkId> const &objects, bool wantObserve)
+{
+	ObserveTrackerNamespace::claimRefreshObservationForClient(client, objects, wantObserve);
+}
 

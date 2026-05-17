@@ -10,6 +10,7 @@
 #include "serverGame/ContainerInterface.h"
 
 #include "serverGame/Chat.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GameServer.h"
@@ -153,6 +154,12 @@ namespace ContainerInterfaceNamespace
 		PROFILER_AUTO_BLOCK_DEFINE("checkTransferScripts");
 
 		error = Container::CEC_Success;
+
+		if (ConfigServerGame::getClaimSystemEnabled() && transferer && !ClaimManager::getInstance().allowContainerTransfer(transferer, destination, item))
+		{
+			error = Container::CEC_NoPermission;
+			return false;
+		}
 
 		NetworkId const &transfererId = transferer ? transferer->getNetworkId() : NetworkId::cms_invalid;
 		ServerObject * const source = safe_cast<ServerObject *>(ContainerInterface::getContainedByObject(item));

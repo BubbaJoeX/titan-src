@@ -27,6 +27,7 @@ set(SHARED_SOURCES
 	shared/ScriptMethodsBuffBuilder.cpp
 	shared/ScriptMethodsChat.cpp
 	shared/ScriptMethodsCity.cpp
+	shared/ScriptMethodsClaim.cpp
 	shared/ScriptMethodsClientEffect.cpp
 	shared/ScriptMethodsClusterWideData.cpp
 	shared/ScriptMethodsCollection.cpp

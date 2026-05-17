@@ -16,6 +16,7 @@
 #include "serverGame/calendar/CalendarService.h"
 #include "serverGame/CityTerrainService.h"
 #include "serverGame/CombatTracker.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/CommandCppFuncs.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ConsoleManager.h"
@@ -69,6 +70,7 @@ void SetupServerGame::install()
 	AuthTransferTracker::install();
 	NonCriticalTaskQueue::install(static_cast<NonCriticalTaskQueue*>(nullptr));
 	SurveySystem::install(static_cast<SurveySystem*>(nullptr));
+	ClaimManager::install(static_cast<ClaimManager*>(nullptr));
 	CreatureObject::install();
 	NameManager::install();
 	MessageToQueue::install();

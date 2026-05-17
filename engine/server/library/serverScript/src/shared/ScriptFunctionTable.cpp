@@ -440,6 +440,7 @@ static const Scripting::ScriptFuncTable ScriptFuncList[] =
 
 //-- finish it up
 
+	{Scripting::TRIG_PLACE_CLAIM_MARKER,        "OnPlaceClaimMarker",     "OOLi"},
 	{Scripting::TRIG_LAST_TRIGGER,			nullptr,					nullptr}
 };
 

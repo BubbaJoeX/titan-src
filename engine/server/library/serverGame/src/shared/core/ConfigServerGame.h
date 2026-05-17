@@ -577,6 +577,14 @@ class ConfigServerGame
 
 		const char *    serverLoadLevel;
 
+		// open-world claim system (runtime registry; DB tables optional for tooling)
+		bool            claimSystemEnabled;
+		int             claimMaxActivePerAccount;
+		float           claimDefaultFootprintRadiusMeters;
+		int             claimMaintenanceIntervalDays;
+		float           claimVisitorResourceTaxRate;
+		int             claimMaintenanceFeeCredits;
+
 		int             maxHousingLots;
 	};
 
@@ -1065,6 +1073,13 @@ class ConfigServerGame
 	static bool				getUseOldSuidGenerator();
 
 	static const char *     getServerLoadLevel();
+
+	static bool             getClaimSystemEnabled();
+	static int              getClaimMaxActivePerAccount();
+	static float            getClaimDefaultFootprintRadiusMeters();
+	static int              getClaimMaintenanceIntervalDays();
+	static float            getClaimVisitorResourceTaxRate();
+	static int              getClaimMaintenanceFeeCredits();
 
 	static int              getMaxHousingLots();
 };
@@ -3713,6 +3728,38 @@ inline bool ConfigServerGame::getUseOldSuidGenerator() {
 inline const char *ConfigServerGame::getServerLoadLevel()
 {
 	return data->serverLoadLevel;
+}
+
+//-----------------------------------------------------------------------
+
+inline bool ConfigServerGame::getClaimSystemEnabled()
+{
+	return data->claimSystemEnabled;
+}
+
+inline int ConfigServerGame::getClaimMaxActivePerAccount()
+{
+	return data->claimMaxActivePerAccount;
+}
+
+inline float ConfigServerGame::getClaimDefaultFootprintRadiusMeters()
+{
+	return data->claimDefaultFootprintRadiusMeters;
+}
+
+inline int ConfigServerGame::getClaimMaintenanceIntervalDays()
+{
+	return data->claimMaintenanceIntervalDays;
+}
+
+inline float ConfigServerGame::getClaimVisitorResourceTaxRate()
+{
+	return data->claimVisitorResourceTaxRate;
+}
+
+inline int ConfigServerGame::getClaimMaintenanceFeeCredits()
+{
+	return data->claimMaintenanceFeeCredits;
 }
 
 //-----------------------------------------------------------------------

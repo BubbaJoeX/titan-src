@@ -14,6 +14,8 @@
 #include "serverGame/CellObject.h"
 #include "serverGame/CollisionCallbacks.h"
 #include "serverGame/CombatTracker.h"
+#include "serverGame/ClaimManager.h"
+#include "serverGame/Client.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ConnectionServerConnection.h"
 #include "serverGame/ContainerInterface.h"
@@ -2471,6 +2473,13 @@ void ServerWorld::internalMoveObject(ServerObject & movingObject, const Vector &
 		updateTriggerDatabase(movingObject);
 		triggerMovingObjects(movingObject, start, end);
 		triggerMovingTriggers(movingObject, start, end);
+
+		if (ConfigServerGame::getClaimSystemEnabled())
+		{
+			CreatureObject *const co = movingObject.asCreatureObject();
+			if (co && co->isPlayerControlled() && co->getClient())
+				ClaimManager::getInstance().onCreatureMoved(co->getClient(), co, start, end);
+		}
 	}
 	else
 	{
@@ -2721,6 +2730,12 @@ void ServerWorld::update(real time)
 			{
 				PROFILER_AUTO_BLOCK_DEFINE("Scheduler:Observe");
 				ObserveTracker::update();
+			}
+
+			{
+				PROFILER_AUTO_BLOCK_DEFINE("ClaimManager::updateFrame");
+				if (ConfigServerGame::getClaimSystemEnabled())
+					ClaimManager::getInstance().updateFrame();
 			}
 
 			{

@@ -263,6 +263,8 @@ set(SHARED_SOURCES
 	shared/core/CharacterMatchManager.h
 	shared/core/ChatServerConnection.cpp
 	shared/core/ChatServerConnection.h
+	shared/core/ClaimManager.cpp
+	shared/core/ClaimManager.h
 	shared/core/Client.cpp
 	shared/core/Client.h
 	shared/core/ClusterWideDataClient.cpp

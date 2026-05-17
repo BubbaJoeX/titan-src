@@ -5358,11 +5358,22 @@ static void commandFuncPlaceStructure(const Command& /*command*/, const NetworkI
 	scriptParameters.addParam(position);
 	scriptParameters.addParam(rotation);
 
-	if (serverObject->getScriptObject()->trigAllScripts(Scripting::TRIG_PLACE_STRUCTURE, scriptParameters) != SCRIPT_CONTINUE)
-		DEBUG_REPORT_LOG(true, ("commandFuncPlaceStructure: did not return SCRIPT_CONTINUE\n"));
+	ServerObject * const deedObject = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(deedNetworkId));
+	int claimMarkerDeed = 0;
+	if (deedObject && deedObject->getObjVars().getItem("claim.is_claim_marker_deed", claimMarkerDeed) && claimMarkerDeed != 0)
+	{
+		if (serverObject->getScriptObject()->trigAllScripts(Scripting::TRIG_PLACE_CLAIM_MARKER, scriptParameters) != SCRIPT_CONTINUE)
+			DEBUG_REPORT_LOG(true, ("commandFuncPlaceStructure: claim marker placement did not return SCRIPT_CONTINUE\n"));
+	}
+	else
+	{
+		if (serverObject->getScriptObject()->trigAllScripts(Scripting::TRIG_PLACE_STRUCTURE, scriptParameters) != SCRIPT_CONTINUE)
+			DEBUG_REPORT_LOG(true, ("commandFuncPlaceStructure: did not return SCRIPT_CONTINUE\n"));
+	}
 }
 
 // ----------------------------------------------------------------------
+
 /**
  * Change the posture of the player to sitting.
  *

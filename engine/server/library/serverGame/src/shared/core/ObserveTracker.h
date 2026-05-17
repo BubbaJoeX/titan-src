@@ -11,12 +11,15 @@
 
 // ======================================================================
 
-class Client;
-class NetworkId;
-class ServerObject;
-class TriggerVolume;
+#include "sharedFoundation/NetworkId.h"
+#include <set>
+#include <vector>
 
 // ======================================================================
+
+class Client;
+class ServerObject;
+class TriggerVolume;
 
 class ObserveTracker
 {
@@ -51,6 +54,7 @@ public:
 	static void onMissionCriticalObjectAdded(ServerObject const &playerObject, ServerObject &criticalShip);
 	static void onMakeVendorInventory(ServerObject &vendorInventory, std::set<Client *> const & oldInventoryObservers);
 	static void onClientAboutToOpenPublicContainer(Client & client, ServerObject & container);
+	static void claimRefreshObservation(Client &client, std::vector<NetworkId> const &objects, bool wantObserve);
 };
 
 // ======================================================================

@@ -492,6 +492,13 @@ void ConfigServerGame::install(void)
 
 	KEY_STRING  (serverLoadLevel, "heavy");
 
+	KEY_BOOL    (claimSystemEnabled, true);
+	KEY_INT     (claimMaxActivePerAccount, 1);
+	KEY_FLOAT   (claimDefaultFootprintRadiusMeters, 32.0f);
+	KEY_INT     (claimMaintenanceIntervalDays, 30);
+	KEY_FLOAT   (claimVisitorResourceTaxRate, 0.1f);
+	KEY_INT     (claimMaintenanceFeeCredits, 1000);
+
 	KEY_INT     (maxHousingLots, 10);
 
 	if (data->baseDecayRate <= 1.0f)

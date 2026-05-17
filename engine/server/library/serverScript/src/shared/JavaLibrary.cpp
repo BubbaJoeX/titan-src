@@ -133,6 +133,10 @@ namespace ScriptMethodsChatNamespace
 {
 	bool install();
 }
+namespace ScriptMethodsClaimNamespace
+{
+	bool install();
+}
 namespace ScriptMethodsCityNamespace
 {
 	bool install();
@@ -1861,6 +1865,7 @@ bool JavaLibrary::connectToJava()
 	registerSuccess &= ScriptMethodsBuffBuilderNamespace::install();
 	registerSuccess &= ScriptMethodsBuffNamespace::install();
 	registerSuccess &= ScriptMethodsChatNamespace::install();
+	registerSuccess &= ScriptMethodsClaimNamespace::install();
 	registerSuccess &= ScriptMethodsCityNamespace::install();
 	registerSuccess &= ScriptMethodsClientEffectNamespace::install();
 	registerSuccess &= ScriptMethodsClusterWideDataNamespace::install();

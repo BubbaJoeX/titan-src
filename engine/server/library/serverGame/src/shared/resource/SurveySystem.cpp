@@ -15,11 +15,17 @@
 #include "serverGame/ServerResourceClassObject.h"
 #include "serverGame/ServerUniverse.h"
 #include "serverGame/ServerWorld.h"
+#include "serverGame/ClaimManager.h"
+#include "serverGame/ConfigServerGame.h"
+#include "serverGame/CreatureObject.h"
+#include "serverGame/ServerObject.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptParameters.h"
 #include "sharedFoundation/ExitChain.h"
 #include "swgSharedNetworkMessages/ResourceListForSurveyMessage.h"
 #include "swgSharedNetworkMessages/SurveyMessage.h"
+
+#include <algorithm>
 
 // ======================================================================
 
@@ -138,6 +144,18 @@ bool SurveySystem::TaskSurvey::run()
 	
 	if (client && typeObj && parentClass && pool && (typeObj->isDerivedFrom(*parentClass)))
 	{
+		CreatureObject const *surveyCreature = nullptr;
+		std::string surveySceneId;
+		if (ConfigServerGame::getClaimSystemEnabled())
+		{
+			ServerObject *const so = ServerWorld::findObjectByNetworkId(m_playerId);
+			if (so && so->asCreatureObject())
+			{
+				surveyCreature = so->asCreatureObject();
+				surveySceneId = so->getSceneId();
+			}
+		}
+
 		std::vector<SurveyMessage::DataItem> surveyData;
 		SurveyMessage::DataItem item;
 
@@ -150,6 +168,19 @@ bool SurveySystem::TaskSurvey::run()
 			for (item.m_location.z=m_location.z-radius; item.m_location.z<=m_location.z+radius; item.m_location.z+=distBetweenPoints)
 			{
 				item.m_efficiency = pool->getEfficiencyAtLocation(item.m_location.x, item.m_location.z);
+				if (surveyCreature && !surveySceneId.empty())
+				{
+					int const basis = 10000;
+					float e = item.m_efficiency;
+					e = std::max(0.f, std::min(1.f, e));
+					int const scaled = static_cast<int>(e * static_cast<float>(basis));
+					if (scaled > 0)
+					{
+						Vector const samplePos(item.m_location.x, item.m_location.y, item.m_location.z);
+						int const keptScaled = ClaimManager::getInstance().applyVisitorResourceTax(surveyCreature, surveySceneId, samplePos, "survey", scaled);
+						item.m_efficiency = static_cast<float>(keptScaled) / static_cast<float>(basis);
+					}
+				}
 				surveyData.push_back(item);
 				DEBUG_REPORT_LOG(true,("Adding data item (%f,%f,%f) -- %f\n",item.m_location.x, item.m_location.y, item.m_location.z, item.m_efficiency));
 				xVals.push_back(item.m_location.x);
