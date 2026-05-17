@@ -694,7 +694,7 @@ bool ConsoleCommandParserObjvar::performParsing (const NetworkId & userId, const
 	{
 		if (argv.size() < 5)
 		{
-			result += getErrorMessage(argv[0], ERR_INVALID_SYNTAX);
+			result += getErrorMessage(argv[0], ERR_INVALID_ARGUMENTS);
 			return true;
 		}
 
