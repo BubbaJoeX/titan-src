@@ -40,6 +40,10 @@ namespace ScriptMethodsClaimNamespace
 	jboolean JNICALL claimRemoveClaim(JNIEnv *env, jobject self, jlong admin, jint claimId, jboolean destroyWorldObjects);
 	jint JNICALL claimPurgeClaimsForPlayer(JNIEnv *env, jobject self, jlong admin, jlong targetPlayer, jboolean destroyWorldObjects, jboolean allAccountClaims);
 	jint JNICALL claimFindClaimIdByMarker(JNIEnv *env, jobject self, jlong marker);
+	jboolean JNICALL claimCanManageTerminal(JNIEnv *env, jobject self, jlong player, jlong terminal);
+	jint JNICALL claimGetMaintenancePrepay(JNIEnv *env, jobject self, jlong player, jlong terminal);
+	jint JNICALL claimGetMaintenanceDueTime(JNIEnv *env, jobject self, jlong player, jlong terminal);
+	jint JNICALL claimGetClaimStatus(JNIEnv *env, jobject self, jlong player, jlong terminal);
 }
 
 bool ScriptMethodsClaimNamespace::install()
@@ -62,6 +66,10 @@ bool ScriptMethodsClaimNamespace::install()
 		JF("_claimRemoveClaim", "(JIZ)Z", claimRemoveClaim),
 		JF("_claimPurgeClaimsForPlayer", "(JJZZ)I", claimPurgeClaimsForPlayer),
 		JF("_claimFindClaimIdByMarker", "(J)I", claimFindClaimIdByMarker),
+		JF("_claimCanManageTerminal", "(JJ)Z", claimCanManageTerminal),
+		JF("_claimGetMaintenancePrepay", "(JJ)I", claimGetMaintenancePrepay),
+		JF("_claimGetMaintenanceDueTime", "(JJ)I", claimGetMaintenanceDueTime),
+		JF("_claimGetClaimStatus", "(JJ)I", claimGetClaimStatus),
 #undef JF
 	};
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES) / sizeof(NATIVES[0]));
@@ -446,4 +454,42 @@ jint JNICALL ScriptMethodsClaimNamespace::claimFindClaimIdByMarker(JNIEnv *env, 
 	NetworkId const markerId(marker);
 	uint32 const claimId = ClaimManager::getInstance().findClaimIdByMarker(markerId);
 	return static_cast<jint>(claimId);
+}
+
+jboolean JNICALL ScriptMethodsClaimNamespace::claimCanManageTerminal(JNIEnv *env, jobject self, jlong player, jlong terminal)
+{
+	UNREF(self);
+	UNREF(env);
+	uint32 claimId = 0;
+	return validateClaimTerminalAccess(env, player, terminal, claimId) ? JNI_TRUE : JNI_FALSE;
+}
+
+jint JNICALL ScriptMethodsClaimNamespace::claimGetMaintenancePrepay(JNIEnv *env, jobject self, jlong player, jlong terminal)
+{
+	UNREF(self);
+	uint32 claimId = 0;
+	if (!validateClaimTerminalAccess(env, player, terminal, claimId))
+		return 0;
+	return ClaimManager::getInstance().getMaintenancePrepayCredits(claimId);
+}
+
+jint JNICALL ScriptMethodsClaimNamespace::claimGetMaintenanceDueTime(JNIEnv *env, jobject self, jlong player, jlong terminal)
+{
+	UNREF(self);
+	uint32 claimId = 0;
+	if (!validateClaimTerminalAccess(env, player, terminal, claimId))
+		return 0;
+	unsigned long const due = ClaimManager::getInstance().getNextMaintenanceDueGameSeconds(claimId);
+	if (due > static_cast<unsigned long>(0x7FFFFFFF))
+		return 0x7FFFFFFF;
+	return static_cast<jint>(due);
+}
+
+jint JNICALL ScriptMethodsClaimNamespace::claimGetClaimStatus(JNIEnv *env, jobject self, jlong player, jlong terminal)
+{
+	UNREF(self);
+	uint32 claimId = 0;
+	if (!validateClaimTerminalAccess(env, player, terminal, claimId))
+		return -1;
+	return ClaimManager::getInstance().getClaimStatus(claimId);
 }

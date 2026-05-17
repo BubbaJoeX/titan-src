@@ -81,6 +81,9 @@ public:
 	bool withdrawTaxBalance(uint32 claimId, std::string const &resourceKey, int amount);
 
 	bool payMaintenance(uint32 claimId, int creditsPaid);
+	int getMaintenancePrepayCredits(uint32 claimId) const;
+	unsigned long getNextMaintenanceDueGameSeconds(uint32 claimId) const;
+	int getClaimStatus(uint32 claimId) const;
 	void updateFrame();
 
 	void bindObjectToClaim(uint32 claimId, NetworkId const &objectId);

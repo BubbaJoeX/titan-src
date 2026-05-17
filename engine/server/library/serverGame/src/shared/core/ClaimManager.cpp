@@ -703,6 +703,36 @@ bool ClaimManager::payMaintenance(uint32 claimId, int creditsPaid)
 
 // ----------------------------------------------------------------------
 
+int ClaimManager::getMaintenancePrepayCredits(uint32 claimId) const
+{
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return 0;
+	return r->maintenancePrepayCredits;
+}
+
+// ----------------------------------------------------------------------
+
+unsigned long ClaimManager::getNextMaintenanceDueGameSeconds(uint32 claimId) const
+{
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return 0;
+	return r->nextMaintenanceDueGameSeconds;
+}
+
+// ----------------------------------------------------------------------
+
+int ClaimManager::getClaimStatus(uint32 claimId) const
+{
+	ClaimRecord const *const r = findRecord(claimId);
+	if (!r)
+		return -1;
+	return r->status;
+}
+
+// ----------------------------------------------------------------------
+
 void ClaimManager::bindObjectToClaim(uint32 claimId, NetworkId const &objectId)
 {
 	ClaimRecord *const r = findRecord(claimId);
