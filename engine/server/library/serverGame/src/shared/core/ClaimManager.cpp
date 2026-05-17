@@ -443,7 +443,7 @@ bool ClaimManager::validateManipulateWorldPosition(CreatureObject const *actor, 
 	if (!tryGetClaimId(targetObject, claimIdInt))
 	{
 		std::string const scene = targetObject.getSceneId();
-		claimIdInt = static_cast<int>(findClaimIdAtPosition(scene, getObjectWorldPosition(targetObject)));
+		claimIdInt = static_cast<int>(findClaimIdAtPosition(scene, getObjectWorldPosition(&targetObject)));
 	}
 
 	if (claimIdInt <= 0)
@@ -740,7 +740,7 @@ bool ClaimManager::allowWorldManipulation(ServerObject const *actorCreature, Ser
 	int claimIdInt = 0;
 	if (!tryGetClaimId(targetObject, claimIdInt))
 	{
-		claimIdInt = static_cast<int>(findClaimIdAtPosition(targetObject.getSceneId(), getObjectWorldPosition(targetObject)));
+		claimIdInt = static_cast<int>(findClaimIdAtPosition(targetObject.getSceneId(), getObjectWorldPosition(&targetObject)));
 		if (claimIdInt == 0)
 			return true;
 	}
