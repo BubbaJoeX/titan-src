@@ -399,7 +399,7 @@ void ClaimManager::broadcastFootprintSync(ClaimRecord const &rec, bool const act
 {
 	if (!rec.markerId.isValid())
 		return;
-	ClaimFootprintSyncMessage const msg(rec.markerId, rec.radius, active);
+	ClaimFootprintSyncMessage const msg(rec.markerId, rec.center, rec.radius, active);
 	GameServer::getInstance().spamAllClients(msg, true);
 }
 
@@ -419,7 +419,7 @@ void ClaimManager::syncFootprintsToClient(Client *const client) const
 			continue;
 		if (!rec.markerId.isValid())
 			continue;
-		ClaimFootprintSyncMessage const msg(rec.markerId, rec.radius, true);
+		ClaimFootprintSyncMessage const msg(rec.markerId, rec.center, rec.radius, true);
 		client->send(msg, true);
 	}
 }
