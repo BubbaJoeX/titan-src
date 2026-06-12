@@ -2,8 +2,8 @@
 //
 // ClaimClientMessageDispatch.h
 //
-// Decode claim network messages for clientGame without including message
-// class bodies (avoids Archive template instantiation in clientGame TUs).
+// Decode claim network messages for clientGame without pulling Archive
+// NetworkId operators into clientGame translation units.
 //
 // ======================================================================
 
@@ -23,9 +23,11 @@ namespace ClaimClientMessageDispatch
 {
 	extern char const * const cms_claimFootprintSync;
 	extern char const * const cms_claimManipulateState;
+	extern char const * const cms_sceneEndBaselines;
 
 	bool decodeManipulateState(Archive::ReadIterator & source);
 	void decodeFootprintSync(Archive::ReadIterator & source, NetworkId & markerIdOut, float & centerXOut, float & centerYOut, float & centerZOut, float & radiusMetersOut, bool & activeOut);
+	void decodeSceneEndBaselines(Archive::ReadIterator & source, NetworkId & networkIdOut);
 }
 
 // ======================================================================

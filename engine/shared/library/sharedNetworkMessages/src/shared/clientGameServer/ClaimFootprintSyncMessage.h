@@ -12,6 +12,7 @@
 // ======================================================================
 
 #include "sharedFoundation/NetworkId.h"
+#include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedMath/Vector.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 
