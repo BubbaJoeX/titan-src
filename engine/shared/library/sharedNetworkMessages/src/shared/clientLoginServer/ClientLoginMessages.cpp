@@ -30,16 +30,35 @@ version(ConfigVersion ? ConfigVersion : NetworkVersionId)  //-- todo production 
 
 //-----------------------------------------------------------------------
 
+LoginClientId::LoginClientId(const std::string& newId, const std::string& newKey, const std::string& guidVal) :
+	GameNetworkMessage("LoginClientId"),
+	id(newId),
+	key(newKey),
+	version(NetworkVersionId),
+	guid(guidVal)
+{
+	addVariable(id);
+	addVariable(key);
+	addVariable(version);
+	addVariable(guid);
+}
+
+//-----------------------------------------------------------------------
+
 LoginClientId::LoginClientId(Archive::ReadIterator & source) :
 GameNetworkMessage("LoginClientId"),
 id(),
 key(),
-version()
+version(),
+guid()
 {
 	addVariable(id);
 	addVariable(key);
 	addVariable(version);
 	unpack(source);
+	// x64 clients send MachineGUID as a 4th archive field (see LoginConnection / SwgCuiLoginScreen).
+	if (source.getSize() > 0)
+		Archive::get(source, guid);
 }
 
 //-----------------------------------------------------------------------
