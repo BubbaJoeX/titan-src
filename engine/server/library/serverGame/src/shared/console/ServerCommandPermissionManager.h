@@ -31,6 +31,12 @@ public:
 	/** @return required staff level from command_permissions.iff, or -1 if the command is not listed. */
 	int                          lookupPermissionLevel    (std::string const & commandPath) const;
 
+	/**
+	 * Combines a command's built-in level with command_permissions.iff.
+	 * Returns -1 when a required table entry is missing.
+	 */
+	int                          resolvePermissionLevel   (std::string const & commandPath, int builtInLevel, bool requireTableEntry) const;
+
 	static ServerCommandPermissionManager * getInstance ();
 	static void                  setInstance             (ServerCommandPermissionManager * mgr);
 

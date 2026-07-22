@@ -378,6 +378,7 @@ static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emit
 
 // RT Camera System objvars
 static const std::string OBJVAR_RT_SCREEN_LINKED_CAMERA = "rt_screen.linkedCamera";
+static const std::string OBJVAR_RT_SCREEN_RESOLUTION = "rt_screen.resolution";
 static const std::string OBJVAR_RT_CAMERA_FOV = "rt_camera.fov";
 static const std::string OBJVAR_RT_CAMERA_RESOLUTION = "rt_camera.resolution";
 static const std::string OBJVAR_RT_CAMERA_ACTIVE = "rt_camera.isActive";
@@ -1646,7 +1647,13 @@ void TangibleObject::updateRtCameraVariablesFromObjvars()
 {
 	// RT Screen: linked camera
 	std::string linkedCamera;
-	if (getObjVars().getItem(OBJVAR_RT_SCREEN_LINKED_CAMERA, linkedCamera))
+	NetworkId linkedCameraId;
+	bool const hasLinkedCameraString = getObjVars().getItem(OBJVAR_RT_SCREEN_LINKED_CAMERA, linkedCamera);
+	bool const hasLinkedCameraId = !hasLinkedCameraString && getObjVars().getItem(OBJVAR_RT_SCREEN_LINKED_CAMERA, linkedCameraId);
+	if (hasLinkedCameraId)
+		linkedCamera = linkedCameraId.getValueString();
+
+	if (hasLinkedCameraString || hasLinkedCameraId)
 	{
 		if (m_rtScreenLinkedCamera.get() != linkedCamera)
 			m_rtScreenLinkedCamera = linkedCamera;
@@ -1671,7 +1678,8 @@ void TangibleObject::updateRtCameraVariablesFromObjvars()
 	// RT Camera/Screen: Resolution
 	std::string resStr;
 	int resolution = 0;
-	if (getObjVars().getItem(OBJVAR_RT_CAMERA_RESOLUTION, resolution))
+	if (getObjVars().getItem(OBJVAR_RT_SCREEN_RESOLUTION, resolution) ||
+		getObjVars().getItem(OBJVAR_RT_CAMERA_RESOLUTION, resolution))
 	{
 		char buf[32];
 		snprintf(buf, sizeof(buf), "%d", resolution);

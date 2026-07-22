@@ -19,7 +19,17 @@
 
 #include "UnicodeUtils.h"
 
+#include <algorithm>
+
 ServerCommandPermissionManager * ServerCommandPermissionManager::ms_instance = 0;
+
+namespace
+{
+	std::string normalizeCommandPath(std::string const & commandPath)
+	{
+		return Unicode::toLower(Unicode::getTrim(commandPath));
+	}
+}
 
 ServerCommandPermissionManager::ServerCommandPermissionManager() :
 		CommandPermissionManager(),
@@ -27,6 +37,11 @@ ServerCommandPermissionManager::ServerCommandPermissionManager() :
 {
 	m_permissionTable = DataTableManager::getTable("datatables/admin/command_permissions.iff", true);
 	DEBUG_FATAL(!m_permissionTable, ("Could not open command permissions table"));
+
+	int const commandColumn = m_permissionTable->findColumnNumber("Command");
+	int const levelColumn = m_permissionTable->findColumnNumber("Level");
+	DEBUG_FATAL(commandColumn < 0 || levelColumn < 0, ("command_permissions.iff must contain Command and Level columns"));
+
 	CommandParser::setPermissionManager(this);
 	setInstance(this);
 }
@@ -36,7 +51,7 @@ ServerCommandPermissionManager::ServerCommandPermissionManager() :
 ServerCommandPermissionManager::~ServerCommandPermissionManager()
 {
 	setInstance(0);
-	DataTableManager::close("command_permissions.iff");
+	DataTableManager::close("datatables/admin/command_permissions.iff");
 	CommandParser::setPermissionManager(0);
 }
 
@@ -73,17 +88,10 @@ bool ServerCommandPermissionManager::isCommandAllowed (const NetworkId & userId,
 	if (!client)
 		return false;
 
-	int clientLevel = client->getGodLevel();
 	std::string command = Unicode::wideToNarrow(commandPath);
-	int row = m_permissionTable->searchColumnString( 0, command);
-	// Commands not listed in command_permissions must not be executable via the in-game console path.
-	int const commandLevelNotListed = 1000;
-	int commandLevel = commandLevelNotListed;
-	
-	if (row != -1)
-		commandLevel = m_permissionTable->getIntValue(1, row);
-
-	bool retval =  (commandLevel <= clientLevel);
+	int const clientLevel = client->getGodLevel();
+	int const commandLevel = resolvePermissionLevel(command, 0, true);
+	bool const retval = commandLevel >= 0 && commandLevel <= clientLevel;
 	if (!retval)
 	{
 		LOG("CustomerService",("Avatar:%s denied command %s because the command level is %d and they are %d", PlayerObject::getAccountDescription(userId).c_str(), command.c_str(), commandLevel, clientLevel));
@@ -97,10 +105,29 @@ int ServerCommandPermissionManager::lookupPermissionLevel(std::string const & co
 {
 	if (!m_permissionTable)
 		return -1;
-	int row = m_permissionTable->searchColumnString(0, commandPath);
-	if (row == -1)
+
+	int const commandColumn = m_permissionTable->findColumnNumber("Command");
+	int const levelColumn = m_permissionTable->findColumnNumber("Level");
+	if (commandColumn < 0 || levelColumn < 0)
 		return -1;
-	return m_permissionTable->getIntValue(1, row);
+
+	std::string const normalizedPath = normalizeCommandPath(commandPath);
+	for (int row = 0; row < m_permissionTable->getNumRows(); ++row)
+	{
+		if (normalizeCommandPath(m_permissionTable->getStringValue(commandColumn, row)) == normalizedPath)
+			return m_permissionTable->getIntValue(levelColumn, row);
+	}
+	return -1;
+}
+
+//------------------------------------------------------------------------------------------
+
+int ServerCommandPermissionManager::resolvePermissionLevel(std::string const & commandPath, int builtInLevel, bool requireTableEntry) const
+{
+	int const tableLevel = lookupPermissionLevel(commandPath);
+	if (tableLevel < 0)
+		return requireTableEntry ? -1 : builtInLevel;
+	return std::max(builtInLevel, tableLevel);
 }
 
 //------------------------------------------------------------------------------------------

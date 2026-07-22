@@ -196,7 +196,7 @@ uint32                          Client::sm_outgoingBytesMap_Worktime = 0; // tim
 
 Client::Client(ConnectionServerConnection &connection, const NetworkId &characterObjectId, const std::string &accountName, const std::string &ipAddr, bool isSecure, bool isSkipLoadScreen, unsigned int stationId, std::set <NetworkId> const &observedObjects, uint32 gameFeatures, uint32 subscriptionFeatures, AccountFeatureIdList const &accountFeatureIds, unsigned int entitlementTotalTime, unsigned int entitlementEntitledTime, unsigned int entitlementTotalTimeSinceLastLogin, unsigned int entitlementEntitledTimeSinceLastLogin, int buddyPoints, std::vector <std::pair<NetworkId, std::string>> const &consumedRewardEvents, std::vector <std::pair<NetworkId, std::string>> const &claimedRewardItems, bool usingAdminLogin, CombatDataTable::CombatSpamFilterType combatSpamFilter, int combatSpamRangeSquaredFilter, int furnitureRotationDegree, bool hasUnoccupiedJediSlot, bool isJediSlotCharacter, bool sendToStarport)
         : MessageDispatch::Receiver(), MessageDispatch::Emitter(), m_accountName(accountName), m_characterName(),
-          m_characterObjectId(characterObjectId), m_connection(&connection), m_controlledObjects(), m_godLevel(0),
+          m_characterObjectId(characterObjectId), m_connection(&connection), m_controlledObjects(), m_godLevel(0), m_rawGodLevel(0),
           m_godMode(false), m_godValidated(false), m_ipAddress(ipAddr), m_isReady(false), m_isSecure(isSecure),
           m_isSkipLoadScreen(isSkipLoadScreen), m_primaryControlledObject(NetworkId::cms_invalid), destroyNotifier(),
           m_observing(), m_openedContainers(), m_watchedByList(),
@@ -515,7 +515,8 @@ void Client::addControlledObject(ServerObject &object) {
     // validate isUsingAdminLogin each onClientReady() call per SWG Source change - 2021 (Aconite)
     // isUsingAdminLogin is used to check if an *account* is in the admin table
     // so we can monitor admin accessed accounts *regardless* of their current god mode/level
-    setUsingAdminLogin(AdminAccountManager::getAdminLevel(getAccountName()) > 0);
+    m_rawGodLevel = AdminAccountManager::getAdminLevel(getAccountName());
+    setUsingAdminLogin(m_rawGodLevel > 0);
 
 }
 
@@ -2353,25 +2354,27 @@ bool Client::setGodMode(bool value) {
     }
 
     // If we aren't required to be secure, or if we are and we are secure, begin permission checks
+    m_rawGodLevel = AdminAccountManager::getAdminLevel(m_accountName);
+
     // Start with if everyone can have God Mode, in which case we don't need to bother otherwise
     int godLevel = 0;
     if(ConfigServerGame::getAdminGodToAll() && ConfigServerGame::getAdminGodToAllGodLevel() > 0)
     {
         // Make sure the account isn't in the admin table, because that should supersede
         // whatever the adminGodToAll level is.
-        if(AdminAccountManager::getAdminLevel(m_accountName) == 0)
+        if(m_rawGodLevel == 0)
         {
             godLevel = ConfigServerGame::getAdminGodToAllGodLevel();
         }
         else
         {
-            godLevel = AdminAccountManager::getAdminLevel(m_accountName);
+            godLevel = m_rawGodLevel;
         }
     }
     // We aren't giving god to everyone, so validate actual god level permissions
     else
     {
-        godLevel = AdminAccountManager::getAdminLevel(m_accountName);
+        godLevel = m_rawGodLevel;
     }
     // Grant God Mode
     if(godLevel > 0)

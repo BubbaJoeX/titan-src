@@ -17,6 +17,25 @@
 
 #include <string>
 
+namespace
+{
+	std::string normalizeAccountName(std::string const & account)
+	{
+		return Unicode::toLower(Unicode::getTrim(account));
+	}
+
+	int findAccountRow(DataTable const & table, int accountColumn, std::string const & account)
+	{
+		std::string const normalizedAccount = normalizeAccountName(account);
+		for (int row = 0; row < table.getNumRows(); ++row)
+		{
+			if (normalizeAccountName(table.getStringValue(accountColumn, row)) == normalizedAccount)
+				return row;
+		}
+		return -1;
+	}
+}
+
 //-----------------------------------------------------------------------
 
 DataTable * AdminAccountManager::ms_adminTable = 0;
@@ -73,10 +92,11 @@ int AdminAccountManager::getAdminLevel(const std::string & account)
 {
 	int level = 0;
 	DEBUG_FATAL(!ms_installed, ("AdminAccountManager not installed"));
+	std::string const normalizedAccount = normalizeAccountName(account);
 
 	if(ConfigServerUtility::isExternalAdminLevelsEnabled()){
 		std::ostringstream postBuffer;
-		postBuffer << "user_name=" << account << "&secretKey=" << ConfigServerUtility::getExternalAdminLevelsSecretKey();
+		postBuffer << "user_name=" << normalizedAccount << "&secretKey=" << ConfigServerUtility::getExternalAdminLevelsSecretKey();
 		std::string response = webAPI::simplePost(ConfigServerUtility::getExternalAdminLevelsURL(), std::string(postBuffer.str()), "");
 		// aconite 4/3/22
 		// stoi inconsistently throws an invalid argument exception from this request 
@@ -97,7 +117,7 @@ int AdminAccountManager::getAdminLevel(const std::string & account)
 
 	int columnNumber = ms_adminTable->findColumnNumber("AdminAccounts");
 	DEBUG_FATAL(columnNumber == -1, ("Error loading admin table...no account column"));
-	int row = ms_adminTable->searchColumnString(columnNumber, Unicode::toLower(account));
+	int row = findAccountRow(*ms_adminTable, columnNumber, normalizedAccount);
 	if (row == -1) return 0;
 
 	level = ms_adminTable->getIntValue("AdminLevel", row);
@@ -111,7 +131,7 @@ bool AdminAccountManager::isAdminAccount(const std::string & account, int& level
 
 	int columnNumber = ms_adminTable->findColumnNumber("AdminAccounts");
 	DEBUG_FATAL(columnNumber == -1, ("Error loading admin table...no account column"));
-	int row = ms_adminTable->searchColumnString(columnNumber, Unicode::toLower(account));
+	int row = findAccountRow(*ms_adminTable, columnNumber, account);
 	if (row == -1)
 		return false;
 

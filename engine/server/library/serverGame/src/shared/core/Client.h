@@ -269,6 +269,7 @@ private:
     ConnectionServerConnection *m_connection;
     std::vector<ServerObject *> m_controlledObjects;
     int m_godLevel;
+    int m_rawGodLevel;
     bool m_godMode;
     bool m_godValidated;
     std::string m_ipAddress;
@@ -415,7 +416,7 @@ inline int Client::getGodLevel() const {
 //-----------------------------------------------------------------------
 
 inline int Client::getRawGodLevel() const {
-    return m_godLevel;
+    return m_rawGodLevel;
 }
 
 //-----------------------------------------------------------------------
