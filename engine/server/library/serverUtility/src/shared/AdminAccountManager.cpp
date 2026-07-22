@@ -12,6 +12,7 @@
 #include "sharedUtility/DataTable.h"
 #include "sharedUtility/DataTableManager.h"
 
+#include "UnicodeUtils.h"
 #include "webAPI.h"
 
 #include <string>
@@ -96,7 +97,7 @@ int AdminAccountManager::getAdminLevel(const std::string & account)
 
 	int columnNumber = ms_adminTable->findColumnNumber("AdminAccounts");
 	DEBUG_FATAL(columnNumber == -1, ("Error loading admin table...no account column"));
-	int row = ms_adminTable->searchColumnString( columnNumber, account);
+	int row = ms_adminTable->searchColumnString(columnNumber, Unicode::toLower(account));
 	if (row == -1) return 0;
 
 	level = ms_adminTable->getIntValue("AdminLevel", row);
@@ -110,7 +111,7 @@ bool AdminAccountManager::isAdminAccount(const std::string & account, int& level
 
 	int columnNumber = ms_adminTable->findColumnNumber("AdminAccounts");
 	DEBUG_FATAL(columnNumber == -1, ("Error loading admin table...no account column"));
-	int row = ms_adminTable->searchColumnString( columnNumber, account);
+	int row = ms_adminTable->searchColumnString(columnNumber, Unicode::toLower(account));
 	if (row == -1)
 		return false;
 

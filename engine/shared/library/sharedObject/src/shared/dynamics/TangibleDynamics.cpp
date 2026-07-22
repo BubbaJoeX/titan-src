@@ -302,6 +302,7 @@ float TangibleDynamics::getPushDrag() const
 {
 	return m_pushDrag;
 }
+TangibleDynamics::MovementSpace TangibleDynamics::getPushSpace() const { return m_pushSpace; }
 
 //===================================================================
 // SPIN / ROTATION
@@ -450,6 +451,14 @@ float TangibleDynamics::getBounceGravity() const     { return m_bounceGravity; }
 float TangibleDynamics::getBounceElasticity() const  { return m_bounceElasticity; }
 float TangibleDynamics::getBounceFloorY() const      { return m_bounceFloorY; }
 float TangibleDynamics::getBounceVerticalVelocity() const { return m_bounceVerticalVelocity; }
+float TangibleDynamics::getBounceDuration() const { return m_bounceDuration < 0.0f ? -1.0f : m_bounceDuration - m_bounceElapsed; }
+void TangibleDynamics::resolveBounceAtFloor()
+{
+	if (m_bounceVerticalVelocity < 0.0f)
+		m_bounceVerticalVelocity = -m_bounceVerticalVelocity * m_bounceElasticity;
+	if (fabs(m_bounceVerticalVelocity) < s_bounceMinVelocity)
+		clearBounceEffect();
+}
 
 //===================================================================
 // WOBBLE (sinusoidal position oscillation)
@@ -494,6 +503,7 @@ Vector TangibleDynamics::getWobbleAmplitude() const   { return m_wobbleAmplitude
 Vector TangibleDynamics::getWobbleFrequency() const   { return m_wobbleFrequency; }
 float  TangibleDynamics::getWobblePhase() const       { return m_wobblePhase; }
 Vector TangibleDynamics::getWobbleOrigin() const      { return m_wobbleOrigin; }
+float  TangibleDynamics::getWobbleDuration() const    { return m_wobbleDuration < 0.0f ? -1.0f : m_wobbleDuration - m_wobbleElapsed; }
 
 //===================================================================
 // ORBIT (circular motion around point)
@@ -543,6 +553,8 @@ void TangibleDynamics::clearOrbitEffect()
 Vector TangibleDynamics::getOrbitCenter() const  { return m_orbitCenter; }
 float  TangibleDynamics::getOrbitRadius() const  { return m_orbitRadius; }
 float  TangibleDynamics::getOrbitAngle() const   { return m_orbitAngle; }
+float  TangibleDynamics::getOrbitSpeed() const   { return m_orbitSpeed; }
+float  TangibleDynamics::getOrbitDuration() const { return m_orbitDuration < 0.0f ? -1.0f : m_orbitDuration - m_orbitElapsed; }
 
 //===================================================================
 // HOVER (terrain-following with bob)
@@ -579,6 +591,7 @@ void TangibleDynamics::clearHoverEffect()
 float TangibleDynamics::getHoverHeight() const       { return m_hoverHeight; }
 float TangibleDynamics::getHoverBobAmplitude() const { return m_hoverBobAmplitude; }
 float TangibleDynamics::getHoverBobSpeed() const     { return m_hoverBobSpeed; }
+float TangibleDynamics::getHoverDuration() const     { return m_hoverDuration < 0.0f ? -1.0f : m_hoverDuration - m_hoverElapsed; }
 
 //===================================================================
 // FOLLOW TARGET (hover + follow object + match rotation)
@@ -622,6 +635,7 @@ float  TangibleDynamics::getFollowDistance() const  { return m_followDistance; }
 float  TangibleDynamics::getFollowSpeed() const     { return m_followSpeed; }
 float  TangibleDynamics::getFollowHoverHeight() const    { return m_followHoverHeight; }
 float  TangibleDynamics::getFollowBobAmplitude() const   { return m_followBobAmplitude; }
+float  TangibleDynamics::getFollowDuration() const       { return m_followDuration < 0.0f ? -1.0f : m_followDuration - m_followElapsed; }
 
 //===================================================================
 // LOCK TO PARENT (rigid attachment with fixed offset)
@@ -661,6 +675,7 @@ Vector TangibleDynamics::getLockToParentPositionOffset() const   { return m_lock
 Vector TangibleDynamics::getLockToParentRotationOffset() const   { return m_lockToParentRotationOffset; }
 bool   TangibleDynamics::getLockToParentMatchRotation() const    { return m_lockToParentMatchRotation; }
 bool   TangibleDynamics::isLockToParentActive() const            { return m_lockToParentEffectActive; }
+float  TangibleDynamics::getLockToParentDuration() const         { return m_lockToParentDuration < 0.0f ? -1.0f : m_lockToParentDuration - m_lockToParentElapsed; }
 
 //===================================================================
 // SWAY/PENDULUM (swinging back and forth)
@@ -700,6 +715,7 @@ float TangibleDynamics::getSwayAngle() const    { return m_swayAngle; }
 float TangibleDynamics::getSwaySpeed() const    { return m_swaySpeed; }
 float TangibleDynamics::getSwayDamping() const  { return m_swayDamping; }
 float TangibleDynamics::getSwayPhase() const    { return m_swayPhase; }
+float TangibleDynamics::getSwayDuration() const { return m_swayDuration < 0.0f ? -1.0f : m_swayDuration - m_swayElapsed; }
 
 //===================================================================
 // SHAKE/VIBRATE (rapid small position offsets)
@@ -744,6 +760,7 @@ void TangibleDynamics::clearShakeEffect()
 float  TangibleDynamics::getShakeIntensity() const  { return m_shakeIntensity; }
 float  TangibleDynamics::getShakeFrequency() const  { return m_shakeFrequency; }
 Vector TangibleDynamics::getShakeOrigin() const     { return m_shakeOrigin; }
+float  TangibleDynamics::getShakeDuration() const   { return m_shakeDuration < 0.0f ? -1.0f : m_shakeDuration - m_shakeElapsed; }
 
 //===================================================================
 // FLOAT/LEVITATE (slow drift up and down with randomness)
@@ -793,6 +810,7 @@ float  TangibleDynamics::getFloatHeight() const          { return m_floatHeight;
 float  TangibleDynamics::getFloatDriftSpeed() const      { return m_floatDriftSpeed; }
 float  TangibleDynamics::getFloatRandomStrength() const  { return m_floatRandomStrength; }
 Vector TangibleDynamics::getFloatOrigin() const          { return m_floatOrigin; }
+float  TangibleDynamics::getFloatDuration() const        { return m_floatDuration < 0.0f ? -1.0f : m_floatDuration - m_floatElapsed; }
 
 //===================================================================
 // CONVEYOR (continuous linear movement with optional wrap)
@@ -845,6 +863,7 @@ float  TangibleDynamics::getConveyorSpeed() const         { return m_conveyorSpe
 float  TangibleDynamics::getConveyorWrapDistance() const  { return m_conveyorWrapDistance; }
 Vector TangibleDynamics::getConveyorOrigin() const        { return m_conveyorOrigin; }
 float  TangibleDynamics::getConveyorTravelDistance() const { return m_conveyorTravelDistance; }
+float  TangibleDynamics::getConveyorDuration() const       { return m_conveyorDuration < 0.0f ? -1.0f : m_conveyorDuration - m_conveyorElapsed; }
 
 //===================================================================
 // CAROUSEL (rotating platform with vertical oscillation like ferris wheel)
@@ -905,6 +924,8 @@ float  TangibleDynamics::getCarouselRotationSpeed() const     { return m_carouse
 float  TangibleDynamics::getCarouselAngle() const             { return m_carouselAngle; }
 float  TangibleDynamics::getCarouselVerticalAmplitude() const { return m_carouselVerticalAmplitude; }
 float  TangibleDynamics::getCarouselVerticalSpeed() const     { return m_carouselVerticalSpeed; }
+float  TangibleDynamics::getCarouselDuration() const          { return m_carouselDuration < 0.0f ? -1.0f : m_carouselDuration - m_carouselElapsed; }
+float  TangibleDynamics::getCarouselVerticalPhase() const     { return m_carouselVerticalPhase; }
 
 //===================================================================
 // EASING
@@ -915,6 +936,8 @@ void TangibleDynamics::setEasing(EaseType easeType, float easeDuration)
 	m_easeType = easeType;
 	m_easeDuration = easeDuration;
 }
+TangibleDynamics::EaseType TangibleDynamics::getEaseType() const { return m_easeType; }
+float TangibleDynamics::getEaseDuration() const { return m_easeDuration; }
 
 //===================================================================
 // COMBINED
@@ -1144,21 +1167,7 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 	// Apply gravity to velocity (track state for server sync)
 	m_bounceVerticalVelocity -= m_bounceGravity * elapsedTime;
 
-	// Simulate floor collision for state tracking
-	// Note: We track the physics state but DON'T call setPosition_w here
-	// Client handles smooth visual updates at frame rate
-	// Server's TangibleObject::updateTangibleDynamicsPosition handles authoritative sync
-	if (m_bounceVerticalVelocity < -m_bounceGravity * 2.0f)
-	{
-		// Approximate floor hit - reverse velocity with elasticity
-		m_bounceVerticalVelocity = -m_bounceVerticalVelocity * m_bounceElasticity;
-
-		if (fabs(m_bounceVerticalVelocity) < s_bounceMinVelocity)
-		{
-			clearBounceEffect();
-			return;
-		}
-	}
+	// TangibleObject resolves collision against the captured floor after applying velocity.
 }
 
 //-------------------------------------------------------------------
@@ -1394,12 +1403,8 @@ void TangibleDynamics::updateConveyorEffect(float elapsedTime)
 	float const distanceDelta = m_conveyorSpeed * elapsedTime;
 	m_conveyorTravelDistance += distanceDelta;
 
-	// Handle wrap-around if wrapDistance is set
-	if (m_conveyorWrapDistance > 0.0f && m_conveyorTravelDistance >= m_conveyorWrapDistance)
-	{
-		// Reset travel distance (wraps back to origin)
-		m_conveyorTravelDistance = fmod(m_conveyorTravelDistance, m_conveyorWrapDistance);
-	}
+	// The owner maps this monotonically increasing distance onto the complete belt
+	// cycle (top, end curve, underside, start curve).
 }
 
 //-------------------------------------------------------------------

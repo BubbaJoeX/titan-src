@@ -119,7 +119,9 @@ bool CreatureObject::unpilotShip()
 	ServerObject * const containingObject = NON_NULL(safe_cast<ServerObject *>(ContainerInterface::getContainedByObject(*this)));
 
 	bool const isNonPobShip = (containingObject->asShipObject() != 0);
-	if (isNonPobShip && ServerWorld::isShipScene())
+	// Cockpit ships cannot be exited into open space, but atmospheric flight
+	// has a valid ground-world destination for the pilot.
+	if (isNonPobShip && ServerWorld::isSpaceScene())
 		return false;
 
 	// If directly contained by a ship, we use the pilot slot, else we use the pob pilot slot

@@ -427,6 +427,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_rtCameraActive(),
 	m_dynamicLightState(),
 	m_dynamicHardpointsState(),
+	m_lastTangibleDynamicsRevision(0),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1721,6 +1722,17 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 		setDynamics(td);
 	}
 
+	int revision = 0;
+	IGNORE_RETURN(getObjVars().getItem("dynamicsRevision", revision));
+	bool const revisionChanged = revision != m_lastTangibleDynamicsRevision;
+	if (revisionChanged)
+	{
+		// Script commands mutate objvars while a channel may already be active. Rebuild the
+		// complete state so updates and partial clears are not mistaken for an unchanged mask.
+		td->clearAllForces();
+		m_lastTangibleDynamicsRevision = revision;
+	}
+
 	int const oldMask = td->getActiveForceMask();
 
 	// --- Push ---
@@ -1954,7 +1966,7 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 
 	// Send to client if forces changed or this is a new dynamics instance
 	int const newMask = td->getActiveForceMask();
-	if (isNew || (newMask != oldMask))
+	if (isNew || revisionChanged || (newMask != oldMask))
 	{
 		sendTangibleDynamicsToClient();
 	}
@@ -1996,7 +2008,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 		Vector const v = td->getPushForce();
 		float const dur = td->getPushForceDuration();
 		float const drag = td->getPushDrag();
-		snprintf(buf, sizeof(buf), "P:%.4f,%.4f,%.4f,%.4f,0,%.4f", v.x, v.y, v.z, dur, drag);
+		snprintf(buf, sizeof(buf), "P:%.4f,%.4f,%.4f,%.4f,%d,%.4f", v.x, v.y, v.z, dur,
+			static_cast<int>(td->getPushSpace()), drag);
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2005,7 +2018,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	{
 		Vector const v = td->getSpinForce();
 		float const dur = td->getSpinForceDuration();
-		snprintf(buf, sizeof(buf), "S:%.4f,%.4f,%.4f,%.4f", v.x, v.y, v.z, dur);
+		snprintf(buf, sizeof(buf), "S:%.4f,%.4f,%.4f,%.4f,%d", v.x, v.y, v.z, dur,
+			td->getSpinAroundAppearanceCenter() ? 1 : 0);
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2021,8 +2035,9 @@ void TangibleObject::sendTangibleDynamicsToClient()
 
 	if (td->isForceActive(TangibleDynamics::FM_bounce))
 	{
-		snprintf(buf, sizeof(buf), "N:%.4f,%.4f,5.0000,-1.0000",
-			td->getBounceGravity(), td->getBounceElasticity());
+		snprintf(buf, sizeof(buf), "N:%.4f,%.4f,%.4f,%.4f",
+			td->getBounceGravity(), td->getBounceElasticity(),
+			td->getBounceVerticalVelocity(), td->getBounceDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2031,8 +2046,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	{
 		Vector const a = td->getWobbleAmplitude();
 		Vector const f = td->getWobbleFrequency();
-		snprintf(buf, sizeof(buf), "W:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
-			a.x, a.y, a.z, f.x, f.y, f.z);
+		snprintf(buf, sizeof(buf), "W:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
+			a.x, a.y, a.z, f.x, f.y, f.z, td->getWobbleDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2040,8 +2055,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_orbit))
 	{
 		Vector const c = td->getOrbitCenter();
-		snprintf(buf, sizeof(buf), "O:%.4f,%.4f,%.4f,%.4f,1.0000,-1.0000",
-			c.x, c.y, c.z, td->getOrbitRadius());
+		snprintf(buf, sizeof(buf), "O:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
+			c.x, c.y, c.z, td->getOrbitRadius(), td->getOrbitSpeed(), td->getOrbitDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2049,8 +2064,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_hover))
 	{
 		// H = Hover: hoverHeight, bobAmplitude, bobSpeed, duration
-		snprintf(buf, sizeof(buf), "H:%.4f,%.4f,%.4f,-1.0000",
-			td->getHoverHeight(), td->getHoverBobAmplitude(), td->getHoverBobSpeed());
+		snprintf(buf, sizeof(buf), "H:%.4f,%.4f,%.4f,%.4f",
+			td->getHoverHeight(), td->getHoverBobAmplitude(), td->getHoverBobSpeed(), td->getHoverDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2058,10 +2073,22 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_followTarget))
 	{
 		// F = Follow: targetId, distance, speed, hoverHeight, bobAmplitude, duration
-		snprintf(buf, sizeof(buf), "F:%llu,%.4f,%.4f,%.4f,%.4f,-1.0000",
+		snprintf(buf, sizeof(buf), "F:%llu,%.4f,%.4f,%.4f,%.4f,%.4f",
 			static_cast<unsigned long long>(td->getFollowTargetId()),
 			td->getFollowDistance(), td->getFollowSpeed(),
-			td->getFollowHoverHeight(), td->getFollowBobAmplitude());
+			td->getFollowHoverHeight(), td->getFollowBobAmplitude(), td->getFollowDuration());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_lockToParent))
+	{
+		Vector const position = td->getLockToParentPositionOffset();
+		Vector const rotation = td->getLockToParentRotationOffset();
+		snprintf(buf, sizeof(buf), "Q:%llu,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.4f",
+			static_cast<unsigned long long>(td->getLockToParentId()),
+			position.x, position.y, position.z, rotation.x, rotation.y, rotation.z,
+			td->getLockToParentMatchRotation() ? 1 : 0, td->getLockToParentDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2069,8 +2096,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_sway))
 	{
 		// Y = Sway: swingAngle, swingSpeed, damping, duration
-		snprintf(buf, sizeof(buf), "Y:%.4f,%.4f,%.4f,-1.0000",
-			td->getSwayAngle(), td->getSwaySpeed(), td->getSwayDamping());
+		snprintf(buf, sizeof(buf), "Y:%.4f,%.4f,%.4f,%.4f",
+			td->getSwayAngle(), td->getSwaySpeed(), td->getSwayDamping(), td->getSwayDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2078,8 +2105,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_shake))
 	{
 		// K = Shake: intensity, frequency, duration
-		snprintf(buf, sizeof(buf), "K:%.4f,%.4f,-1.0000",
-			td->getShakeIntensity(), td->getShakeFrequency());
+		snprintf(buf, sizeof(buf), "K:%.4f,%.4f,%.4f",
+			td->getShakeIntensity(), td->getShakeFrequency(), td->getShakeDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2087,8 +2114,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	if (td->isForceActive(TangibleDynamics::FM_float))
 	{
 		// L = Float: height, driftSpeed, randomStrength, duration
-		snprintf(buf, sizeof(buf), "L:%.4f,%.4f,%.4f,-1.0000",
-			td->getFloatHeight(), td->getFloatDriftSpeed(), td->getFloatRandomStrength());
+		snprintf(buf, sizeof(buf), "L:%.4f,%.4f,%.4f,%.4f",
+			td->getFloatHeight(), td->getFloatDriftSpeed(), td->getFloatRandomStrength(), td->getFloatDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2097,8 +2124,8 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	{
 		// C = Conveyor: dirX, dirY, dirZ, speed, wrapDistance, duration
 		Vector const dir = td->getConveyorDirection();
-		snprintf(buf, sizeof(buf), "C:%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
-			dir.x, dir.y, dir.z, td->getConveyorSpeed(), td->getConveyorWrapDistance());
+		snprintf(buf, sizeof(buf), "C:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
+			dir.x, dir.y, dir.z, td->getConveyorSpeed(), td->getConveyorWrapDistance(), td->getConveyorDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2107,12 +2134,16 @@ void TangibleObject::sendTangibleDynamicsToClient()
 	{
 		// R = Carousel: centerX, centerY, centerZ, radius, rotationSpeed, verticalAmplitude, verticalSpeed, duration
 		Vector const center = td->getCarouselCenter();
-		snprintf(buf, sizeof(buf), "R:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
+		snprintf(buf, sizeof(buf), "R:%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
 			center.x, center.y, center.z, td->getCarouselRadius(), td->getCarouselRotationSpeed(),
-			td->getCarouselVerticalAmplitude(), td->getCarouselVerticalSpeed());
+			td->getCarouselVerticalAmplitude(), td->getCarouselVerticalSpeed(), td->getCarouselDuration());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
+
+	snprintf(buf, sizeof(buf), "E:%d,%.4f", static_cast<int>(td->getEaseType()), td->getEaseDuration());
+	if (!packed.empty()) packed += '|';
+	packed += buf;
 
 	if (packed.empty())
 		return;
@@ -2541,7 +2572,7 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 				desiredPos.y = targetPos.y + followHoverHeight;
 
 				// Smooth exponential interpolation
-				float const positionSmoothFactor = 5.0f;
+				float const positionSmoothFactor = (followSpeed > 0.01f) ? followSpeed : 0.01f;
 				float const posLerpFactor = 1.0f - exp(-positionSmoothFactor * elapsedTime);
 
 				Vector newPos;
@@ -2614,8 +2645,8 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 		// Note: The dynamics already increments the angle, so we query current state
 		float const angle = td->getOrbitAngle();
 
-		float const newX = center.x + radius * cos(angle);
-		float const newZ = center.z + radius * sin(angle);
+		float const newX = center.x + radius * sin(angle);
+		float const newZ = center.z + radius * cos(angle);
 
 		// Set the server's authoritative position
 		setPosition_w(Vector(newX, center.y, newZ));
@@ -2656,6 +2687,7 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 		if (pos.y <= floorY)
 		{
 			pos.y = floorY;
+			td->resolveBounceAtFloor();
 		}
 
 		// Set the server's authoritative position
@@ -2779,8 +2811,7 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 		float newY = center.y;
 		if (vertAmp > 0.0f)
 		{
-			// Use angle for vertical position - object goes up as it rotates
-			newY += vertAmp * sin(angle);
+			newY += vertAmp * sin(td->getCarouselVerticalPhase());
 		}
 
 		setPosition_w(Vector(newX, newY, newZ));
@@ -5543,6 +5574,8 @@ void TangibleObject::clearCondition(int condition)
 	if (isAuthoritative())
 	{
 		m_condition = (m_condition.get() & (~condition));
+		if (condition & C_magicTangibleDynamic)
+			scheduleForAlter();
 		updateRemoteTextureUrlFromObjvars();
 	}
 	else

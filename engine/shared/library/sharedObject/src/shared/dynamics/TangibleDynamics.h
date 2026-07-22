@@ -81,6 +81,7 @@ public:
 	float  getPushForceDuration() const;
 	void   setPushDrag(float drag);
 	float  getPushDrag() const;
+	MovementSpace getPushSpace() const;
 
 	// --- Spin/Rotation ---
 
@@ -108,6 +109,8 @@ public:
 	float getBounceElasticity() const;
 	float getBounceFloorY() const;
 	float getBounceVerticalVelocity() const;
+	float getBounceDuration() const;
+	void  resolveBounceAtFloor();
 
 	// --- Wobble (sinusoidal position oscillation) ---
 
@@ -117,6 +120,7 @@ public:
 	Vector getWobbleFrequency() const;
 	float  getWobblePhase() const;
 	Vector getWobbleOrigin() const;
+	float  getWobbleDuration() const;
 
 	// --- Orbit (circular motion) ---
 
@@ -125,6 +129,8 @@ public:
 	Vector getOrbitCenter() const;
 	float  getOrbitRadius() const;
 	float  getOrbitAngle() const;
+	float  getOrbitSpeed() const;
+	float  getOrbitDuration() const;
 
 	// --- Hover (terrain-following with slight bob) ---
 
@@ -133,6 +139,7 @@ public:
 	float getHoverHeight() const;
 	float getHoverBobAmplitude() const;
 	float getHoverBobSpeed() const;
+	float getHoverDuration() const;
 
 	// --- Follow Target (hover + follow another object, matching rotation) ---
 
@@ -144,6 +151,7 @@ public:
 	float  getFollowSpeed() const;
 	float  getFollowHoverHeight() const;
 	float  getFollowBobAmplitude() const;
+	float  getFollowDuration() const;
 
 	// --- Lock To Parent (rigid attachment to parent object with fixed offset) ---
 
@@ -155,6 +163,7 @@ public:
 	Vector getLockToParentRotationOffset() const;
 	bool   getLockToParentMatchRotation() const;
 	bool   isLockToParentActive() const;
+	float  getLockToParentDuration() const;
 
 	// --- Sway/Pendulum (swinging back and forth like a hanging sign) ---
 
@@ -164,6 +173,7 @@ public:
 	float  getSwaySpeed() const;
 	float  getSwayDamping() const;
 	float  getSwayPhase() const;
+	float  getSwayDuration() const;
 
 	// --- Shake/Vibrate (rapid small position offsets for emphasis) ---
 
@@ -172,6 +182,7 @@ public:
 	float  getShakeIntensity() const;
 	float  getShakeFrequency() const;
 	Vector getShakeOrigin() const;
+	float  getShakeDuration() const;
 
 	// --- Float/Levitate (slow drift up and down with slight random movement) ---
 
@@ -181,6 +192,7 @@ public:
 	float  getFloatDriftSpeed() const;
 	float  getFloatRandomStrength() const;
 	Vector getFloatOrigin() const;
+	float  getFloatDuration() const;
 
 	// --- Conveyor (continuous linear movement with optional wrap) ---
 
@@ -191,6 +203,7 @@ public:
 	float  getConveyorWrapDistance() const;
 	Vector getConveyorOrigin() const;
 	float  getConveyorTravelDistance() const;
+	float  getConveyorDuration() const;
 
 	// --- Carousel (rotating platform with vertical oscillation) ---
 
@@ -202,10 +215,14 @@ public:
 	float  getCarouselAngle() const;
 	float  getCarouselVerticalAmplitude() const;
 	float  getCarouselVerticalSpeed() const;
+	float  getCarouselDuration() const;
+	float  getCarouselVerticalPhase() const;
 
 	// --- Easing ---
 
 	void setEasing(EaseType easeType, float easeDuration);
+	EaseType getEaseType() const;
+	float getEaseDuration() const;
 
 	// --- Combined forces ---
 

@@ -57,8 +57,8 @@ guid()
 	addVariable(version);
 	unpack(source);
 	// x64 clients send MachineGUID as a 4th archive field (see LoginConnection / SwgCuiLoginScreen).
-	if (source.getSize() > 0)
-		Archive::get(source, guid);
+		if (source.getSize() > 0)
+			guid.unpack(source);
 }
 
 //-----------------------------------------------------------------------

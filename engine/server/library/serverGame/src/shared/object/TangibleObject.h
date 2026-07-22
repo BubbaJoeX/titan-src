@@ -600,6 +600,7 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_dynamicLightState;
 	/// packed hp_dyn slots for client-only hardpoint attachments (appearance / light / fx)
 	Archive::AutoDeltaVariable<std::string> m_dynamicHardpointsState;
+	int                                    m_lastTangibleDynamicsRevision;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 

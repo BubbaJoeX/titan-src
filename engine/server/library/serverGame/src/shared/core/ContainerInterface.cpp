@@ -40,6 +40,7 @@
 #include "sharedObject/SlotIdManager.h"
 #include "sharedObject/VolumeContainer.h"
 #include "sharedObject/VolumeContainmentProperty.h"
+#include "serverUtility/AdminAccountManager.h"
 
 #include <string>
 
@@ -1009,7 +1010,11 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 {
 	error = Container::CEC_Success;
 
-	if (transferer && transferer->getClient() && !transferer->getClient()->isGod())
+	Client const * const client = transferer ? transferer->getClient() : nullptr;
+	bool const isAdminOrGod = client
+		&& (client->isGod() || AdminAccountManager::getAdminLevel(client->getAccountName()) > 0);
+
+	if (client && !isAdminOrGod)
 	{
 		bool allowedDrop = false;
 		if (ConfigServerGame::getClaimSystemEnabled())
