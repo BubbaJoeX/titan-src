@@ -140,6 +140,7 @@ void SharedShipObjectTemplate::createCustomizationDataPropertyAsNeeded(Object &o
 			const std::string & portalLayoutFilename = getPortalLayoutFilename();
 			AssetCustomizationManager::addCustomizationVariablesForAsset(TemporaryCrcString(portalLayoutFilename.c_str(), true), *customizationData, skipSharedOwnerVariables);		
 		}
+		addCustomizationVariablesFromTemplate(*customizationData, skipSharedOwnerVariables);
 
 		//-- release local reference to the CustomizationData instance
 		customizationData->release();

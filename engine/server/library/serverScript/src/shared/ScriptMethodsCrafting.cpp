@@ -532,6 +532,7 @@ int i;
 		// Retrieve CustomizationData for crafted object's appearance template name.
 		bool const skipSharedOwnerVariables = true;
 		AssetCustomizationManager::addCustomizationVariablesForAsset(TemporaryCrcString(sharedTangibleTemplate->getAppearanceFilename().c_str(), true), *customizationData, skipSharedOwnerVariables);
+		sharedTangibleTemplate->addCustomizationVariablesFromTemplate(*customizationData, skipSharedOwnerVariables);
 
 		// Retrieve all ranged int customization variables from CusotmizationData.
 		VariableInfoVector  variableInfoList;
