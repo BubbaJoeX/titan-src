@@ -918,6 +918,10 @@ void PortalProperty::unlinkAllCellPortals(int cellIndex)
 	if (!cell)
 		return;
 
+	Object & cellOwner = cell->getOwner();
+	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
+		return;
+
 	cell->clearAllPortalNeighbors();
 }
 
@@ -1079,6 +1083,10 @@ void PortalProperty::collectPortalSockets(PortalSocketInfoList &outSockets) cons
 	{
 		CellProperty *const cell = const_cast<PortalProperty *>(this)->getCell(cellIndex);
 		if (!cell)
+			continue;
+
+		Object const & cellOwner = cell->getOwner();
+		if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
 			continue;
 
 		int const portalCount = cell->getPortalCount();
