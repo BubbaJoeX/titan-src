@@ -15,6 +15,7 @@
 #include "sharedFoundation/CrcString.h"
 #include "sharedFoundation/ExitChain.h"
 #include "sharedFoundation/TemporaryCrcString.h"
+#include "sharedLog/Log.h"
 #include "sharedMath/PaletteArgb.h"
 #include "sharedMath/PaletteArgbList.h"
 #include "sharedObject/Appearance.h"
