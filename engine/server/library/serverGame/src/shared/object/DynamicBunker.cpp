@@ -189,11 +189,23 @@ namespace DynamicBunkerNamespace
 		if (!getPortalBuildingTransform(portalProperty, graftedCellIndex, graftedPortalIndex, graftTransform))
 			return;
 
+		float width = 2.5f;
+		float height = 3.0f;
+		if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
+		{
+			PortalProperty::CustomSocket customSocket;
+			if (portalProperty.findCustomSocket(hostCellIndex, hostPortalIndex, customSocket))
+			{
+				width = std::max(0.5f, customSocket.doorwayWidth);
+				height = std::max(0.5f, customSocket.doorwayHeight);
+			}
+		}
+
 		Vector const hostPos = hostTransform.getPosition_p();
 		Vector const graftPos = graftTransform.getPosition_p();
 		Vector const delta = graftPos - hostPos;
 		float const gap = delta.magnitude();
-		if (gap < 0.75f)
+		if (gap < 0.05f)
 			return;
 
 		Vector const mid = (hostPos + graftPos) * 0.5f;
@@ -208,9 +220,9 @@ namespace DynamicBunkerNamespace
 		segment.transform_o2p = bridgeTransform;
 		if (gap > 0.01f)
 			segment.transform_o2p.yaw_l(atan2f(delta.x, delta.z));
-		segment.length = std::max(1.0f, gap);
-		segment.width = 2.5f;
-		segment.height = 3.0f;
+		segment.length = std::max(0.5f, gap);
+		segment.width = width;
+		segment.height = height;
 		portalProperty.recordBridgeSegment(segment);
 	}
 
@@ -237,8 +249,16 @@ namespace DynamicBunkerNamespace
 			if (portalProperty.findDynamicRoomGraftForSocket(socket.cellIndex, socket.portalIndex, graft))
 			{
 				entry.open = false;
-				entry.linkedCellIndex = graft.graftedCellIndex;
-				entry.linkedPortalIndex = graft.graftedPortalIndex;
+				if (graft.hostCellIndex == socket.cellIndex && graft.hostPortalIndex == socket.portalIndex)
+				{
+					entry.linkedCellIndex = graft.graftedCellIndex;
+					entry.linkedPortalIndex = graft.graftedPortalIndex;
+				}
+				else
+				{
+					entry.linkedCellIndex = graft.hostCellIndex;
+					entry.linkedPortalIndex = graft.hostPortalIndex;
+				}
 			}
 			else if (!entry.custom)
 			{
