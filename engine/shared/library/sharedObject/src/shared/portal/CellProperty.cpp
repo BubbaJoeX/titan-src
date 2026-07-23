@@ -671,6 +671,9 @@ bool CellProperty::areAdjacent(const CellProperty *cellProperty1, const CellProp
 				{
 					// Check all the portals in this portal object
 
+					if (!iterPortalObjectList->portalList)
+						continue;
+
 					const PortalList &portalList = *(iterPortalObjectList->portalList);
 
 					PortalList::const_iterator iterPortalList = portalList.begin();
