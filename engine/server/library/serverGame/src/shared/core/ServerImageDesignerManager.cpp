@@ -386,7 +386,11 @@ void ServerImageDesignerManager::setMorphCustomization(CreatureObject & creature
 			param.update(creature, value);
 			customizationData->release();
 		}
+		else
+			WARNING(true, ("ImageDesigner: morph variable [%s] is unavailable for recipient [%s]; change ignored.", customizationName.c_str(), creature.getNetworkId().getValueString().c_str()));
 	}
+	else
+		WARNING(true, ("ImageDesigner: rejected unknown morph type [%s] for recipient [%s].", customizationName.c_str(), creature.getNetworkId().getValueString().c_str()));
 }
 
 //----------------------------------------------------------------------
@@ -413,12 +417,24 @@ void ServerImageDesignerManager::setIndexCustomization(CreatureObject & creature
 				int rangeMin = 0;
 				int rangeMax = 0;
 				paletteVariable->getRange(rangeMin, rangeMax);
-				int const finalValue = clamp(rangeMin, value, rangeMax);
-				paletteVariable->setValue(finalValue);
+				if (rangeMax > rangeMin)
+				{
+					int const finalValue = clamp(rangeMin, value, rangeMax - 1);
+					WARNING(finalValue != value, ("ImageDesigner: clamped variable [%s] value [%d] to [%d], valid range [%d,%d), recipient [%s].", customizationName.c_str(), value, finalValue, rangeMin, rangeMax, creature.getNetworkId().getValueString().c_str()));
+					IGNORE_RETURN(paletteVariable->setValue(finalValue));
+				}
+				else
+					WARNING(true, ("ImageDesigner: variable [%s] has invalid empty range [%d,%d), recipient [%s]; change ignored.", customizationName.c_str(), rangeMin, rangeMax, creature.getNetworkId().getValueString().c_str()));
 			}
+			else
+				WARNING(true, ("ImageDesigner: customization [%s] is missing or is not palette-backed for recipient [%s]; index change ignored.", customizationName.c_str(), creature.getNetworkId().getValueString().c_str()));
 			customizationData->release();
 		}
+		else
+			WARNING(true, ("ImageDesigner: customization data for [%s] is unavailable on recipient [%s]; index change ignored.", customizationName.c_str(), creature.getNetworkId().getValueString().c_str()));
 	}
+	else
+		WARNING(true, ("ImageDesigner: rejected unknown index customization type [%s] for recipient [%s].", customizationName.c_str(), creature.getNetworkId().getValueString().c_str()));
 }
 
 //----------------------------------------------------------------------

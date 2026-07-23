@@ -2117,9 +2117,9 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
         }
     } catch (Archive::ReadException &) {
         if (getCharacterObject()) {
-            WARNING_STRICT_FATAL(true, ("A message was received from a client that could not be unpacked. Either the data was corrupt (intentionally or accidentally) or the client and server notion of the message are out of sync. The client will be disconnected. Character object is : %s :%s, IP=%s, accountname=%s", getCharacterObject()->getObjectTemplateName(), getCharacterObject()->getNetworkId().getValueString().c_str(), getIpAddress().c_str(), getAccountName().c_str()));
+            WARNING_STRICT_FATAL(true, ("Client message [%s] type=[0x%08x] payloadBytes=[%u] could not be unpacked. Either the data was corrupt or the client and server message formats are out of sync. The client will be disconnected. Character object is : %s :%s, IP=%s, accountname=%s", message.getCmdName().c_str(), message.getType(), static_cast<unsigned int>(message.getByteStream().getSize()), getCharacterObject()->getObjectTemplateName(), getCharacterObject()->getNetworkId().getValueString().c_str(), getIpAddress().c_str(), getAccountName().c_str()));
         } else {
-            WARNING_STRICT_FATAL(true, ("A message was received from a client that could not be unpacked. Either the data was corrupt (intentionally or accidentally) or the client and server notion of the message are out of sync. The client will be disconnected. IP=%s, accountname=%s", getIpAddress().c_str(), getAccountName().c_str()));
+            WARNING_STRICT_FATAL(true, ("Client message [%s] type=[0x%08x] payloadBytes=[%u] could not be unpacked. Either the data was corrupt or the client and server message formats are out of sync. The client will be disconnected. IP=%s, accountname=%s", message.getCmdName().c_str(), message.getType(), static_cast<unsigned int>(message.getByteStream().getSize()), getIpAddress().c_str(), getAccountName().c_str()));
         }
         if (getConnection()) {
             KickPlayer const kickMessage(m_characterObjectId, "Invalid Network Stream");

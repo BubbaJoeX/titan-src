@@ -57,6 +57,7 @@
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/CustomizationData.h"
 #include "sharedObject/CustomizationDataProperty.h"
+#include "sharedObject/CustomizationIdManager.h"
 #include "sharedObject/Controller.h"
 #include "sharedObject/NetworkIdManager.h"
 #include "sharedObject/ObjectTemplate.h"
@@ -7119,6 +7120,123 @@ void JNICALL ScriptMethodsObjectInfoNamespace::sendZoneAbilityTrayClose(JNIEnv *
 
 // ----------------------------------------------------------------------
 
+namespace
+{
+	CustomizationVariable *findCustomizationVariableByPath(CustomizationData &data, std::string const &name)
+	{
+		CustomizationVariable *variable = data.findVariable(name);
+		if (!variable && !name.empty())
+			variable = data.findVariable(name[0] == '/' ? name.substr(1) : "/" + name);
+		return variable;
+	}
+
+	struct DirectColorChannels
+	{
+		RangedIntCustomizationVariable *red;
+		RangedIntCustomizationVariable *green;
+		RangedIntCustomizationVariable *blue;
+	};
+
+	bool getDirectColorBase(std::string const &baseName, std::string &prefix, int &baseId)
+	{
+		std::string normalizedName = baseName;
+		if (normalizedName.empty() || normalizedName[0] != '/')
+			normalizedName = "/" + normalizedName;
+
+		if (normalizedName.compare(0, 9, "/private/") == 0)
+			prefix = "/private/";
+		else if (normalizedName.compare(0, 14, "/shared_owner/") == 0)
+			prefix = "/shared_owner/";
+		else
+			return false;
+
+		return CustomizationIdManager::mapStringToId(normalizedName.c_str(), baseId) && baseId > 0 && baseId < 128;
+	}
+
+	bool getDirectColorSlot(CustomizationData &data, std::string const &prefix, int slot, DirectColorChannels &channels)
+	{
+		char slotText[2];
+		snprintf(slotText, sizeof(slotText), "%d", slot);
+		std::string const stem = prefix + "direct_color_" + slotText;
+		channels.red = dynamic_cast<RangedIntCustomizationVariable *>(data.findVariable(stem + "_r"));
+		channels.green = dynamic_cast<RangedIntCustomizationVariable *>(data.findVariable(stem + "_g"));
+		channels.blue = dynamic_cast<RangedIntCustomizationVariable *>(data.findVariable(stem + "_b"));
+		return channels.red && channels.green && channels.blue;
+	}
+
+	bool slotMatches(DirectColorChannels const &channels, int baseId)
+	{
+		return (channels.red->getValue() >> 8) == baseId &&
+			(channels.green->getValue() >> 8) == baseId &&
+			(channels.blue->getValue() >> 8) == baseId;
+	}
+
+	bool slotIsEmpty(DirectColorChannels const &channels)
+	{
+		return channels.red->getValue() == 0 && channels.green->getValue() == 0 && channels.blue->getValue() == 0;
+	}
+
+	bool setDirectColor(CustomizationData &data, std::string const &baseName, int r, int g, int b, bool enabled)
+	{
+		std::string prefix;
+		int baseId = 0;
+		if (!getDirectColorBase(baseName, prefix, baseId))
+			return false;
+
+		DirectColorChannels emptySlot = {nullptr, nullptr, nullptr};
+		bool haveEmptySlot = false;
+		for (int slot = 0; slot < 2; ++slot)
+		{
+			DirectColorChannels channels = {nullptr, nullptr, nullptr};
+			if (!getDirectColorSlot(data, prefix, slot, channels))
+				continue;
+			if (slotMatches(channels, baseId))
+			{
+				if (!enabled)
+					return channels.red->setValue(0) && channels.green->setValue(0) && channels.blue->setValue(0);
+				return channels.red->setValue((baseId << 8) | r) &&
+					channels.green->setValue((baseId << 8) | g) &&
+					channels.blue->setValue((baseId << 8) | b);
+			}
+			if (!haveEmptySlot && slotIsEmpty(channels))
+			{
+				emptySlot = channels;
+				haveEmptySlot = true;
+			}
+		}
+
+		if (!enabled)
+			return true;
+		if (!haveEmptySlot)
+			return false;
+		return emptySlot.red->setValue((baseId << 8) | r) &&
+			emptySlot.green->setValue((baseId << 8) | g) &&
+			emptySlot.blue->setValue((baseId << 8) | b);
+	}
+
+	bool getDirectColor(CustomizationData &data, std::string const &baseName, PackedArgb &color)
+	{
+		std::string prefix;
+		int baseId = 0;
+		if (!getDirectColorBase(baseName, prefix, baseId))
+			return false;
+
+		for (int slot = 0; slot < 2; ++slot)
+		{
+			DirectColorChannels channels = {nullptr, nullptr, nullptr};
+			if (getDirectColorSlot(data, prefix, slot, channels) && slotMatches(channels, baseId))
+			{
+				color = PackedArgb(255,
+					static_cast<uint8>(channels.red->getValue() & 0xff),
+					static_cast<uint8>(channels.green->getValue() & 0xff),
+					static_cast<uint8>(channels.blue->getValue() & 0xff));
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 /**
  * Set a customization color using RGB values.
  * @param target  The object to set the customization on
@@ -7152,24 +7270,22 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIE
 	if (!cdata)
 		return JNI_FALSE;
 
-	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	CustomizationVariable * const cv = findCustomizationVariableByPath(*cdata, varNameStr);
 	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
 
 	if (palVar)
 	{
 		PackedArgb color(255, static_cast<uint8>(r), static_cast<uint8>(g), static_cast<uint8>(b));
-		int const previousIndex = palVar->getValue();
 		palVar->setClosestColor(color);
 
-		// Remove state written by the retired direct-RGB implementation.
-		std::string objvarName = "directColor." + varNameStr;
-		obj->removeObjVarItem(objvarName);
-		bool const changed = palVar->getValue() != previousIndex;
+		if (!setDirectColor(*cdata, varNameStr, r, g, b, true))
+			WARNING(true, ("Direct color override for declared palette variable [%s] has no available slot for RGB [%d,%d,%d]; retained nearest palette index [%d].", varNameStr.c_str(), r, g, b, palVar->getValue()));
 
 		cdata->release();
-		return changed ? JNI_TRUE : JNI_FALSE;
+		return JNI_TRUE;
 	}
 
+	WARNING(true, ("Rejected direct color for unknown or non-palette customization variable [%s] on object [%s].", varNameStr.c_str(), obj->getNetworkId().getValueString().c_str()));
 	cdata->release();
 	return JNI_FALSE;
 }
@@ -7205,31 +7321,40 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorHtml(JNI
 	if (!JavaLibrary::convert(htmlColorParam, htmlColorStr))
 		return JNI_FALSE;
 
-	if (!PackedArgb::isValidHtmlColor(htmlColorStr.c_str()))
-		return JNI_FALSE;
-
 	CustomizationData * const cdata = obj->fetchCustomizationData();
 	if (!cdata)
 		return JNI_FALSE;
 
-	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	CustomizationVariable * const cv = findCustomizationVariableByPath(*cdata, varNameStr);
 	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
 
 	if (palVar)
 	{
+		if (htmlColorStr == "clear" || htmlColorStr == "CLEAR")
+		{
+			bool const supportsOverride = setDirectColor(*cdata, varNameStr, 0, 0, 0, false);
+			cdata->release();
+			return supportsOverride ? JNI_TRUE : JNI_FALSE;
+		}
+
+		if (!PackedArgb::isValidHtmlColor(htmlColorStr.c_str()))
+		{
+			cdata->release();
+			return JNI_FALSE;
+		}
+
 		PackedArgb color = PackedArgb::fromHtmlString(htmlColorStr.c_str());
-		int const previousIndex = palVar->getValue();
 		palVar->setClosestColor(color);
 
-		// Remove state written by the retired direct-RGB implementation.
-		std::string objvarName = "directColor." + varNameStr;
-		obj->removeObjVarItem(objvarName);
-		bool const changed = palVar->getValue() != previousIndex;
+		bool const supportsOverride = setDirectColor(*cdata, varNameStr, color.getR(), color.getG(), color.getB(), true);
+		if (!supportsOverride)
+			WARNING(true, ("Direct color override for declared palette variable [%s] has no available slot for HTML color [%s]; retained nearest palette index [%d].", varNameStr.c_str(), htmlColorStr.c_str(), palVar->getValue()));
 
 		cdata->release();
-		return changed ? JNI_TRUE : JNI_FALSE;
+		return JNI_TRUE;
 	}
 
+	WARNING(true, ("Rejected HTML color for unknown or non-palette customization variable [%s] on object [%s].", varNameStr.c_str(), obj->getNetworkId().getValueString().c_str()));
 	cdata->release();
 	return JNI_FALSE;
 }
@@ -7259,12 +7384,13 @@ jintArray JNICALL ScriptMethodsObjectInfoNamespace::getCustomizationColorRGB(JNI
 	if (!cdata)
 		return nullptr;
 
-	CustomizationVariable * const cv = cdata->findVariable(varNameStr);
+	CustomizationVariable * const cv = findCustomizationVariableByPath(*cdata, varNameStr);
 	PaletteColorCustomizationVariable * const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(cv);
 
 	if (palVar)
 	{
-		PackedArgb const & color = palVar->getDirectColor();
+		PackedArgb color = palVar->getValueAsColor();
+		IGNORE_RETURN(getDirectColor(*cdata, varNameStr, color));
 
 		LocalIntArrayRefPtr result = createNewIntArray(4);
 		if (result == LocalIntArrayRef::cms_nullPtr)

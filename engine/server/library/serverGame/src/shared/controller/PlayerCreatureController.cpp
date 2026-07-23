@@ -1322,9 +1322,13 @@ void PlayerCreatureController::handleMessage (const int message, const float val
 									ServerImageDesignerManager::cancelSession(designer->getNetworkId(), recipient->getNetworkId());
 								}
 								customizationData->release();
+								if (customizationDataHair)
+									customizationDataHair->release();
 							}
 							else
 							{
+								if (customizationDataHair)
+									customizationDataHair->release();
 								ServerImageDesignerManager::cancelSession(designer->getNetworkId(), recipient->getNetworkId());
 							}
 						}
