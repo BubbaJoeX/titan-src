@@ -118,6 +118,8 @@ namespace DynamicBunkerNamespace
 			building.setObjVarItem(customSocketKey(index, "label"), socket.label);
 			building.setObjVarItem(customSocketKey(index, "open"), socket.open ? 1 : 0);
 			building.setObjVarItem(customSocketKey(index, "transform"), socket.doorTransform_o2p);
+			building.setObjVarItem(customSocketKey(index, "width"), socket.doorwayWidth);
+			building.setObjVarItem(customSocketKey(index, "height"), socket.doorwayHeight);
 		}
 
 		for (int i = newCount; i < oldCount; ++i)
@@ -127,6 +129,8 @@ namespace DynamicBunkerNamespace
 			building.removeObjVarItem(customSocketKey(i, "label"));
 			building.removeObjVarItem(customSocketKey(i, "open"));
 			building.removeObjVarItem(customSocketKey(i, "transform"));
+			building.removeObjVarItem(customSocketKey(i, "width"));
+			building.removeObjVarItem(customSocketKey(i, "height"));
 		}
 	}
 
@@ -317,6 +321,8 @@ namespace DynamicBunkerNamespace
 			entry.label = socket.label;
 			entry.doorTransform_o2p = socket.doorTransform_o2p;
 			entry.open = socket.open;
+			entry.doorwayWidth = socket.doorwayWidth;
+			entry.doorwayHeight = socket.doorwayHeight;
 			customSocketEntries.push_back(entry);
 		}
 	}
@@ -335,7 +341,9 @@ namespace DynamicBunkerNamespace
 			socket.socketIndex,
 			socket.label,
 			socket.doorTransform_o2p,
-			socket.open);
+			socket.open,
+			socket.doorwayWidth,
+			socket.doorwayHeight);
 		building.sendToClientsInUpdateRange(message, true, false);
 	}
 
@@ -816,15 +824,16 @@ void DynamicBunker::handleAssignRoom(Client &client, DynamicBunkerAssignRoomMess
 		return;
 	}
 
-	if (!TreeFile::exists(room.donorPob.c_str()))
+	std::string resolvedDonorPob;
+	if (!DynamicBunkerRoomCatalog::resolveDonorPobPath(room.donorPob, resolvedDonorPob))
 	{
-		WARNING(true, ("DynamicBunker::handleAssignRoom - donor POB '%s' not found for room '%s'",
+		WARNING(true, ("DynamicBunker::handleAssignRoom - donor POB '%s' not found for room '%s' (server missing appearance TRE?)",
 			room.donorPob.c_str(), message.getRoomId().c_str()));
 		return;
 	}
 
 	NetworkId cellId;
-	if (!addRoomHook(*building, message.getHostCellIndex(), message.getHostPortalIndex(), room.donorPob.c_str(), room.donorCellIndex, room.donorPortalIndex, cellId))
+	if (!addRoomHook(*building, message.getHostCellIndex(), message.getHostPortalIndex(), resolvedDonorPob.c_str(), room.donorCellIndex, room.donorPortalIndex, cellId))
 	{
 		WARNING(true, ("DynamicBunker::handleAssignRoom - graft failed for '%s'", message.getRoomId().c_str()));
 		return;
@@ -896,6 +905,12 @@ void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreate
 	socket.label = message.getLabel().empty() ? "custom" : message.getLabel();
 	socket.doorTransform_o2p = message.getDoorTransform_o2p();
 	socket.open = true;
+	socket.doorwayWidth = message.getDoorwayWidth();
+	socket.doorwayHeight = message.getDoorwayHeight();
+	if (socket.doorwayWidth < 0.5f)
+		socket.doorwayWidth = 1.0f;
+	if (socket.doorwayHeight < 0.5f)
+		socket.doorwayHeight = 2.0f;
 
 	if (!portalProperty->addCustomSocket(socket))
 	{
@@ -937,6 +952,10 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 				continue;
 			}
 			socket.open = (openFlag != 0);
+			if (!building.getObjVars().getItem(customSocketKey(i, "width"), socket.doorwayWidth))
+				socket.doorwayWidth = 1.0f;
+			if (!building.getObjVars().getItem(customSocketKey(i, "height"), socket.doorwayHeight))
+				socket.doorwayHeight = 2.0f;
 			IGNORE_RETURN(portalProperty->addCustomSocket(socket));
 		}
 	}

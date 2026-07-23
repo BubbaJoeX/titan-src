@@ -681,7 +681,16 @@ bool CellProperty::areAdjacent(const CellProperty *cellProperty1, const CellProp
 						// other side of any of the portals
 
 						const Portal * const portal = (*iterPortalList);
-						const CellProperty * const cellProperty = portal->getNeighbor()->getParentCell();
+						if (!portal)
+							continue;
+
+						const Portal * const neighborPortal = portal->getNeighbor();
+						if (!neighborPortal)
+							continue;
+
+						const CellProperty * const cellProperty = neighborPortal->getParentCell();
+						if (!cellProperty)
+							continue;
 
 						if (cellProperty == checkCellProperty)
 						{
@@ -862,6 +871,9 @@ bool CellProperty::isAdjacentTo(const CellProperty *cell) const
 
 	if(cell == nullptr) return false;
 
+	if (!m_portalObjectList)
+		return false;
+
 	// ----------
 
 	const PortalObjectList::const_iterator iEnd = m_portalObjectList->end();
@@ -873,8 +885,14 @@ bool CellProperty::isAdjacentTo(const CellProperty *cell) const
 		for (PortalList::const_iterator j = portalList.begin(); j != jEnd; ++j)
 		{
 			const Portal *portal = *j;
+			if (!portal)
+				continue;
 
-			CellProperty const * const neighbor = portal->getNeighbor() ? portal->getNeighbor()->getParentCell() : 0;
+			Portal const * const neighborPortal = portal->getNeighbor();
+			if (!neighborPortal)
+				continue;
+
+			CellProperty const * const neighbor = neighborPortal->getParentCell();
 			if (neighbor == cell) 
 				return true;
 		}

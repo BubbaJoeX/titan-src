@@ -22,6 +22,7 @@ public:
 
 	// roomId format: "dyn|<donorPob>|<cellIndex>|<portalIndex>"
 	static bool parseRoomId(std::string const &roomId, std::string &outDonorPob, int &outDonorCellIndex, int &outDonorPortalIndex);
+	static bool resolveDonorPobPath(std::string const &inPath, std::string &outPath);
 
 	static void buildCatalog(DynamicBunkerOpenFloorplanMessage::RoomList &outRooms);
 	static bool lookupRoom(std::string const &roomId, DynamicBunkerOpenFloorplanMessage::RoomEntry &outRoom);

@@ -115,6 +115,8 @@ public:
 		std::string label;
 		Transform doorTransform_o2p;
 		bool open;
+		float doorwayWidth;
+		float doorwayHeight;
 	};
 
 	typedef std::vector<RoomEntry> RoomList;
@@ -274,7 +276,9 @@ public:
 		int32 socketIndex,
 		std::string const &label,
 		Transform const &doorTransform_o2p,
-		bool open);
+		bool open,
+		float doorwayWidth,
+		float doorwayHeight);
 
 	explicit DynamicBunkerCustomSocketSyncMessage(Archive::ReadIterator &source);
 	~DynamicBunkerCustomSocketSyncMessage();
@@ -285,6 +289,8 @@ public:
 	std::string const &getLabel() const { return m_label.get(); }
 	Transform const &getDoorTransform_o2p() const { return m_doorTransform_o2p.get(); }
 	bool getOpen() const { return m_open.get(); }
+	float getDoorwayWidth() const { return m_doorwayWidth.get(); }
+	float getDoorwayHeight() const { return m_doorwayHeight.get(); }
 
 private:
 
@@ -294,6 +300,8 @@ private:
 	Archive::AutoVariable<std::string> m_label;
 	Archive::AutoVariable<Transform> m_doorTransform_o2p;
 	Archive::AutoVariable<bool> m_open;
+	Archive::AutoVariable<float> m_doorwayWidth;
+	Archive::AutoVariable<float> m_doorwayHeight;
 };
 
 // ======================================================================
@@ -311,7 +319,9 @@ public:
 		NetworkId const &terminalId,
 		int32 cellIndex,
 		Transform const &doorTransform_o2p,
-		std::string const &label);
+		std::string const &label,
+		float doorwayWidth,
+		float doorwayHeight);
 
 	explicit DynamicBunkerCreateCustomSocketMessage(Archive::ReadIterator &source);
 	~DynamicBunkerCreateCustomSocketMessage();
@@ -321,6 +331,8 @@ public:
 	int32 getCellIndex() const { return m_cellIndex.get(); }
 	Transform const &getDoorTransform_o2p() const { return m_doorTransform_o2p.get(); }
 	std::string const &getLabel() const { return m_label.get(); }
+	float getDoorwayWidth() const { return m_doorwayWidth.get(); }
+	float getDoorwayHeight() const { return m_doorwayHeight.get(); }
 
 private:
 
@@ -329,6 +341,8 @@ private:
 	Archive::AutoVariable<int32> m_cellIndex;
 	Archive::AutoVariable<Transform> m_doorTransform_o2p;
 	Archive::AutoVariable<std::string> m_label;
+	Archive::AutoVariable<float> m_doorwayWidth;
+	Archive::AutoVariable<float> m_doorwayHeight;
 };
 
 // ======================================================================

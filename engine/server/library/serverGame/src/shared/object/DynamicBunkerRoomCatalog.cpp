@@ -48,6 +48,44 @@ namespace DynamicBunkerRoomCatalogNamespace
 		return true;
 	}
 
+	bool resolveDonorPobPath(std::string const &inPath, std::string &outPath)
+	{
+		if (inPath.empty())
+			return false;
+
+		std::vector<std::string> candidates;
+		candidates.push_back(inPath);
+
+		if (inPath.compare(0, 11, "appearance/") == 0)
+			candidates.push_back(inPath.substr(11));
+
+		if (inPath.find("appearance/") != 0)
+			candidates.push_back("appearance/" + inPath);
+
+		for (size_t i = 0; i < candidates.size(); ++i)
+		{
+			std::string const &candidate = candidates[i];
+			if (candidate.empty())
+				continue;
+
+			if (TreeFile::exists(candidate.c_str()))
+			{
+				outPath = candidate;
+				return true;
+			}
+
+			PortalPropertyTemplate const *const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(candidate.c_str()));
+			if (tmpl)
+			{
+				tmpl->release();
+				outPath = candidate;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	bool templateNameLooksLikeBuilding(char const *templateName)
 	{
 		if (!templateName || !*templateName)
@@ -71,10 +109,11 @@ namespace DynamicBunkerRoomCatalogNamespace
 		if (pob.empty() || !pathLooksUseful(pob))
 			return false;
 
-		if (!TreeFile::exists(pob.c_str()))
+		std::string resolved;
+		if (!resolveDonorPobPath(pob, resolved))
 			return false;
 
-		uniquePobs.insert(pob);
+		uniquePobs.insert(resolved);
 		return true;
 	}
 
@@ -111,10 +150,11 @@ namespace DynamicBunkerRoomCatalogNamespace
 
 	void expandPob(std::string const &pobPath, DynamicBunkerOpenFloorplanMessage::RoomList &rooms, std::map<std::string, DynamicBunkerOpenFloorplanMessage::RoomEntry> &byId)
 	{
-		if (!TreeFile::exists(pobPath.c_str()))
+		std::string resolvedPob;
+		if (!resolveDonorPobPath(pobPath, resolvedPob))
 			return;
 
-		PortalPropertyTemplate const *const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(pobPath.c_str()));
+		PortalPropertyTemplate const *const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(resolvedPob.c_str()));
 		if (!tmpl)
 			return;
 
@@ -132,9 +172,9 @@ namespace DynamicBunkerRoomCatalogNamespace
 			// One catalog entry per cell; first portal is the graft socket.
 			int const portalIndex = 0;
 			DynamicBunkerOpenFloorplanMessage::RoomEntry room;
-			room.roomId = makeRoomId(pobPath, cellIndex, portalIndex);
-			room.displayName = makeDisplayName(pobPath, cellName, cellIndex, portalIndex);
-			room.donorPob = pobPath;
+			room.roomId = makeRoomId(resolvedPob, cellIndex, portalIndex);
+			room.displayName = makeDisplayName(resolvedPob, cellName, cellIndex, portalIndex);
+			room.donorPob = resolvedPob;
 			room.appearanceHint = appearance ? appearance : "";
 			room.socketType = "auto";
 			room.donorCellIndex = cellIndex;
@@ -284,9 +324,11 @@ bool DynamicBunkerRoomCatalog::lookupRoom(std::string const &roomId, DynamicBunk
 	outRoom.donorCellIndex = cellIndex;
 	outRoom.donorPortalIndex = portalIndex;
 
-	if (TreeFile::exists(donorPob.c_str()))
+	std::string resolvedPob;
+	if (resolveDonorPobPath(donorPob, resolvedPob))
 	{
-		PortalPropertyTemplate const *const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(donorPob.c_str()));
+		outRoom.donorPob = resolvedPob;
+		PortalPropertyTemplate const *const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(resolvedPob.c_str()));
 		if (tmpl)
 		{
 			if (cellIndex < tmpl->getNumberOfCells())
@@ -294,7 +336,7 @@ bool DynamicBunkerRoomCatalog::lookupRoom(std::string const &roomId, DynamicBunk
 				PortalPropertyTemplateCell const &cell = tmpl->getCell(cellIndex);
 				if (cell.getAppearanceName())
 					outRoom.appearanceHint = cell.getAppearanceName();
-				outRoom.displayName = makeDisplayName(donorPob, cell.getName(), cellIndex, portalIndex);
+				outRoom.displayName = makeDisplayName(resolvedPob, cell.getName(), cellIndex, portalIndex);
 			}
 			tmpl->release();
 		}
@@ -309,6 +351,13 @@ void DynamicBunkerRoomCatalog::invalidateCache()
 	s_cacheValid = false;
 	s_cachedRooms.clear();
 	s_roomById.clear();
+}
+
+// ----------------------------------------------------------------------
+
+bool DynamicBunkerRoomCatalog::resolveDonorPobPath(std::string const &inPath, std::string &outPath)
+{
+	return DynamicBunkerRoomCatalogNamespace::resolveDonorPobPath(inPath, outPath);
 }
 
 // ======================================================================

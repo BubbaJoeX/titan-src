@@ -104,6 +104,8 @@ namespace Archive
 		get(source, target.label);
 		get(source, target.doorTransform_o2p);
 		get(source, target.open);
+		get(source, target.doorwayWidth);
+		get(source, target.doorwayHeight);
 	}
 
 	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::CustomSocketEntry const &source)
@@ -113,6 +115,8 @@ namespace Archive
 		put(target, source.label);
 		put(target, source.doorTransform_o2p);
 		put(target, source.open);
+		put(target, source.doorwayWidth);
+		put(target, source.doorwayHeight);
 	}
 }
 
@@ -363,19 +367,25 @@ DynamicBunkerCreateCustomSocketMessage::DynamicBunkerCreateCustomSocketMessage(
 	NetworkId const &terminalId,
 	int32 cellIndex,
 	Transform const &doorTransform_o2p,
-	std::string const &label)
+	std::string const &label,
+	float doorwayWidth,
+	float doorwayHeight)
 : GameNetworkMessage(MessageType),
 	m_buildingId(buildingId),
 	m_terminalId(terminalId),
 	m_cellIndex(cellIndex),
 	m_doorTransform_o2p(doorTransform_o2p),
-	m_label(label)
+	m_label(label),
+	m_doorwayWidth(doorwayWidth),
+	m_doorwayHeight(doorwayHeight)
 {
 	addVariable(m_buildingId);
 	addVariable(m_terminalId);
 	addVariable(m_cellIndex);
 	addVariable(m_doorTransform_o2p);
 	addVariable(m_label);
+	addVariable(m_doorwayWidth);
+	addVariable(m_doorwayHeight);
 }
 
 DynamicBunkerCreateCustomSocketMessage::DynamicBunkerCreateCustomSocketMessage(Archive::ReadIterator &source)
@@ -384,13 +394,17 @@ DynamicBunkerCreateCustomSocketMessage::DynamicBunkerCreateCustomSocketMessage(A
 	m_terminalId(),
 	m_cellIndex(0),
 	m_doorTransform_o2p(),
-	m_label()
+	m_label(),
+	m_doorwayWidth(1.0f),
+	m_doorwayHeight(2.0f)
 {
 	addVariable(m_buildingId);
 	addVariable(m_terminalId);
 	addVariable(m_cellIndex);
 	addVariable(m_doorTransform_o2p);
 	addVariable(m_label);
+	addVariable(m_doorwayWidth);
+	addVariable(m_doorwayHeight);
 	unpack(source);
 }
 
@@ -406,14 +420,18 @@ DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(
 	int32 socketIndex,
 	std::string const &label,
 	Transform const &doorTransform_o2p,
-	bool open)
+	bool open,
+	float doorwayWidth,
+	float doorwayHeight)
 : GameNetworkMessage(MessageType),
 	m_buildingId(buildingId),
 	m_cellIndex(cellIndex),
 	m_socketIndex(socketIndex),
 	m_label(label),
 	m_doorTransform_o2p(doorTransform_o2p),
-	m_open(open)
+	m_open(open),
+	m_doorwayWidth(doorwayWidth),
+	m_doorwayHeight(doorwayHeight)
 {
 	addVariable(m_buildingId);
 	addVariable(m_cellIndex);
@@ -421,6 +439,8 @@ DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(
 	addVariable(m_label);
 	addVariable(m_doorTransform_o2p);
 	addVariable(m_open);
+	addVariable(m_doorwayWidth);
+	addVariable(m_doorwayHeight);
 }
 
 DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(Archive::ReadIterator &source)
@@ -430,7 +450,9 @@ DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(Archi
 	m_socketIndex(0),
 	m_label(),
 	m_doorTransform_o2p(),
-	m_open(true)
+	m_open(true),
+	m_doorwayWidth(1.0f),
+	m_doorwayHeight(2.0f)
 {
 	addVariable(m_buildingId);
 	addVariable(m_cellIndex);
@@ -438,6 +460,8 @@ DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(Archi
 	addVariable(m_label);
 	addVariable(m_doorTransform_o2p);
 	addVariable(m_open);
+	addVariable(m_doorwayWidth);
+	addVariable(m_doorwayHeight);
 	unpack(source);
 }
 
