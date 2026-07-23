@@ -91,6 +91,11 @@ ConnectionServer::ConnectionServer()
     s_clientServiceSetup->fragmentSize = ConfigConnectionServer::getClientFragmentSize();
     s_clientServiceSetup->maxDataHoldTime = ConfigConnectionServer::getClientMaxDataHoldTime();
     s_clientServiceSetup->hashTableSize = ConfigConnectionServer::getClientHashTableSize();
+    // Extended player data can produce a multi-megabyte initial baseline burst. The shared
+    // 2 MiB reliable queue limit disconnects the client before that burst can drain.
+    // Keep this scoped to external client connections; clientOverflowLimit remains the
+    // ConnectionServer's application-level protection against an unbounded send queue.
+    s_clientServiceSetup->reliableOverflowBytes = 8 * 1024 * 1024;
     s_clientServiceSetup->port = ConfigConnectionServer::getClientServicePortPublic();
     s_clientServiceSetup->compress = ConfigConnectionServer::getCompressClientNetworkTraffic();
     s_clientServiceSetup->useTcp = false;
