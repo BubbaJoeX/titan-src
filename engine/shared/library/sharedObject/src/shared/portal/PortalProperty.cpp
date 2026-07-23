@@ -1441,43 +1441,6 @@ bool PortalProperty::getPortalNeighbor(int cellIndex, int portalIndex, int &outN
 
 // ----------------------------------------------------------------------
 
-namespace PortalPropertyNamespace
-{
-	bool flagCustomPortalFloorEdges(CellProperty & cell, int portalIndex)
-	{
-		if (portalIndex < 0)
-			return false;
-
-		Portal * const portal = cell.getPortal(portalIndex);
-		if (!portal)
-			return false;
-
-		Floor * const floor = cell.getFloor();
-		if (!floor)
-			return false;
-
-		FloorMesh const * const floorMeshConst = floor->getFloorMesh();
-		if (!floorMeshConst)
-			return false;
-
-		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
-		floorMesh->clearPortalEdges(portalIndex);
-
-		IndexedTriangleList const & geometry = portal->getGeometry();
-		std::vector<Vector> const & vertices = geometry.getVertices();
-		if (vertices.size() < 3)
-			return false;
-
-		VectorVector portalPolys;
-		portalPolys.push_back(vertices);
-		return floorMesh->flagPortalEdges(portalPolys, portalIndex);
-	}
-}
-
-using namespace PortalPropertyNamespace;
-
-// ----------------------------------------------------------------------
-
 bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex)
 {
 	CustomSocket customSocket;
@@ -1585,7 +1548,19 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	}
 
 	socketEntry->materializedPortalIndex = portalIndex;
-	IGNORE_RETURN(flagCustomPortalFloorEdges(*cell, portalIndex));
+
+	Portal * const portal = cell->getPortal(portalIndex);
+	Floor * const floor = cell->getFloor();
+	FloorMesh const * const floorMeshConst = floor ? floor->getFloorMesh() : 0;
+	if (portal && floorMeshConst)
+	{
+		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
+		floorMesh->clearPortalEdges(portalIndex);
+		VectorVector const portalVerts = portal->getGeometry().getVertices();
+		if (portalVerts.size() >= 3)
+			IGNORE_RETURN(floorMesh->flagPortalEdges(portalVerts, portalIndex));
+	}
+
 	return true;
 }
 
