@@ -7116,6 +7116,9 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIE
 {
 	UNREF(self);
 
+	if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+		return JNI_FALSE;
+
 	ServerObject * serverObj = nullptr;
 	if (!JavaLibrary::getObject(target, serverObj) || !serverObj)
 		return JNI_FALSE;
@@ -7139,21 +7142,16 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIE
 	if (palVar)
 	{
 		PackedArgb color(255, static_cast<uint8>(r), static_cast<uint8>(g), static_cast<uint8>(b));
+		int const previousIndex = palVar->getValue();
+		palVar->setClosestColor(color);
 
-		// Set the direct color on the customization variable
-		palVar->setDirectColor(color);
-
-		// Also store the direct color as an objvar for persistence
-		// Format: directColor.<varName> = packed ARGB value
+		// Remove state written by the retired direct-RGB implementation.
 		std::string objvarName = "directColor." + varNameStr;
-		int packedColor = (static_cast<int>(color.getA()) << 24) |
-		                  (static_cast<int>(color.getR()) << 16) |
-		                  (static_cast<int>(color.getG()) << 8) |
-		                  static_cast<int>(color.getB());
-		obj->setObjVarItem(objvarName, packedColor);
+		obj->removeObjVarItem(objvarName);
+		bool const changed = palVar->getValue() != previousIndex;
 
 		cdata->release();
-		return JNI_TRUE;
+		return changed ? JNI_TRUE : JNI_FALSE;
 	}
 
 	cdata->release();
@@ -7204,21 +7202,16 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorHtml(JNI
 	if (palVar)
 	{
 		PackedArgb color = PackedArgb::fromHtmlString(htmlColorStr.c_str());
+		int const previousIndex = palVar->getValue();
+		palVar->setClosestColor(color);
 
-		// Set the direct color on the customization variable
-		palVar->setDirectColor(color);
-
-		// Also store the direct color as an objvar for persistence
-		// Format: directColor.<varName> = packed ARGB value
+		// Remove state written by the retired direct-RGB implementation.
 		std::string objvarName = "directColor." + varNameStr;
-		int packedColor = (static_cast<int>(color.getA()) << 24) |
-		                  (static_cast<int>(color.getR()) << 16) |
-		                  (static_cast<int>(color.getG()) << 8) |
-		                  static_cast<int>(color.getB());
-		obj->setObjVarItem(objvarName, packedColor);
+		obj->removeObjVarItem(objvarName);
+		bool const changed = palVar->getValue() != previousIndex;
 
 		cdata->release();
-		return JNI_TRUE;
+		return changed ? JNI_TRUE : JNI_FALSE;
 	}
 
 	cdata->release();

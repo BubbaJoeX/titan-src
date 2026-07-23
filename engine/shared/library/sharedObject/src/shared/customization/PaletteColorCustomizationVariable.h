@@ -37,7 +37,7 @@ public:
 
 	virtual void         writeObjectTemplateExportString(const std::string &variablePathName, ObjectTemplateCustomizationDataWriter &writer) const;
 
-	// Persistence overrides for direct color support
+	// Persistence remains the legacy palette-index representation.
 	virtual int          getPersistedDataByteCount() const;
 	virtual void         saveToByteVector(ByteVector &data) const;
 	virtual bool         restoreFromByteVector(ByteVector const &data, int startIndex, int length);
@@ -46,7 +46,7 @@ public:
 
 	void                 setClosestColor(const PackedArgb &targetColor);
 
-	// Direct color support - HTML hex codes and RGB values
+	// Compatibility API: RGB/HTML inputs map to the nearest palette entry.
 	bool                 setDirectColor(const PackedArgb &color);
 	bool                 setDirectColorHtml(const char *htmlColor);
 	bool                 hasDirectColor() const;
@@ -73,8 +73,6 @@ private:
 
 	const PaletteArgb *const m_palette;
 	int                      m_paletteIndex;
-	bool                     m_useDirectColor;
-	mutable PackedArgb       m_directColor;
 
 };
 

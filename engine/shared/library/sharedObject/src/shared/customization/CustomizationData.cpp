@@ -1169,18 +1169,9 @@ void CustomizationData::saveToByteVector(ByteVector &data, bool persistRemoteDat
 	CustomizationVariableConstVector  variables;
 	iterateOverConstVariables(collectPersistedVariablesCallback, &variables, persistRemoteData);
 
-	//-- Count direct color variables
-	int directColorCount = 0;
-	for (size_t i = 0; i < variables.size(); ++i)
-	{
-		PaletteColorCustomizationVariable const * palVar = dynamic_cast<PaletteColorCustomizationVariable const *>(variables[i].second);
-		if (palVar && palVar->hasDirectColor())
-			++directColorCount;
-	}
-
 	//-- Write header data.
-	// Use version 3 if we have direct colors, otherwise version 2 for backward compatibility
-	data.push_back(directColorCount > 0 ? 3 : 2);
+	// Version 2 is the authoritative legacy palette-index format.
+	data.push_back(2);
 
 	// Write # variables.
 	int const variableCount = static_cast<int>(variables.size());
@@ -1219,30 +1210,6 @@ void CustomizationData::saveToByteVector(ByteVector &data, bool persistRemoteDat
 		variable->saveToByteVector(data);
 	}
 
-	//-- For version 3, append direct color data
-	if (directColorCount > 0)
-	{
-		// Write count of direct color entries
-		data.push_back(static_cast<byte>(directColorCount));
-
-		// Write each direct color: variableId (1 byte) + R (1 byte) + G (1 byte) + B (1 byte)
-		for (int i = 0; i < variableCount; ++i)
-		{
-			PaletteColorCustomizationVariable const * palVar = dynamic_cast<PaletteColorCustomizationVariable const *>(variables[static_cast<CustomizationVariableConstVector::size_type>(i)].second);
-			if (palVar && palVar->hasDirectColor())
-			{
-				std::string const &variableName = variables[static_cast<CustomizationVariableConstVector::size_type>(i)].first;
-				int variableId = -1;
-				CustomizationIdManager::mapStringToId(variableName.c_str(), variableId);
-
-				PackedArgb const & color = palVar->getDirectColor();
-				data.push_back(static_cast<byte>(variableId));
-				data.push_back(static_cast<byte>(color.getR()));
-				data.push_back(static_cast<byte>(color.getG()));
-				data.push_back(static_cast<byte>(color.getB()));
-			}
-		}
-	}
 }
 
 // ----------------------------------------------------------------------
@@ -1442,7 +1409,9 @@ bool CustomizationData::restoreFromByteVector_3(ByteVector const &data)
 		currentIndex += variableSize;
 	}
 
-	// Now read direct color data if present
+	// Version 3 was emitted by an experimental direct-RGB implementation.
+	// Consume its extension for migration compatibility, but do not apply RGB
+	// over the palette index already restored above.
 	if (currentIndex < dataSize)
 	{
 		int const directColorCount = static_cast<int>(data[static_cast<ByteVector::size_type>(currentIndex)]);
@@ -1471,14 +1440,9 @@ bool CustomizationData::restoreFromByteVector_3(ByteVector const &data)
 				continue;
 			}
 
-			// Get variable and set direct color
-			CustomizationVariable *const variable = findVariable(variableName);
-			PaletteColorCustomizationVariable *const palVar = dynamic_cast<PaletteColorCustomizationVariable *>(variable);
-			if (palVar)
-			{
-				PackedArgb color(255, r, g, b);
-				palVar->setDirectColor(color);
-			}
+			UNREF(r);
+			UNREF(g);
+			UNREF(b);
 		}
 	}
 

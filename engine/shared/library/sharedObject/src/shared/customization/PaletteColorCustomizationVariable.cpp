@@ -28,9 +28,7 @@ MEMORY_BLOCK_MANAGER_IMPLEMENTATION_WITH_INSTALL(PaletteColorCustomizationVariab
 PaletteColorCustomizationVariable::PaletteColorCustomizationVariable(const PaletteArgb *palette, int selectedIndex)
 :	RangedIntCustomizationVariable(),
 	m_palette(palette),
-	m_paletteIndex(selectedIndex),
-	m_useDirectColor(false),
-	m_directColor(PackedArgb::solidWhite)
+	m_paletteIndex(selectedIndex)
 {
 	NOT_NULL(palette);
 	palette->fetch();
@@ -57,8 +55,6 @@ PaletteColorCustomizationVariable::~PaletteColorCustomizationVariable()
 
 int PaletteColorCustomizationVariable::getValue() const
 {
-	// Always return the palette index (closest match when using direct color).
-	// Direct color is transmitted via customization data version 3 format.
 	return m_paletteIndex;
 }
 
@@ -69,7 +65,6 @@ bool PaletteColorCustomizationVariable::setValue(int value)
 	if (m_palette && (value >= 0) && (value < m_palette->getEntryCount()))
 	{
 		m_paletteIndex = value;
-		m_useDirectColor = false;
 		signalVariableModified();
 	}
 	else if (!m_palette)
@@ -89,11 +84,6 @@ bool PaletteColorCustomizationVariable::setValue(int value)
 
 const PackedArgb &PaletteColorCustomizationVariable::getValueAsColor() const
 {
-	// If using direct color, return the actual direct color for rendering
-	if (m_useDirectColor)
-		return m_directColor;
-
-	// Otherwise return the palette color
 	if (!m_palette)
 		return PackedArgb::solidMagenta;
 
@@ -146,10 +136,6 @@ void PaletteColorCustomizationVariable::writeObjectTemplateExportString(const st
 
 int PaletteColorCustomizationVariable::getPersistedDataByteCount() const
 {
-	// Always save the matched palette index - direct color is stored in objvar
-	int const value = m_paletteIndex;
-
-	// Check if palette is available
 	if (!m_palette)
 		return 1;
 
@@ -172,7 +158,6 @@ int PaletteColorCustomizationVariable::getPersistedDataByteCount() const
 
 void PaletteColorCustomizationVariable::saveToByteVector(ByteVector &data) const
 {
-	// Always save the matched palette index - direct color is stored in objvar
 	int const byteCount = getPersistedDataByteCount();
 	switch (byteCount)
 	{
@@ -227,9 +212,9 @@ bool PaletteColorCustomizationVariable::restoreFromByteVector(ByteVector const &
 			return false;
 	}
 
-	// Restore palette index (direct color is restored separately from objvar)
+	// Palette indices are the only persisted representation.  This preserves the
+	// authored CDF/template value and the legacy customization wire format.
 	m_paletteIndex = value;
-	m_useDirectColor = false;
 
 	return true;
 }
@@ -242,16 +227,7 @@ std::string PaletteColorCustomizationVariable::debugToString() const
 {
 	char buffer[1024];
 
-	if (m_useDirectColor)
-	{
-		char htmlColor[16];
-		m_directColor.toHtmlString(htmlColor, sizeof(htmlColor), false);
-		sprintf(buffer, "palette (%s): direct color %s -> matched index %d", m_palette->getName().getString(), htmlColor, m_paletteIndex);
-	}
-	else
-	{
-		sprintf(buffer, "palette (%s): index %d", m_palette->getName().getString(), m_paletteIndex);
-	}
+	sprintf(buffer, "palette (%s): index %d", m_palette->getName().getString(), m_paletteIndex);
 	return std::string(buffer);
 }
 
@@ -259,21 +235,18 @@ std::string PaletteColorCustomizationVariable::debugToString() const
 
 // ----------------------------------------------------------------------
 /**
- * Set a direct RGB color, bypassing the palette.
- * The color will be auto-matched to the closest palette entry for rendering.
+ * Compatibility entry point for RGB callers.
+ * Palette variables cannot carry RGB data, so deterministically select the
+ * closest declared palette entry.
  * @param color  The direct color to set
  * @return  true if successful
  */
 bool PaletteColorCustomizationVariable::setDirectColor(const PackedArgb &color)
 {
-	m_directColor = color;
-	m_useDirectColor = true;
-	if (m_palette)
-		m_paletteIndex = m_palette->findClosestMatch(color);
-	else
-		m_paletteIndex = 0;
-	signalVariableModified();
-	return true;
+	if (!m_palette)
+		return false;
+
+	return setValue(m_palette->findClosestMatch(color));
 }
 
 // ----------------------------------------------------------------------
@@ -298,7 +271,7 @@ bool PaletteColorCustomizationVariable::setDirectColorHtml(const char *htmlColor
  */
 bool PaletteColorCustomizationVariable::hasDirectColor() const
 {
-	return m_useDirectColor;
+	return false;
 }
 
 // ----------------------------------------------------------------------
@@ -308,10 +281,6 @@ bool PaletteColorCustomizationVariable::hasDirectColor() const
  */
 const PackedArgb &PaletteColorCustomizationVariable::getDirectColor() const
 {
-	if (m_useDirectColor)
-		return m_directColor;
-
-	// Return the palette color
 	return getValueAsColor();
 }
 
