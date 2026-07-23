@@ -7176,22 +7176,31 @@ namespace
 		return channels.red->getValue() == 0 && channels.green->getValue() == 0 && channels.blue->getValue() == 0;
 	}
 
-	bool ensureDirectColorSlots(CustomizationData &data, std::string const &prefix)
+	bool directColorSlotHasAnyVariable(CustomizationData &data, std::string const &prefix, int slot)
 	{
-		char const * const slotNames[] =
+		char slotText[2];
+		snprintf(slotText, sizeof(slotText), "%d", slot);
+		std::string const stem = prefix + "direct_color_" + slotText;
+		return data.findConstVariable(stem + "_r") ||
+			data.findConstVariable(stem + "_g") ||
+			data.findConstVariable(stem + "_b");
+	}
+
+	bool ensureDirectColorSlot(CustomizationData &data, std::string const &prefix, int slot, DirectColorChannels &channels)
+	{
+		char slotText[2];
+		snprintf(slotText, sizeof(slotText), "%d", slot);
+		std::string const stem = prefix + "direct_color_" + slotText;
+		char const * const channelSuffixes[] = {"_r", "_g", "_b"};
+		for (int channel = 0; channel < 3; ++channel)
 		{
-			"direct_color_0_r", "direct_color_0_g", "direct_color_0_b",
-			"direct_color_1_r", "direct_color_1_g", "direct_color_1_b"
-		};
-		for (int i = 0; i < 6; ++i)
-		{
-			std::string const slotPath = prefix + slotNames[i];
+			std::string const slotPath = stem + channelSuffixes[channel];
 			if (!data.findConstVariable(slotPath))
 				data.addVariableTakeOwnership(slotPath, new BasicRangedIntCustomizationVariable(0, 0, 32768));
 			if (!data.findConstVariable(slotPath))
 				return false;
 		}
-		return true;
+		return getDirectColorSlot(data, prefix, slot, channels);
 	}
 
 	bool setDirectColor(CustomizationData &data, std::string const &baseName, int r, int g, int b, bool enabled)
@@ -7199,8 +7208,6 @@ namespace
 		std::string prefix;
 		int baseId = 0;
 		if (!getDirectColorBase(baseName, prefix, baseId))
-			return false;
-		if (enabled && !ensureDirectColorSlots(data, prefix))
 			return false;
 
 		DirectColorChannels emptySlot = {nullptr, nullptr, nullptr};
@@ -7227,6 +7234,17 @@ namespace
 
 		if (!enabled)
 			return true;
+		if (!haveEmptySlot)
+		{
+			for (int slot = 0; slot < 2; ++slot)
+			{
+				if (!directColorSlotHasAnyVariable(data, prefix, slot))
+				return ensureDirectColorSlot(data, prefix, slot, emptySlot) &&
+					emptySlot.red->setValue((baseId << 8) | r) &&
+					emptySlot.green->setValue((baseId << 8) | g) &&
+					emptySlot.blue->setValue((baseId << 8) | b);
+			}
+		}
 		if (!haveEmptySlot)
 			return false;
 		return emptySlot.red->setValue((baseId << 8) | r) &&
