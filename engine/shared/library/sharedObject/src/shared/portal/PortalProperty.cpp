@@ -508,13 +508,47 @@ char const *PortalProperty::getExteriorFloorName() const
 
 // ----------------------------------------------------------------------
 
+namespace PortalPropertyNamespace
+{
+}
+
+using namespace PortalPropertyNamespace;
+
+// ----------------------------------------------------------------------
+
+int PortalProperty::resolveCellPortalIndex(CellProperty const *cell, int preferredIndex)
+{
+	if (!cell)
+		return -1;
+
+	if (preferredIndex >= 0 && const_cast<CellProperty *>(cell)->getPortal(preferredIndex))
+		return preferredIndex;
+
+	int const portalCount = cell->getPortalCount();
+	for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
+	{
+		Portal *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
+		if (portal && portal->isPassable())
+			return portalIndex;
+	}
+
+	return -1;
+}
+
+// ----------------------------------------------------------------------
+
 void PortalProperty::cellLoaded(int cellIndex, Object &cellObject, bool shouldCreateAppearance)
 {
 	DEBUG_FATAL(cellIndex < 1 || cellIndex >= static_cast<int>(m_cellList->size()), ("invalid cell index %d/%d", cellIndex, static_cast<int>(m_cellList->size())));
-	DEBUG_FATAL((*m_cellList)[static_cast<CellList::size_type>(cellIndex)], ("cell already loaded"));
-	if ((*m_cellList)[static_cast<CellList::size_type>(cellIndex)])
+
+	CellProperty *const existingCell = (*m_cellList)[static_cast<CellList::size_type>(cellIndex)];
+	if (existingCell)
 	{
+		if (&existingCell->getOwner() == &cellObject)
+			return;
+
 		WARNING(true, ("CellProblem for portal %s cell index %d already loaded", getOwner().getNetworkId().getValueString().c_str(), cellIndex));
+		return;
 	}
 
 	// attach the cell as a child of the portal object
@@ -1119,8 +1153,7 @@ bool PortalProperty::addCustomSocket(CustomSocket const &socket)
 		if (it->socketIndex == socket.socketIndex)
 		{
 			*it = socket;
-			if (it->materializedPortalIndex < 0)
-				it->materializedPortalIndex = -1;
+			it->materializedPortalIndex = -1;
 			if (it->doorwayWidth < 0.01f)
 				it->doorwayWidth = 1.0f;
 			if (it->doorwayHeight < 0.01f)
@@ -1129,8 +1162,7 @@ bool PortalProperty::addCustomSocket(CustomSocket const &socket)
 		}
 	}
 	CustomSocket entry = socket;
-	if (entry.materializedPortalIndex < 0)
-		entry.materializedPortalIndex = -1;
+	entry.materializedPortalIndex = -1;
 	if (entry.doorwayWidth < 0.01f)
 		entry.doorwayWidth = 1.0f;
 	if (entry.doorwayHeight < 0.01f)
@@ -1278,10 +1310,18 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 		return false;
 
 	CellProperty *const hostCell = getCell(hostCellIndex);
-	if (!hostCell || !getCell(graftCellIndex))
+	CellProperty *const graftCell = getCell(graftCellIndex);
+	if (!hostCell || !graftCell)
 		return false;
 
-	int hostPortalIndex = customSocket.materializedPortalIndex;
+	int hostPortalIndex = -1;
+	if (customSocket.materializedPortalIndex >= 0
+		&& customSocket.materializedPortalIndex < hostCell->getPortalCount()
+		&& hostCell->getPortal(customSocket.materializedPortalIndex))
+	{
+		hostPortalIndex = customSocket.materializedPortalIndex;
+	}
+
 	if (hostPortalIndex < 0)
 	{
 		Transform customPortal_building;
@@ -1324,7 +1364,11 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 	if (hostPortalIndex < 0)
 		return false;
 
-	return linkCellPortals(hostCellIndex, hostPortalIndex, graftCellIndex, graftPortalIndex);
+	int const resolvedGraftPortal = PortalProperty::resolveCellPortalIndex(graftCell, graftPortalIndex);
+	if (resolvedGraftPortal < 0)
+		return false;
+
+	return linkCellPortals(hostCellIndex, hostPortalIndex, graftCellIndex, resolvedGraftPortal);
 }
 
 // ----------------------------------------------------------------------

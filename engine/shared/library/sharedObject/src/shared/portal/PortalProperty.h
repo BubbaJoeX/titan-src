@@ -137,6 +137,7 @@ public:
 	DynamicRoomGraftList const   &getDynamicRoomGrafts() const;
 
 	static int const              cms_customSocketBase;
+	static int                    resolveCellPortalIndex(CellProperty const *cell, int preferredIndex);
 
 	struct CustomSocket
 	{
