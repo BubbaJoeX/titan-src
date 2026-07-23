@@ -70,7 +70,6 @@ namespace ScriptMethodsInteriorsNamespace
 	jint         JNICALL getCellPortalCount(JNIEnv *env, jobject self, jlong building, jint cellIndex);
 	jstring      JNICALL getCellAppearanceName(JNIEnv *env, jobject self, jlong building, jint cellIndex);
 	jboolean     JNICALL openDynamicBunkerFloorplan(JNIEnv *env, jobject self, jlong player, jlong building, jlong terminal, jint hostCellIndex, jint hostPortalIndex);
-	jboolean     JNICALL openDynamicBunkerFloorplanHere(JNIEnv *env, jobject self, jlong player);
 }
 
 
@@ -111,7 +110,6 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getCellPortalCount", "(JI)I", getCellPortalCount),
 	JF("_getCellAppearanceName", "(JI)Ljava/lang/String;", getCellAppearanceName),
 	JF("_openDynamicBunkerFloorplan", "(JJJII)Z", openDynamicBunkerFloorplan),
-	JF("_openDynamicBunkerFloorplanHere", "(J)Z", openDynamicBunkerFloorplanHere),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -964,21 +962,6 @@ jboolean JNICALL ScriptMethodsInteriorsNamespace::openDynamicBunkerFloorplan(JNI
 		return JNI_FALSE;
 
 	return DynamicBunker::openFloorplan(*client, *buildingObject, *terminalObject, hostCellIndex, hostPortalIndex) ? JNI_TRUE : JNI_FALSE;
-}
-
-//--------------------------------------------------------------------------------------
-
-jboolean JNICALL ScriptMethodsInteriorsNamespace::openDynamicBunkerFloorplanHere(JNIEnv * /*env*/, jobject /*self*/, jlong player)
-{
-	CreatureObject *creature = nullptr;
-	if (!JavaLibrary::getObject(player, creature) || !creature)
-		return JNI_FALSE;
-
-	Client *const client = creature->getClient();
-	if (!client)
-		return JNI_FALSE;
-
-	return DynamicBunker::openFloorplanForClient(*client) ? JNI_TRUE : JNI_FALSE;
 }
 
 //--------------------------------------------------------------------------------------
