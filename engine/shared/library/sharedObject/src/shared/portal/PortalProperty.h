@@ -18,6 +18,7 @@ class Object;
 class Portal;
 class PortalPropertyTemplate;
 class PortalPropertyTemplateCell;
+class PortalPropertyTemplateCellPortal;
 class Vector;
 
 #include "sharedObject/Container.h"
@@ -144,6 +145,9 @@ public:
 		std::string label;
 		Transform   doorTransform_o2p;
 		bool        open;
+		int         materializedPortalIndex;
+		float       doorwayWidth;
+		float       doorwayHeight;
 	};
 
 	typedef std::vector<CustomSocket> CustomSocketList;
@@ -173,6 +177,7 @@ public:
 	bool                          getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const;
 	bool                          getPortalNeighbor(int cellIndex, int portalIndex, int &outNeighborCellIndex, int &outNeighborPortalIndex) const;
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
+	bool                          materializeCustomSocketPortal(int cellIndex, int customSocketIndex);
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
 
 	void                          clearBridgeSegments();
@@ -213,6 +218,7 @@ private:
 	};
 
 	typedef std::map<int, GraftedCellRecord> GraftedCellMap;
+	typedef std::vector<PortalPropertyTemplateCellPortal *> RuntimePortalTemplateList;
 
 private:
 
@@ -230,6 +236,7 @@ private:
 	DynamicRoomGraftList          *m_dynamicRoomGrafts;
 	CustomSocketList              *m_customSockets;
 	BridgeSegmentList             *m_bridgeSegments;
+	RuntimePortalTemplateList     *m_runtimePortalTemplates;
 };
 
 // ======================================================================

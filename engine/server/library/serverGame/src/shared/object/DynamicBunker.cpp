@@ -832,9 +832,6 @@ void DynamicBunker::handleAssignRoom(Client &client, DynamicBunkerAssignRoomMess
 
 	building->setObjVarItem(assignedRoomKey(message.getHostCellIndex(), message.getHostPortalIndex()), message.getRoomId());
 
-	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
-	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, message.getHostCellIndex(), message.getHostPortalIndex()));
-
 	LOG("dynamic_bunker", ("handleAssignRoom ok room=%s cell=%s", message.getRoomId().c_str(), cellId.getValueString().c_str()));
 }
 
@@ -855,9 +852,6 @@ void DynamicBunker::handleUnassignRoom(Client &client, DynamicBunkerUnassignRoom
 			message.getHostCellIndex(), message.getHostPortalIndex()));
 		return;
 	}
-
-	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
-	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, message.getHostCellIndex(), message.getHostPortalIndex()));
 
 	LOG("dynamic_bunker", ("handleUnassignRoom ok building=%s socket=%d/%d",
 		building->getNetworkId().getValueString().c_str(),
@@ -912,9 +906,6 @@ void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreate
 	persistCustomSockets(*building, *portalProperty);
 	updatePortalLayoutCrc(*building, *portalProperty);
 	broadcastCustomSocket(*building, socket);
-
-	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
-	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, socket.cellIndex, socket.socketIndex));
 
 	LOG("dynamic_bunker", ("handleCreateCustomSocket ok building=%s cell=%d socket=%d",
 		building->getNetworkId().getValueString().c_str(),

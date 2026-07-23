@@ -33,6 +33,7 @@ class Iff;
 class PortalPropertyTemplateCellPortal
 {
 	friend class Portal;
+	friend class PortalProperty;
 
 public:
 
@@ -44,6 +45,11 @@ public:
 	void               flipPassable();
 	void               preloadAssets() const;
 	void               garbageCollect() const;
+
+	static PortalPropertyTemplateCellPortal * createRuntime(
+		IndexedTriangleList * geometry,
+		Transform const & doorTransform_o2p,
+		char const * doorStyleName);
 
 private:
 
@@ -65,6 +71,7 @@ private:
 	bool              m_disabled;
 	bool              m_passable;
 	bool              m_geometryWindingClockwise;
+	bool              m_ownsPortalGeometry;
 	IndexedTriangleList const * m_portalGeometry;
 	char             *m_doorStyle;
 	bool              m_hasDoorHardpoint;

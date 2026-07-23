@@ -1152,15 +1152,32 @@ void CellProperty::drawDebugShapes(DebugShapeRenderer * const renderer) const
 
 Portal *CellProperty::getPortal(int portalIndex)
 {
-	Portal * result = 0;
-	if(m_portalObjectList)
+	if (portalIndex < 0)
+		return 0;
+
+	if(m_portalObjectList && !m_portalObjectList->empty())
 	{
-		if(m_portalObjectList->front().portalList)
-		{
-			result = m_portalObjectList->front().portalList->operator[](static_cast<PortalList::size_type>(portalIndex));
-		}
+		PortalList * const portalList = m_portalObjectList->front().portalList;
+		if (portalList && portalIndex < static_cast<int>(portalList->size()))
+			return (*portalList)[static_cast<PortalList::size_type>(portalIndex)];
 	}
-	return result;
+	return 0;
+}
+
+// ----------------------------------------------------------------------
+
+int CellProperty::appendRuntimePortal(PortalPropertyTemplateCellPortal const & portalTemplate)
+{
+	if (!m_portalObjectList || m_portalObjectList->empty())
+		return -1;
+
+	PortalList * const portalList = m_portalObjectList->front().portalList;
+	if (!portalList)
+		return -1;
+
+	Portal * const portal = new Portal(portalTemplate, this, &getOwner());
+	portalList->push_back(portal);
+	return static_cast<int>(portalList->size()) - 1;
 }
 
 // ----------------------------------------------------------------------

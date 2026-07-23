@@ -24,6 +24,7 @@
 #include "sharedObject/PortalPropertyTemplate.h"
 #include "sharedObject/PortalPropertyTemplateList.h"
 #include "sharedFoundation/Crc.h"
+#include "sharedMath/IndexedTriangleList.h"
 
 #include <algorithm>
 #include <limits>
@@ -65,7 +66,8 @@ PortalProperty::PortalProperty(Object &owner, const char *fileName)
 	m_graftedCellMap(new GraftedCellMap),
 	m_dynamicRoomGrafts(new DynamicRoomGraftList),
 	m_customSockets(new CustomSocketList),
-	m_bridgeSegments(new BridgeSegmentList)
+	m_bridgeSegments(new BridgeSegmentList),
+	m_runtimePortalTemplates(0)
 {
 #ifdef _DEBUG
 	DataLint::pushAsset(fileName);
@@ -99,6 +101,13 @@ PortalProperty::~PortalProperty()
 	m_customSockets = 0;
 	delete m_bridgeSegments;
 	m_bridgeSegments = 0;
+	if (m_runtimePortalTemplates)
+	{
+		for (size_t i = 0; i < m_runtimePortalTemplates->size(); ++i)
+			delete (*m_runtimePortalTemplates)[i];
+		delete m_runtimePortalTemplates;
+		m_runtimePortalTemplates = 0;
+	}
 
 	delete m_cellList;
 	delete m_fixupList;
@@ -1101,10 +1110,23 @@ bool PortalProperty::addCustomSocket(CustomSocket const &socket)
 		if (it->socketIndex == socket.socketIndex)
 		{
 			*it = socket;
+			if (it->materializedPortalIndex < 0)
+				it->materializedPortalIndex = -1;
+			if (it->doorwayWidth < 0.01f)
+				it->doorwayWidth = 1.0f;
+			if (it->doorwayHeight < 0.01f)
+				it->doorwayHeight = 2.0f;
 			return true;
 		}
 	}
-	m_customSockets->push_back(socket);
+	CustomSocket entry = socket;
+	if (entry.materializedPortalIndex < 0)
+		entry.materializedPortalIndex = -1;
+	if (entry.doorwayWidth < 0.01f)
+		entry.doorwayWidth = 1.0f;
+	if (entry.doorwayHeight < 0.01f)
+		entry.doorwayHeight = 2.0f;
+	m_customSockets->push_back(entry);
 	return true;
 }
 
@@ -1237,34 +1259,116 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 	if (!hostCell || !getCell(graftCellIndex))
 		return false;
 
-	Transform customPortal_building;
-	customPortal_building.multiply(hostCell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
-	Vector const customPos = customPortal_building.getPosition_p();
-
-	int bestPortal = -1;
-	float bestDistSq = std::numeric_limits<float>::max();
-	int const portalCount = hostCell->getPortalCount();
-	for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
+	int hostPortalIndex = customSocket.materializedPortalIndex;
+	if (hostPortalIndex < 0)
 	{
-		Portal *const portal = hostCell->getPortal(portalIndex);
-		if (!portal || !portal->isPassable())
-			continue;
+		Transform customPortal_building;
+		customPortal_building.multiply(hostCell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+		Vector const customPos = customPortal_building.getPosition_p();
 
-		Transform portal_building;
-		portal_building.multiply(hostCell->getOwner().getTransform_o2p(), portal->getDoorTransform());
-		Vector const delta = portal_building.getPosition_p() - customPos;
-		float const distSq = delta.magnitudeSquared();
-		if (distSq < bestDistSq)
+		int bestPortal = -1;
+		float bestDistSq = std::numeric_limits<float>::max();
+		int const portalCount = hostCell->getPortalCount();
+		for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
 		{
-			bestDistSq = distSq;
-			bestPortal = portalIndex;
+			Portal *const portal = hostCell->getPortal(portalIndex);
+			if (!portal || !portal->isPassable())
+				continue;
+
+			Transform portal_building;
+			portal_building.multiply(hostCell->getOwner().getTransform_o2p(), portal->getDoorTransform());
+			Vector const delta = portal_building.getPosition_p() - customPos;
+			float const distSq = delta.magnitudeSquared();
+			if (distSq < bestDistSq)
+			{
+				bestDistSq = distSq;
+				bestPortal = portalIndex;
+			}
+		}
+
+		if (bestPortal >= 0 && bestDistSq <= 256.0f)
+			hostPortalIndex = bestPortal;
+	}
+
+	if (hostPortalIndex < 0)
+	{
+		if (!materializeCustomSocketPortal(hostCellIndex, customSocketIndex))
+			return false;
+		if (!findCustomSocket(hostCellIndex, customSocketIndex, customSocket))
+			return false;
+		hostPortalIndex = customSocket.materializedPortalIndex;
+	}
+
+	if (hostPortalIndex < 0)
+		return false;
+
+	return linkCellPortals(hostCellIndex, hostPortalIndex, graftCellIndex, graftPortalIndex);
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSocketIndex)
+{
+	NOT_NULL(m_customSockets);
+
+	CustomSocket * socketEntry = 0;
+	for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->cellIndex == cellIndex && it->socketIndex == customSocketIndex)
+		{
+			socketEntry = &(*it);
+			break;
 		}
 	}
 
-	if (bestPortal < 0 || bestDistSq > 256.0f)
+	if (!socketEntry)
 		return false;
 
-	return linkCellPortals(hostCellIndex, bestPortal, graftCellIndex, graftPortalIndex);
+	if (socketEntry->materializedPortalIndex >= 0)
+	{
+		CellProperty * const cell = getCell(cellIndex);
+		if (cell && cell->getPortal(socketEntry->materializedPortalIndex))
+			return true;
+		socketEntry->materializedPortalIndex = -1;
+	}
+
+	CellProperty * const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	float const width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
+	float const height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
+	float const halfWidth = width * 0.5f;
+
+	std::vector<Vector> vertices;
+	vertices.push_back(Vector(-halfWidth, 0.0f, 0.0f));
+	vertices.push_back(Vector( halfWidth, 0.0f, 0.0f));
+	vertices.push_back(Vector( halfWidth, height, 0.0f));
+	vertices.push_back(Vector(-halfWidth, height, 0.0f));
+
+	IndexedTriangleList * const geometry = new IndexedTriangleList;
+	geometry->addTriangleFan(&vertices[0], static_cast<int>(vertices.size()));
+
+	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
+		geometry,
+		socketEntry->doorTransform_o2p,
+		"default");
+	if (!portalTemplate)
+	{
+		delete geometry;
+		return false;
+	}
+
+	if (!m_runtimePortalTemplates)
+		m_runtimePortalTemplates = new RuntimePortalTemplateList;
+	m_runtimePortalTemplates->push_back(portalTemplate);
+
+	int const portalIndex = cell->appendRuntimePortal(*portalTemplate);
+	if (portalIndex < 0)
+		return false;
+
+	socketEntry->materializedPortalIndex = portalIndex;
+	return true;
 }
 
 // ----------------------------------------------------------------------
