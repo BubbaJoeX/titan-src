@@ -167,7 +167,7 @@ public:
 	bool                          removeCustomSocket(int socketIndex);
 	CustomSocketList const       &getCustomSockets() const;
 	bool                          findCustomSocket(int cellIndex, int portalIndex, CustomSocket &outSocket) const;
-	bool                          isCustomSocketIndex(int portalIndex);
+	static bool                   isCustomSocketIndex(int portalIndex);
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
 
