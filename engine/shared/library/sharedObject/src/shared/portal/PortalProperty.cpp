@@ -1202,6 +1202,9 @@ bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex
 		return true;
 	}
 
+	if (portalIndex < 0 || portalIndex >= cell->getPortalCount())
+		return false;
+
 	Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
 	if (!portal)
 		return false;
