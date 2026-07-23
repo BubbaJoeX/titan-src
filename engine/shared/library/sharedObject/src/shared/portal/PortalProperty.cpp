@@ -1547,6 +1547,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	}
 
 	socketEntry->materializedPortalIndex = portalIndex;
+	IGNORE_RETURN(cell->flagRuntimePortalFloorEdges(portalIndex));
 	return true;
 }
 

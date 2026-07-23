@@ -1264,6 +1264,33 @@ bool CellProperty::replaceRuntimePortal(int portalIndex, PortalPropertyTemplateC
 
 // ----------------------------------------------------------------------
 
+bool CellProperty::flagRuntimePortalFloorEdges(int portalIndex)
+{
+	if (portalIndex < 0 || !m_floor)
+		return false;
+
+	Portal * const portal = getPortal(portalIndex);
+	if (!portal)
+		return false;
+
+	FloorMesh * const floorMesh = m_floor->getFloorMesh();
+	if (!floorMesh)
+		return false;
+
+	floorMesh->clearPortalEdges(portalIndex);
+
+	IndexedTriangleList const & geometry = portal->getGeometry();
+	std::vector<Vector> const & vertices = geometry.getVertices();
+	if (vertices.size() < 3)
+		return false;
+
+	std::vector<std::vector<Vector> > portalPolys;
+	portalPolys.push_back(vertices);
+	return floorMesh->flagPortalEdges(portalPolys, portalIndex);
+}
+
+// ----------------------------------------------------------------------
+
 int CellProperty::getNumberOfPortalObjects() const
 {
 	return static_cast<int>(m_portalObjectList->size());
