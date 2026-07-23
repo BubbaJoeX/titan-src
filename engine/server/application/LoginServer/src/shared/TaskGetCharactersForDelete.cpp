@@ -13,8 +13,15 @@
 
 // ======================================================================
 
+namespace
+{
+	std::vector<uint32> const s_noSlotCountClusters;
+}
+
+// ======================================================================
+
 TaskGetCharactersForDelete::TaskGetCharactersForDelete (StationId stationId, int clusterGroupId) :
-		TaskGetAvatarList(stationId, clusterGroupId, nullptr)
+		TaskGetAvatarList(stationId, clusterGroupId, s_noSlotCountClusters, nullptr)
 {
 }
 
