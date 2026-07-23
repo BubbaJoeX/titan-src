@@ -594,9 +594,15 @@ int CellProperty::getPortalCount() const
 {
 	int counter = 0;
 
+	if (!m_portalObjectList)
+		return 0;
+
 	const PortalObjectList::const_iterator iEnd = m_portalObjectList->end();
 	for (PortalObjectList::const_iterator i = m_portalObjectList->begin(); i != iEnd; ++i)
 	{
+		if (!i->portalList)
+			continue;
+
 		const PortalList &portalList   = *i->portalList;
 
 		counter += static_cast<int>(portalList.size());
