@@ -1308,16 +1308,18 @@ LoginServer::onValidateClient(StationId suid, const std::string &username, Clien
     GenericValueTypeMessage <std::set<std::string>> const msgCharacterCreationDisabledClusterList("CharacterCreationDisabled", ConfigLoginServer::getCharacterCreationDisabledClusterList());
     conn->send(msgCharacterCreationDisabledClusterList, true);
 
-    //Send off request for the avatar list from the database.
-    DatabaseConnection::getInstance().requestAvatarListForAccount(suid, 0);
-    LOG("LoginClientConnection", ("onValidateClient() for stationId (%lu) at IP (%s), id (%s), requesting avatar list for account", suid, conn->getRemoteAddress().c_str(), username.c_str()));
-
     //Set up the connection as being validated with this suid.
     conn->setIsValidated(true);
     conn->setStationId(suid);
     conn->setIsSecure(isSecure);
     conn->setAdminLevel(isAdminAccount ? AdminAccountManager::getAdminLevel(username) : -1);
     IGNORE_RETURN(m_validatedClientMap.insert(std::pair<StationId, ClientConnection *>(suid, conn)));
+
+    // Queue the asynchronous avatar/slot request only after this authenticated
+    // station is registered, so completion cannot target a default/zero cache.
+    DatabaseConnection::getInstance().requestAvatarListForAccount(suid, 0);
+    LOG("LoginClientConnection", ("onValidateClient() stationId (%u) avatarSlotRefresh=queued",
+        static_cast<unsigned int>(suid)));
 
     //Must be done after setting various information in the connection object above
     sendClusterStatus(*conn);

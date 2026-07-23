@@ -78,25 +78,6 @@ class TaskGetAvatarList : public DB::TaskRequest
 		GetOpenCharacterSlotsQuery& operator=(const GetOpenCharacterSlotsQuery&);
 	};
 
-	class GetOpenSlotCapacityQuery : public DB::Query
-	{
-	public:
-		GetOpenSlotCapacityQuery();
-
-		DB::BindableLong station_id;
-		DB::BindableLong cluster_id;
-		DB::BindableLong result;
-
-		virtual void getSQL(std::string &sql);
-		virtual bool bindParameters();
-		virtual bool bindColumns();
-		virtual QueryMode getExecutionMode() const;
-
-	private:
-		GetOpenSlotCapacityQuery(const GetOpenSlotCapacityQuery&);
-		GetOpenSlotCapacityQuery& operator=(const GetOpenSlotCapacityQuery&);
-	};
-
   private:
 	TaskGetAvatarList(); // disabled default constructor
 	TaskGetAvatarList(const TaskGetAvatarList &);

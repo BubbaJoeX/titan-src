@@ -198,7 +198,12 @@ void ClientConnection::onReceive(const Archive::ByteStream &message) {
             }
             case constcrc("RequestAvailableCharacterSlotsV1") : {
                 GenericValueTypeMessage<bool> const request(ri);
-                if (request.getValue() && !sendAvailableCharacterSlots()) {
+                if (request.getValue()) {
+                    REPORT_LOG(true, ("AvailableCharacterSlotsV1Refresh station=%u async=queued previousCacheEntries=%u\n",
+                        static_cast<unsigned int>(getStationId()), static_cast<unsigned int>(m_availableCharacterSlots.size())));
+                    // Never replay a possibly stale result. A response is sent only
+                    // when the authoritative asynchronous DB task completes.
+                    m_availableCharacterSlots.clear();
                     DatabaseConnection::getInstance().requestAvatarListForAccount(getStationId(), 0);
                 }
                 break;
@@ -216,7 +221,8 @@ void ClientConnection::setAvailableCharacterSlots(const std::vector<std::pair<ui
     if (slots != m_availableCharacterSlots) {
         m_availableCharacterSlots = slots;
         for (std::vector<std::pair<uint32, int> >::const_iterator slot = slots.begin(); slot != slots.end(); ++slot) {
-            REPORT_LOG(true, ("AvailableCharacterSlotsV1 cluster %lu count %d\n", slot->first, slot->second));
+            REPORT_LOG(true, ("AvailableCharacterSlotsV1 station %u cluster %u count %d cache=authoritative\n",
+                static_cast<unsigned int>(getStationId()), static_cast<unsigned int>(slot->first), slot->second));
         }
     }
 }

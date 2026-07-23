@@ -26,7 +26,6 @@
 
 namespace
 {
-	std::set<uint32> s_reportedSlotPolicyMismatch;
 	std::set<uint32> s_reportedMissingNormalSlotPolicy;
 }
 
@@ -149,15 +148,6 @@ bool TaskGetAvatarList::process(DB::Session *session)
 		int const configuredMaximum = std::max(0, ConfigLoginServer::getMaxCharactersPerAccount());
 		for (std::vector<uint32>::const_iterator clusterId = m_clusterIds.begin(); clusterId != m_clusterIds.end(); ++clusterId)
 		{
-			GetOpenSlotCapacityQuery capacityQuery;
-			capacityQuery.station_id = static_cast<long>(m_stationId);
-			capacityQuery.cluster_id = static_cast<long>(*clusterId);
-			if (!session->exec(&capacityQuery))
-				return false;
-			capacityQuery.done();
-			int const rawPolicyCapacity = static_cast<int>(capacityQuery.result.getValue());
-			int const policyCapacity = std::max(0, rawPolicyCapacity);
-
 			GetOpenCharacterSlotsQuery slotsQuery;
 			slotsQuery.station_id = static_cast<long>(m_stationId);
 			slotsQuery.cluster_id = static_cast<long>(*clusterId);
@@ -167,8 +157,10 @@ bool TaskGetAvatarList::process(DB::Session *session)
 
 			int slotsByType[4] = { 0, 0, 0, 0 };
 			bool hasNormalSlotPolicy = false;
+			int slotRows = 0;
 			while ((rowsFetched = slotsQuery.fetch()) > 0)
 			{
+				++slotRows;
 				int const type = static_cast<int>(slotsQuery.character_type_id.getValue());
 				if (type >= 0 && type < 4)
 				{
@@ -181,23 +173,32 @@ bool TaskGetAvatarList::process(DB::Session *session)
 			if (rowsFetched < 0)
 				return false;
 
-			// A missing type-1 row means this account uses the configured account
-			// allowance. policyCapacity already subtracts enabled characters and
-			// applies the account and cluster limits exactly once.
-			int const normalRemaining = hasNormalSlotPolicy ? slotsByType[1] : policyCapacity;
+			// LOGIN.get_open_character_slots is the same authoritative policy used
+			// by creation validation. Its values are already net of existing
+			// characters and the account/cluster limits; do not subtract or clamp
+			// them through a second policy source.
+			int const normalRemaining = hasNormalSlotPolicy ? slotsByType[1] : 0;
 			if (!hasNormalSlotPolicy && s_reportedMissingNormalSlotPolicy.insert(*clusterId).second)
-				REPORT_LOG(true, ("AvailableCharacterSlotsV1 cluster %lu has no type-1 row; using configured capacity %d as normal remaining (further warnings suppressed)\n", *clusterId, policyCapacity));
+				REPORT_LOG(true, ("AvailableCharacterSlotsV1 station %u cluster %u has no authoritative type-1 row; reporting zero (further warnings suppressed)\n",
+					static_cast<unsigned int>(m_stationId), static_cast<unsigned int>(*clusterId)));
 
 			// Existing validation explicitly requires both the unlocked (type 2)
 			// and spectral backing (type 3) slots to create that character type.
 			int const unlockedRemaining = (slotsByType[2] > 0 && slotsByType[3] > 0)
 				? std::min(slotsByType[2], slotsByType[3])
 				: 0;
-			int const rawCount = normalRemaining + unlockedRemaining;
-			int const availableCount = std::max(0, std::min(configuredMaximum, std::min(policyCapacity, rawCount)));
-			bool const policyMismatch = rawPolicyCapacity < 0 || std::min(policyCapacity, rawCount) > configuredMaximum;
-			if (policyMismatch && s_reportedSlotPolicyMismatch.insert(*clusterId).second)
-				DEBUG_WARNING(true, ("Available character slot policy mismatch for cluster %lu; capacity=%d normal=%d unlocked=%d configured=%d (further warnings suppressed)", *clusterId, rawPolicyCapacity, normalRemaining, unlockedRemaining, configuredMaximum));
+			int const packageNetRemaining = normalRemaining + unlockedRemaining;
+			int const availableCount = std::max(0, packageNetRemaining);
+			int activeCharacterCount = 0;
+			for (AvatarList::const_iterator avatar = m_avatars.begin(); avatar != m_avatars.end(); ++avatar)
+			{
+				if (avatar->m_clusterId == *clusterId)
+					++activeCharacterCount;
+			}
+			REPORT_LOG(true, ("AvailableCharacterSlotsV1Calc station=%u cluster=%u group=%d async=complete rows=%d type1=%d type2=%d type3=%d active=%d packageNet=%d configuredMax=%d available=%d\n",
+				static_cast<unsigned int>(m_stationId), static_cast<unsigned int>(*clusterId), m_clusterGroupId,
+				slotRows, slotsByType[1], slotsByType[2], slotsByType[3], activeCharacterCount,
+				packageNetRemaining, configuredMaximum, availableCount));
 			m_availableCharacterSlots.push_back(std::make_pair(*clusterId, availableCount));
 		}
 	}
@@ -341,53 +342,6 @@ TaskGetAvatarList::GetOpenCharacterSlotsQuery::GetOpenCharacterSlotsQuery() :
 	cluster_id(),
 	character_type_id(),
 	num_open_slots()
-{
-}
-
-// ----------------------------------------------------------------------
-
-void TaskGetAvatarList::GetOpenSlotCapacityQuery::getSQL(std::string &sql)
-{
-	sql = std::string("begin select least(account_limit - (select count(*) from ") +
-		DatabaseConnection::getInstance().getSchemaQualifier() +
-		"swg_characters where (station_id = :station_id or station_id in (select case when child_id = :station_id then parent_id else child_id end from " +
-		DatabaseConnection::getInstance().getSchemaQualifier() +
-		"account_map where parent_id = :station_id or child_id = :station_id)) and enabled = 'Y'), cluster_limit - num_characters) into :result from " +
-		DatabaseConnection::getInstance().getSchemaQualifier() + "default_char_limits, " +
-		DatabaseConnection::getInstance().getSchemaQualifier() + "cluster_list where id = :cluster_id; end;";
-}
-
-// ----------------------------------------------------------------------
-
-bool TaskGetAvatarList::GetOpenSlotCapacityQuery::bindParameters()
-{
-	if (!bindParameter(station_id)) return false;
-	if (!bindParameter(cluster_id)) return false;
-	if (!bindParameter(result)) return false;
-	return true;
-}
-
-// ----------------------------------------------------------------------
-
-bool TaskGetAvatarList::GetOpenSlotCapacityQuery::bindColumns()
-{
-	return true;
-}
-
-// ----------------------------------------------------------------------
-
-DB::Query::QueryMode TaskGetAvatarList::GetOpenSlotCapacityQuery::getExecutionMode() const
-{
-	return MODE_PROCEXEC;
-}
-
-// ----------------------------------------------------------------------
-
-TaskGetAvatarList::GetOpenSlotCapacityQuery::GetOpenSlotCapacityQuery() :
-	Query(),
-	station_id(),
-	cluster_id(),
-	result()
 {
 }
 
