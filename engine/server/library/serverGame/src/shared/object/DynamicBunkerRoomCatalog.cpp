@@ -71,6 +71,9 @@ namespace DynamicBunkerRoomCatalogNamespace
 		if (pob.empty() || !pathLooksUseful(pob))
 			return false;
 
+		if (!TreeFile::exists(pob.c_str()))
+			return false;
+
 		uniquePobs.insert(pob);
 		return true;
 	}

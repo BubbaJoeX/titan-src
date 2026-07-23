@@ -17,6 +17,7 @@
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
 #include "sharedFoundation/DynamicVariableList.h"
+#include "sharedFile/TreeFile.h"
 #include "sharedLog/Log.h"
 #include "sharedNetworkMessages/DynamicBunkerMessages.h"
 #include "sharedObject/CellProperty.h"
@@ -765,6 +766,13 @@ void DynamicBunker::handleAssignRoom(Client &client, DynamicBunkerAssignRoomMess
 		return;
 	}
 
+	if (!TreeFile::exists(room.donorPob.c_str()))
+	{
+		WARNING(true, ("DynamicBunker::handleAssignRoom - donor POB '%s' not found for room '%s'",
+			room.donorPob.c_str(), message.getRoomId().c_str()));
+		return;
+	}
+
 	NetworkId cellId;
 	if (!addRoomHook(*building, message.getHostCellIndex(), message.getHostPortalIndex(), room.donorPob.c_str(), room.donorCellIndex, room.donorPortalIndex, cellId))
 	{
@@ -811,10 +819,23 @@ void DynamicBunker::handleUnassignRoom(Client &client, DynamicBunkerUnassignRoom
 
 void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreateCustomSocketMessage const &message)
 {
-	ServerObject *const building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
+	ServerObject *building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
 	if (!building || !building->getPortalProperty())
 	{
-		WARNING(true, ("DynamicBunker::handleCreateCustomSocket - invalid building %s", message.getBuildingId().getValueString().c_str()));
+		ServerObject *const character = client.getCharacterObject();
+		if (character)
+		{
+			Object *const topmost = ContainerInterface::getTopmostContainer(*character);
+			ServerObject *const fallback = topmost ? safe_cast<ServerObject *>(topmost) : 0;
+			if (fallback && fallback->getPortalProperty())
+				building = fallback;
+		}
+	}
+
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::handleCreateCustomSocket - invalid building %s (player not in POB?)",
+			message.getBuildingId().getValueString().c_str()));
 		return;
 	}
 
@@ -918,6 +939,13 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 			!building.getObjVars().getItem(graftKey(i, "donorCell"), donorCell) ||
 			!building.getObjVars().getItem(graftKey(i, "donorPob"), donorPob))
 		{
+			continue;
+		}
+
+		if (!TreeFile::exists(donorPob.c_str()))
+		{
+			WARNING(true, ("DynamicBunker::restoreGraftsFromObjVars - skipping graft %d, donor POB '%s' not found",
+				i, donorPob.c_str()));
 			continue;
 		}
 
