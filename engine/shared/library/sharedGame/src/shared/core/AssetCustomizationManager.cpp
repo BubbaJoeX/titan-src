@@ -201,6 +201,7 @@ namespace AssetCustomizationManagerNamespace
 	typedef std::vector<RuntimeVariableDeclaration> RuntimeVariableDeclarationVector;
 	typedef std::map<std::string, RuntimeVariableDeclarationVector> RuntimeVariableDeclarationMap;
 	RuntimeVariableDeclarationMap s_runtimeVariableDeclarationCache;
+	size_t s_runtimeVariableDeclarationCount;
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 }
@@ -266,6 +267,7 @@ void AssetCustomizationManagerNamespace::remove()
 	s_attemptedDefaultLoad = false;
 	s_runtimeLookupBlacklist.clear();
 	s_runtimeVariableDeclarationCache.clear();
+	s_runtimeVariableDeclarationCount = 0;
 }
 
 // ----------------------------------------------------------------------
@@ -748,6 +750,16 @@ namespace
 			scratchCustomizationData->release();
 
 			cacheIterator = s_runtimeVariableDeclarationCache.insert(std::make_pair(assetKey, declarations)).first;
+			s_runtimeVariableDeclarationCount += declarations.size();
+			size_t const runtimeAssetCount = s_runtimeVariableDeclarationCache.size();
+			if (runtimeAssetCount == 1 || (runtimeAssetCount % 100) == 0)
+			{
+				LOG("CustomizationAllocation", ("runtimeAssets=%lu runtimeDeclarations=%lu latestAssetDeclarations=%lu asset=[%s]",
+					static_cast<unsigned long>(runtimeAssetCount),
+					static_cast<unsigned long>(s_runtimeVariableDeclarationCount),
+					static_cast<unsigned long>(declarations.size()),
+					assetPath));
+			}
 		}
 
 		int addedVariableCount = 0;
@@ -833,6 +845,7 @@ void AssetCustomizationManager::install(char const *filename)
 	s_attemptedDefaultLoad = false;
 	s_runtimeLookupBlacklist.clear();
 	s_runtimeVariableDeclarationCache.clear();
+	s_runtimeVariableDeclarationCount = 0;
 	s_installed = true;
 	ExitChain::add(remove, "AssetCustomizationManager", 0, false);
 }
@@ -852,17 +865,19 @@ int AssetCustomizationManager::addCustomizationVariablesForAsset(CrcString const
 
 	int addedVariableCount = 0;
 
-	// ACM remains the fast, deterministic declaration source, but old ACM files can
-	// contain a valid asset entry with an incomplete variable/dependency list.
+	// ACM is the bounded declaration source for known assets. Runtime appearance
+	// creation retains client render resources and must remain a missing-asset fallback.
 	if (s_crcLookupTable && (s_crcLookupEntryCount > 0))
 	{
 		int const assetId = lookupAssetId(assetName);
 		if (assetId)
+		{
 			addVariablesForAssetAndLinks(assetId, customizationData, skipSharedOwnerVariables, addedVariableCount);
+			return addedVariableCount;
+		}
 	}
 
-	// Supplement ACM from the authoritative runtime appearance.  Copying only
-	// declarations exposed by the asset keeps unknown customization paths rejected.
+	// Assets absent from ACM can still obtain declarations from their appearance.
 	int runtimeAddedVariableCount = 0;
 	char const * const assetPath = assetName.getString();
 	std::string const assetKey = assetPath ? assetPath : "";
