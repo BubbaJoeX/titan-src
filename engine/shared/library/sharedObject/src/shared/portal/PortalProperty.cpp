@@ -884,13 +884,7 @@ void PortalProperty::unlinkAllCellPortals(int cellIndex)
 	if (!cell)
 		return;
 
-	int const portalCount = cell->getPortalCount();
-	for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
-	{
-		Portal *const portal = cell->getPortal(portalIndex);
-		if (portal)
-			portal->clearNeighbor();
-	}
+	cell->clearAllPortalNeighbors();
 }
 
 // ----------------------------------------------------------------------

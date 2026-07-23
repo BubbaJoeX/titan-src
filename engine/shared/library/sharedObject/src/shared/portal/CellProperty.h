@@ -122,6 +122,7 @@ public:
 	const uint32          getCellNameCrc() const;
 	int                   getCellIndex() const;
 	int                   getPortalCount() const;
+	void                  clearAllPortalNeighbors();
 	int                   appendRuntimePortal(PortalPropertyTemplateCellPortal const & portalTemplate);
 
 	Object               *getAppearanceObject();

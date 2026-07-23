@@ -613,6 +613,30 @@ int CellProperty::getPortalCount() const
 
 // ----------------------------------------------------------------------
 
+void CellProperty::clearAllPortalNeighbors()
+{
+	if (!m_portalObjectList)
+		return;
+
+	const PortalObjectList::const_iterator iEnd = m_portalObjectList->end();
+	for (PortalObjectList::const_iterator i = m_portalObjectList->begin(); i != iEnd; ++i)
+	{
+		if (!i->portalList)
+			continue;
+
+		PortalList &portalList = *i->portalList;
+		PortalList::iterator const jEnd = portalList.end();
+		for (PortalList::iterator j = portalList.begin(); j != jEnd; ++j)
+		{
+			Portal *const portal = *j;
+			if (portal)
+				portal->clearNeighbor();
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
 Object *CellProperty::getAppearanceObject()
 {
 	return m_appearanceObject;
