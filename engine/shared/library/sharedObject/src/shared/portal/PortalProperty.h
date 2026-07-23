@@ -168,6 +168,8 @@ public:
 	CustomSocketList const       &getCustomSockets() const;
 	bool                          findCustomSocket(int cellIndex, int portalIndex, CustomSocket &outSocket) const;
 	static bool                   isCustomSocketIndex(int portalIndex);
+	bool                          getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const;
+	bool                          getPortalNeighbor(int cellIndex, int portalIndex, int &outNeighborCellIndex, int &outNeighborPortalIndex) const;
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
 

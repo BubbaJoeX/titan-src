@@ -925,7 +925,7 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 		return false;
 
 	Transform hostPortal_cell;
-	if (isCustomSocketIndex(hostPortalIndex))
+	if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
 	{
 		CustomSocket customSocket;
 		if (!findCustomSocket(hostCellIndex, hostPortalIndex, customSocket))
@@ -1152,6 +1152,68 @@ bool PortalProperty::findCustomSocket(int cellIndex, int portalIndex, CustomSock
 bool PortalProperty::isCustomSocketIndex(int portalIndex)
 {
 	return portalIndex >= cms_customSocketBase;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const
+{
+	CellProperty const *const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	if (isCustomSocketIndex(portalIndex))
+	{
+		CustomSocket customSocket;
+		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
+			return false;
+		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+		return true;
+	}
+
+	Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
+	if (!portal)
+		return false;
+
+	outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), portal->getDoorTransform());
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::getPortalNeighbor(int cellIndex, int portalIndex, int &outNeighborCellIndex, int &outNeighborPortalIndex) const
+{
+	outNeighborCellIndex = -1;
+	outNeighborPortalIndex = -1;
+
+	if (isCustomSocketIndex(portalIndex))
+		return false;
+
+	CellProperty const *const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
+	if (!portal || !portal->getNeighbor())
+		return false;
+
+	Portal const *const neighborPortal = portal->getNeighbor();
+	CellProperty const *const neighborCell = neighborPortal->getParentCell();
+	if (!neighborCell)
+		return false;
+
+	outNeighborCellIndex = neighborCell->getCellIndex();
+	int const neighborPortalCount = neighborCell->getPortalCount();
+	for (int pi = 0; pi < neighborPortalCount; ++pi)
+	{
+		if (const_cast<CellProperty *>(neighborCell)->getPortal(pi) == neighborPortal)
+		{
+			outNeighborPortalIndex = pi;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // ----------------------------------------------------------------------
