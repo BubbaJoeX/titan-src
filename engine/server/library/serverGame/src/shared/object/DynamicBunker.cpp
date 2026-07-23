@@ -485,7 +485,7 @@ namespace DynamicBunkerNamespace
 			return false;
 		}
 
-		IGNORE_RETURN(portalProperty.unlinkCellPortal(graft.hostCellIndex, graft.hostPortalIndex));
+		IGNORE_RETURN(portalProperty.unlinkHostPortal(graft.hostCellIndex, graft.hostPortalIndex));
 		portalProperty.unlinkAllCellPortals(graftedCellIndex);
 
 		ejectCellContentsToHost(portalProperty, graftedCellIndex, graft.hostCellIndex);
@@ -559,7 +559,8 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 	}
 
 	Transform cellTransform;
-	if (!portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, cellTransform))
+	int resolvedDonorPortalIndex = donorPortalIndex;
+	if (!portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, cellTransform, &resolvedDonorPortalIndex))
 	{
 		WARNING(true, ("DynamicBunker::addRoomHook - failed to compute graft transform for %s", donorPobName));
 		return false;
@@ -596,12 +597,12 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 
 	CellProperty *const graftCell = portalProperty->getCell(graftedCellIndex);
 	int const resolvedGraftPortal = graftCell
-		? PortalProperty::resolveCellPortalIndex(graftCell, donorPortalIndex)
+		? PortalProperty::resolveCellPortalIndex(graftCell, resolvedDonorPortalIndex)
 		: -1;
 	if (resolvedGraftPortal < 0)
 	{
-		WARNING(true, ("DynamicBunker::addRoomHook - graft cell %d has no passable portal (requested %d)",
-			graftedCellIndex, donorPortalIndex));
+		WARNING(true, ("DynamicBunker::addRoomHook - graft cell %d has no passable portal (resolved donor %d, requested %d)",
+			graftedCellIndex, resolvedDonorPortalIndex, donorPortalIndex));
 		cellObject->permanentlyDestroy(DeleteReasons::Replaced);
 		IGNORE_RETURN(portalProperty->clearLoadedCellSlot(graftedCellIndex));
 		IGNORE_RETURN(portalProperty->releaseGraftedCellSlot(graftedCellIndex));

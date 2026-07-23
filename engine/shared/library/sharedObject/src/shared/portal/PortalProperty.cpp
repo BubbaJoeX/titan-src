@@ -992,6 +992,23 @@ bool PortalProperty::unlinkCellPortal(int cellIndex, int portalIndex)
 
 // ----------------------------------------------------------------------
 
+bool PortalProperty::unlinkHostPortal(int cellIndex, int portalIndex)
+{
+	if (isCustomSocketIndex(portalIndex))
+	{
+		CustomSocket customSocket;
+		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
+			return false;
+		if (customSocket.materializedPortalIndex < 0)
+			return true;
+		return unlinkCellPortal(cellIndex, customSocket.materializedPortalIndex);
+	}
+
+	return unlinkCellPortal(cellIndex, portalIndex);
+}
+
+// ----------------------------------------------------------------------
+
 void PortalProperty::unlinkAllCellPortals(int cellIndex)
 {
 	CellProperty *const cell = getCell(cellIndex);
@@ -1038,9 +1055,12 @@ bool PortalProperty::releaseGraftedCellSlot(int graftedCellIndex)
 
 // ----------------------------------------------------------------------
 
-bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p) const
+bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p, int *outResolvedDonorPortalIndex) const
 {
 	NOT_NULL(donorPobName);
+
+	if (outResolvedDonorPortalIndex)
+		*outResolvedDonorPortalIndex = -1;
 
 	if (!getCell(hostCellIndex))
 		return false;
@@ -1075,6 +1095,8 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 			invDonorPortal.invert(donorPortal_cell);
 
 			outCellTransform_o2p.multiply(desiredPortal_building, invDonorPortal);
+			if (outResolvedDonorPortalIndex)
+				*outResolvedDonorPortalIndex = resolvedDonorPortal;
 			ok = true;
 		}
 	}
@@ -1458,7 +1480,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
 		socketEntry->doorTransform_o2p,
-		"default");
+		0);
 	if (!portalTemplate)
 	{
 		delete geometry;

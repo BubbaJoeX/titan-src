@@ -127,10 +127,11 @@ public:
 	bool                          addCellObject(Object &cellObject, ContainerErrorCode &error);
 	bool                          linkCellPortals(int cellIndexA, int portalIndexA, int cellIndexB, int portalIndexB);
 	bool                          unlinkCellPortal(int cellIndex, int portalIndex);
+	bool                          unlinkHostPortal(int cellIndex, int portalIndex);
 	void                          unlinkAllCellPortals(int cellIndex);
 	bool                          clearLoadedCellSlot(int cellIndex);
 	bool                          releaseGraftedCellSlot(int graftedCellIndex);
-	bool                          computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p) const;
+	bool                          computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p, int *outResolvedDonorPortalIndex = 0) const;
 	bool                          recordDynamicRoomGraft(DynamicRoomGraft const &graft);
 	bool                          removeDynamicRoomGraft(int graftedCellIndex);
 	bool                          findDynamicRoomGraftForSocket(int cellIndex, int portalIndex, DynamicRoomGraft &outGraft) const;
