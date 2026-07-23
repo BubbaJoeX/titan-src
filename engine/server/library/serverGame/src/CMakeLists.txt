@@ -405,6 +405,10 @@ set(SHARED_SOURCES
 	shared/object/BattlefieldMarkerObject.cpp
 	shared/object/BattlefieldMarkerObject.h
 	shared/object/BuildingObject.cpp
+	shared/object/DynamicBunker.cpp
+	shared/object/DynamicBunker.h
+	shared/object/DynamicBunkerRoomCatalog.cpp
+	shared/object/DynamicBunkerRoomCatalog.h
 	shared/object/BuildingObject.h
 	shared/object/CellObject.cpp
 	shared/object/CellObject.h

@@ -81,7 +81,9 @@
 #include "sharedNetworkMessages/AuctionQueryMessage.h"
 #include "sharedNetworkMessages/BidAuctionMessage.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
+#include "serverGame/DynamicBunker.h"
 #include "sharedNetworkMessages/CityTerrainMessages.h"
+#include "sharedNetworkMessages/DynamicBunkerMessages.h"
 #include "sharedNetworkMessages/ProceduralTerrainSyncMessages.h"
 #include "sharedNetworkMessages/CancelLiveAuctionMessage.h"
 #include "sharedNetworkMessages/ChatAvatarId.h"
@@ -1174,6 +1176,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 				}
 				break;
 			}
+
+                //----------------------------------------------------------------------
+
+            case constcrc("DynamicBunkerAssignRoomMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                DynamicBunkerAssignRoomMessage const assignMsg(ri);
+                DynamicBunker::handleAssignRoom(*this, assignMsg);
+                break;
+            }
 
                 //----------------------------------------------------------------------
 

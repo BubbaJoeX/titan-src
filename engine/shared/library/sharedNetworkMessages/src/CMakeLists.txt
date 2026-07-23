@@ -197,6 +197,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/CalendarMessages.h
 	shared/clientGameServer/CityTerrainMessages.cpp
 	shared/clientGameServer/CityTerrainMessages.h
+	shared/clientGameServer/DynamicBunkerMessages.cpp
+	shared/clientGameServer/DynamicBunkerMessages.h
 	shared/clientGameServer/ProceduralTerrainSyncMessages.cpp
 	shared/clientGameServer/ProceduralTerrainSyncMessages.h
 	shared/clientGameServer/CharacterSheetResponseMessage.cpp

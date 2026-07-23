@@ -420,7 +420,7 @@ CellProperty::~CellProperty()
 void CellProperty::initialize(const PortalProperty &portalProperty, int cellIndex, bool createAppearance)
 {
 	m_portalProperty = &portalProperty;
-	const PortalPropertyTemplateCell &cellTemplate = portalProperty.getPortalPropertyTemplate().getCell(cellIndex);
+	const PortalPropertyTemplateCell &cellTemplate = portalProperty.getCellTemplate(cellIndex);
 
 	PortalObjectEntry poe;
 	poe.portalProperty = &portalProperty;
@@ -956,7 +956,7 @@ const BaseExtent *CellProperty::getCollisionExtent() const
 {
 	if(m_portalProperty)
 	{
-		return m_portalProperty->getPortalPropertyTemplate().getCell(m_cellIndex).getCollisionExtent();
+		return m_portalProperty->getCellTemplate(m_cellIndex).getCollisionExtent();
 	}
 	else
 	{
@@ -1134,7 +1134,7 @@ void CellProperty::drawDebugShapes(DebugShapeRenderer * const renderer) const
 		}
 	}
 
-	PortalPropertyTemplateCell const & cellTemplate = m_portalProperty->getPortalPropertyTemplate().getCell(m_cellIndex);
+	PortalPropertyTemplateCell const & cellTemplate = m_portalProperty->getCellTemplate(m_cellIndex);
 
 	BaseExtent const * collisionExtent = cellTemplate.getCollisionExtent();
 	

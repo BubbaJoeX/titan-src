@@ -17,10 +17,15 @@ class Iff;
 class Object;
 class Portal;
 class PortalPropertyTemplate;
+class PortalPropertyTemplateCell;
 class Vector;
 
 #include "sharedObject/Container.h"
 #include "sharedMath/Transform.h"
+
+#include <map>
+#include <string>
+#include <vector>
 
 // ======================================================================
 
@@ -98,6 +103,43 @@ public:
 	bool                          hasPassablePortalToParentCell() const;
 	CellProperty const * findContainingCell(Vector const & position_l) const;
 
+	// Dynamic bunker room grafting: reserve a synthetic cell index, register a donor
+	// POB cell as its template source, then create/load a CellObject into that index
+	// and call linkCellPortals() to snap the inward portals together.
+	struct DynamicRoomGraft
+	{
+		int graftedCellIndex;
+		int hostCellIndex;
+		int hostPortalIndex;
+		int graftedPortalIndex;
+		int donorCellIndex;
+		std::string donorPobName;
+	};
+
+	typedef std::vector<DynamicRoomGraft> DynamicRoomGraftList;
+
+	int                           getBaseTemplateCellCount() const;
+	PortalPropertyTemplateCell const &getCellTemplate(int cellIndex) const;
+	bool                          isGraftedCell(int cellIndex) const;
+	int                           reserveGraftedCellSlot(char const *donorPobName, int donorCellIndex);
+	bool                          ensureGraftedCellSlot(int graftedCellIndex, char const *donorPobName, int donorCellIndex);
+	bool                          linkCellPortals(int cellIndexA, int portalIndexA, int cellIndexB, int portalIndexB);
+	bool                          computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p) const;
+	bool                          recordDynamicRoomGraft(DynamicRoomGraft const &graft);
+	bool                          removeDynamicRoomGraft(int graftedCellIndex);
+	DynamicRoomGraftList const   &getDynamicRoomGrafts() const;
+
+	struct PortalSocketInfo
+	{
+		int  cellIndex;
+		int  portalIndex;
+		bool open;
+		bool passable;
+	};
+
+	typedef std::vector<PortalSocketInfo> PortalSocketInfoList;
+	void                          collectPortalSockets(PortalSocketInfoList &outSockets) const;
+
 private:
 
 	PortalProperty();
@@ -114,6 +156,14 @@ private:
 	typedef std::vector<FixupRec>        FixupList;
 	typedef std::vector<CellProperty*>   CellList;
 
+	struct GraftedCellRecord
+	{
+		PortalPropertyTemplate const *donorTemplate;
+		int                           donorCellIndex;
+	};
+
+	typedef std::map<int, GraftedCellRecord> GraftedCellMap;
+
 private:
 
 	static BeginCreateObjectFunction    ms_beginCreateObjectFunction;
@@ -126,6 +176,8 @@ private:
 	CellList                      *m_cellList;
 	FixupList                     *m_fixupList;
 	bool                           m_hasPassablePortalToParentCell;
+	GraftedCellMap                *m_graftedCellMap;
+	DynamicRoomGraftList          *m_dynamicRoomGrafts;
 };
 
 // ======================================================================

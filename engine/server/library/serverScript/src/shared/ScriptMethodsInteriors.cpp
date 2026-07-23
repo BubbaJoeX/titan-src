@@ -12,7 +12,9 @@
 #include "serverGame/BuildingObject.h"
 #include "serverGame/CellObject.h"
 #include "serverGame/ContainerInterface.h"
+#include "serverGame/Client.h"
 #include "serverGame/CreatureObject.h"
+#include "serverGame/DynamicBunker.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
@@ -62,6 +64,12 @@ namespace ScriptMethodsInteriorsNamespace
 	jboolean     JNICALL setCellLabel(JNIEnv * env, jobject self, jlong target, jstring cellLabel);
 	jboolean     JNICALL setCellLabelOffset(JNIEnv * env, jobject self, jlong target, jfloat x, jfloat y, jfloat z);
 	jboolean     JNICALL setCellLight(JNIEnv * env, jobject self, jlong cellId, jfloat r, jfloat g, jfloat b, jfloat brightness);
+
+	jlong        JNICALL addRoomHook(JNIEnv *env, jobject self, jlong building, jint hostCellIndex, jint hostPortalIndex, jstring donorPob, jint donorCellIndex, jint donorPortalIndex);
+	jboolean     JNICALL linkRoomPortals(JNIEnv *env, jobject self, jlong building, jint cellIndexA, jint portalIndexA, jint cellIndexB, jint portalIndexB);
+	jint         JNICALL getCellPortalCount(JNIEnv *env, jobject self, jlong building, jint cellIndex);
+	jstring      JNICALL getCellAppearanceName(JNIEnv *env, jobject self, jlong building, jint cellIndex);
+	jboolean     JNICALL openDynamicBunkerFloorplan(JNIEnv *env, jobject self, jlong player, jlong building, jlong terminal, jint hostCellIndex, jint hostPortalIndex);
 }
 
 
@@ -97,6 +105,11 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setCellLabel", "(JLjava/lang/String;)Z", setCellLabel),
 	JF("_setCellLabelOffset", "(JFFF)Z", setCellLabelOffset),
 	JF("_setCellLight", "(JFFFF)Z", setCellLight),
+	JF("_addRoomHook", "(JIILjava/lang/String;II)J", addRoomHook),
+	JF("_linkRoomPortals", "(JIIII)Z", linkRoomPortals),
+	JF("_getCellPortalCount", "(JI)I", getCellPortalCount),
+	JF("_getCellAppearanceName", "(JI)Ljava/lang/String;", getCellAppearanceName),
+	JF("_openDynamicBunkerFloorplan", "(JJJII)Z", openDynamicBunkerFloorplan),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -870,6 +883,85 @@ jboolean JNICALL ScriptMethodsInteriorsNamespace::setCellLight(JNIEnv * env, job
 	cellObject->setCellLightColor(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b), static_cast<float>(brightness));
 
 	return JNI_TRUE;
+}
+
+//--------------------------------------------------------------------------------------
+
+jlong JNICALL ScriptMethodsInteriorsNamespace::addRoomHook(JNIEnv *env, jobject /*self*/, jlong building, jint hostCellIndex, jint hostPortalIndex, jstring donorPob, jint donorCellIndex, jint donorPortalIndex)
+{
+	ServerObject *buildingObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return 0;
+
+	JavaStringParam localDonorPob(donorPob);
+	std::string donorPobName;
+	if (!JavaLibrary::convert(localDonorPob, donorPobName) || donorPobName.empty())
+		return 0;
+
+	NetworkId cellId;
+	if (!DynamicBunker::addRoomHook(*buildingObject, hostCellIndex, hostPortalIndex, donorPobName.c_str(), donorCellIndex, donorPortalIndex, cellId))
+		return 0;
+
+	return cellId.getValue();
+}
+
+//--------------------------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsInteriorsNamespace::linkRoomPortals(JNIEnv * /*env*/, jobject /*self*/, jlong building, jint cellIndexA, jint portalIndexA, jint cellIndexB, jint portalIndexB)
+{
+	ServerObject *buildingObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return JNI_FALSE;
+
+	return DynamicBunker::linkExistingPortals(*buildingObject, cellIndexA, portalIndexA, cellIndexB, portalIndexB) ? JNI_TRUE : JNI_FALSE;
+}
+
+//--------------------------------------------------------------------------------------
+
+jint JNICALL ScriptMethodsInteriorsNamespace::getCellPortalCount(JNIEnv * /*env*/, jobject /*self*/, jlong building, jint cellIndex)
+{
+	ServerObject const *buildingObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return 0;
+
+	return DynamicBunker::getPortalCount(*buildingObject, cellIndex);
+}
+
+//--------------------------------------------------------------------------------------
+
+jstring JNICALL ScriptMethodsInteriorsNamespace::getCellAppearanceName(JNIEnv *env, jobject /*self*/, jlong building, jint cellIndex)
+{
+	ServerObject const *buildingObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return 0;
+
+	std::string appearanceName;
+	if (!DynamicBunker::getCellAppearanceName(*buildingObject, cellIndex, appearanceName))
+		return 0;
+
+	return JavaString(appearanceName.c_str()).getReturnValue();
+}
+
+//--------------------------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsInteriorsNamespace::openDynamicBunkerFloorplan(JNIEnv * /*env*/, jobject /*self*/, jlong player, jlong building, jlong terminal, jint hostCellIndex, jint hostPortalIndex)
+{
+	CreatureObject *creature = nullptr;
+	if (!JavaLibrary::getObject(player, creature) || !creature)
+		return JNI_FALSE;
+
+	Client *const client = creature->getClient();
+	if (!client)
+		return JNI_FALSE;
+
+	ServerObject *buildingObject = nullptr;
+	ServerObject *terminalObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return JNI_FALSE;
+	if (!JavaLibrary::getObject(terminal, terminalObject) || !terminalObject)
+		return JNI_FALSE;
+
+	return DynamicBunker::openFloorplan(*client, *buildingObject, *terminalObject, hostCellIndex, hostPortalIndex) ? JNI_TRUE : JNI_FALSE;
 }
 
 //--------------------------------------------------------------------------------------

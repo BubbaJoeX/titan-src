@@ -16,6 +16,7 @@
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/CreatureObject.h"
+#include "serverGame/DynamicBunker.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/MessageToQueue.h"
 #include "serverGame/NewbieTutorial.h"
@@ -714,6 +715,7 @@ void BuildingObject::onAddedToWorld()
 void BuildingObject::onAllContentsLoaded()
 {
 	TangibleObject::onAllContentsLoaded();
+	DynamicBunker::restoreGraftsFromObjVars(*this);
 	m_contentsLoaded = true;
 	ServerObject * containedBy = safe_cast<ServerObject *>(ContainerInterface::getFirstParentInWorld(*this));
 	bool fixHouseSceneIds = true;
