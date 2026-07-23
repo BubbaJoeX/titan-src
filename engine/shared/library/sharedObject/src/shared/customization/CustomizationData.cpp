@@ -105,6 +105,7 @@ namespace CustomizationDataNamespace
 		bool invalid;
 	};
 
+	std::string canonicalizeDirectColorPath(std::string const &variableName);
 	bool  getDirectColorVariableLocation(std::string const &variableName, int &bank, int &slot, int &channel);
 	bool  isReservedDirectColorVariable(std::string const &variableName);
 	void  declarePersistedDirectColorSlots(CustomizationData &customizationData, CustomizationData::ByteVector const &data);
@@ -144,12 +145,24 @@ void CustomizationDataNamespace::alterVariableCallback(std::string const &fullVa
 
 // ----------------------------------------------------------------------
 
+std::string CustomizationDataNamespace::canonicalizeDirectColorPath(std::string const &variableName)
+{
+	std::string::size_type const firstNonSeparator = variableName.find_first_not_of(CustomizationData::cms_directorySeparator);
+	if (firstNonSeparator == std::string::npos)
+		return std::string();
+
+	return std::string(1, CustomizationData::cms_directorySeparator) + variableName.substr(firstNonSeparator);
+}
+
+// ----------------------------------------------------------------------
+
 bool CustomizationDataNamespace::getDirectColorVariableLocation(std::string const &variableName, int &bank, int &slot, int &channel)
 {
+	std::string const canonicalVariableName = canonicalizeDirectColorPath(variableName);
 	for (bank = 0; bank < 2; ++bank)
 		for (slot = 0; slot < 2; ++slot)
 			for (channel = 0; channel < 3; ++channel)
-				if (variableName == cs_directColorVariableNames[bank][slot][channel])
+				if (canonicalVariableName == cs_directColorVariableNames[bank][slot][channel])
 					return true;
 
 	return false;
@@ -227,11 +240,14 @@ void CustomizationDataNamespace::declarePersistedDirectColorSlots(CustomizationD
 				continue;
 
 			std::string baseVariableName;
-			if (!CustomizationIdManager::mapIdToString(baseId, baseVariableName) ||
-				baseVariableName.compare(0, expectedBasePrefixLength, expectedBasePrefix) != 0)
+			if (!CustomizationIdManager::mapIdToString(baseId, baseVariableName))
 				continue;
 
-			CustomizationVariable const * const baseVariable = customizationData.findConstVariable(baseVariableName);
+			std::string const canonicalBaseVariableName = canonicalizeDirectColorPath(baseVariableName);
+			if (canonicalBaseVariableName.compare(0, expectedBasePrefixLength, expectedBasePrefix) != 0)
+				continue;
+
+			CustomizationVariable const * const baseVariable = customizationData.findConstVariable(canonicalBaseVariableName);
 			if (!dynamic_cast<PaletteColorCustomizationVariable const *>(baseVariable))
 				continue;
 
@@ -279,6 +295,9 @@ bool CustomizationData::ModificationCallbackData::operator ==(const Modification
 void CustomizationData::install()
 {
 	DEBUG_FATAL(ms_installed, ("CustomizationData already installed."));
+	DEBUG_FATAL(canonicalizeDirectColorPath("private/direct_color_1_r") != "/private/direct_color_1_r", ("direct-color path canonicalization failed for legacy path."));
+	DEBUG_FATAL(canonicalizeDirectColorPath("/private/direct_color_1_r") != "/private/direct_color_1_r", ("direct-color path canonicalization failed for canonical path."));
+	DEBUG_FATAL(canonicalizeDirectColorPath("//private/direct_color_1_r") != "/private/direct_color_1_r", ("direct-color path canonicalization failed for repeated separators."));
 
 	installMemoryBlockManager();
 
@@ -1463,7 +1482,7 @@ bool CustomizationData::restoreFromByteVector_1(ByteVector const &data)
 
 		// Reserved slots that failed bounded validation remain undeclared. Avoid
 		// findVariable() here because it creates missing directory nodes.
-		if (isReservedDirectColorVariable(variableName) && !findConstVariable(variableName))
+		if (isReservedDirectColorVariable(variableName) && !findConstVariable(canonicalizeDirectColorPath(variableName)))
 		{
 			currentIndex += variableSize;
 			continue;
@@ -1560,7 +1579,7 @@ bool CustomizationData::restoreFromByteVector_3(ByteVector const &data)
 			continue;
 		}
 
-		if (isReservedDirectColorVariable(variableName) && !findConstVariable(variableName))
+		if (isReservedDirectColorVariable(variableName) && !findConstVariable(canonicalizeDirectColorPath(variableName)))
 		{
 			currentIndex += variableSize;
 			continue;
