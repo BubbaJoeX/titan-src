@@ -16,6 +16,7 @@ public:
         int clientServicePortPublic;
         int clientServicePortPrivate;
         int clientOverflowLimit;
+        int clientReliableOverflowBytes;
         int gameServicePort;
         const char *clusterName;
         int maxClients;
@@ -82,6 +83,8 @@ public:
     static const uint16 getCentralServerPort();
 
     static const int getClientOverflowLimit();
+
+    static const int getClientReliableOverflowBytes();
 
     static const char *getClientServiceBindInterface();
 
@@ -232,6 +235,12 @@ inline const char *ConfigConnectionServer::getClientServiceBindInterface() {
 
 inline const int ConfigConnectionServer::getClientOverflowLimit() {
     return data->clientOverflowLimit;
+}
+
+//-----------------------------------------------------------------------
+
+inline const int ConfigConnectionServer::getClientReliableOverflowBytes() {
+    return data->clientReliableOverflowBytes;
 }
 
 //-----------------------------------------------------------------------

@@ -62,7 +62,8 @@ void ConfigConnectionServer::install(void)
 	KEY_STRING  (clientServiceBindInterface, "");
 	KEY_INT     (clientServicePortPrivate, 44464);
 	KEY_INT     (clientServicePortPublic, 44463);
-	KEY_INT     (clientOverflowLimit, 1024 * 1024); // 1MB overflow
+	KEY_INT     (clientOverflowLimit, 16 * 1024 * 1024);
+	KEY_INT     (clientReliableOverflowBytes, 20 * 1024 * 1024);
 	KEY_INT     (gameServicePort, 0);
 	KEY_INT     (pingPort, 0);
 	KEY_STRING  (clusterName, "devcluster");

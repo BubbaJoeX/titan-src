@@ -95,6 +95,8 @@ void GameConnection::onReceive(const Archive::ByteStream & message)
 			const std::vector<NetworkId> & v = msg.getDistributionList();
 			std::vector<NetworkId>::const_iterator i;
 			const bool reliable = msg.getReliable();
+			Archive::ReadIterator forwardedRi = msg.getByteStream().begin();
+			const GameNetworkMessage forwardedMessage(forwardedRi);
 
 			Service *service = ConnectionServer::getClientServicePrivate();
 			LogicalPacket const * p = service->createPacket(msg.getByteStream().getBuffer(), static_cast<int>(msg.getByteStream().getSize()));
@@ -103,7 +105,9 @@ void GameConnection::onReceive(const Archive::ByteStream & message)
 				Client* client = ConnectionServer::getClient((*i));
 				if (client)
 				{
-					client->getClientConnection()->sendSharedPacket(p, reliable);
+					ClientConnection * const clientConnection = client->getClientConnection();
+					clientConnection->recordForwardedPacket(forwardedMessage.getCmdName(), static_cast<int>(msg.getByteStream().getSize()));
+					clientConnection->sendSharedPacket(p, reliable);
 				}
 			}
 			service->releasePacket(p);

@@ -91,7 +91,7 @@ ClientConnection::ClientConnection(UdpConnectionMT *u, TcpClient *t)
           m_sendLastTimeMs(0), m_sessionId(""), m_sessionValidated(false), m_connectionServerLag(0), m_gameServerLag(0),
           m_countSpamLimitResetTime(0), m_entitlementTotalTime(0), m_entitlementEntitledTime(0),
           m_entitlementTotalTimeSinceLastLogin(0), m_entitlementEntitledTimeSinceLastLogin(0), m_buddyPoints(0),
-          m_sendToStarport(false), m_pendingChatEnterRoomRequests(), m_pendingChatQueryRoomRequests() {
+          m_forwardedPacketFrame(0), m_sendToStarport(false), m_pendingChatEnterRoomRequests(), m_pendingChatQueryRoomRequests() {
     static const std::string loginTrace("TRACE_LOGIN");
     LOG(loginTrace, ("new ClientConnection"));
 
@@ -487,13 +487,18 @@ void ClientConnection::onConnectionOpened() {
 
 void ClientConnection::onConnectionOverflowing(const unsigned int bytesPending) {
     char errbuf[1024];
-    snprintf(errbuf, sizeof(errbuf), "Connection overflow from server to client, %d bytes. Disconnected.", bytesPending);
-    LOG("Network", ("Disconnect: Client connection overflowing. %d bytes pending", bytesPending));
+    const unsigned int overflowLimit = static_cast<unsigned int>(ConfigConnectionServer::getClientOverflowLimit());
+    snprintf(errbuf, sizeof(errbuf), "Connection overflow from server to client, %u bytes pending (limit=%u). Disconnected.", bytesPending, overflowLimit);
+    LOG("Network", ("Disconnect: Client connection overflowing. %u bytes pending (limit=%u)", bytesPending, overflowLimit));
 
-    std::vector < std::pair < std::string, int > > ::const_iterator
-    i;
+    std::map<std::string, unsigned int> packetTotals;
+    std::vector < std::pair < std::string, int > > ::const_iterator i;
     for (i = m_pendingPackets.begin(); i != m_pendingPackets.end(); ++i) {
-        LOG("Network", ("Overflow packets this frame: [%s] %d bytes", i->first.c_str(), i->second));
+        packetTotals[i->first] += static_cast<unsigned int>(i->second);
+    }
+    std::map<std::string, unsigned int>::const_iterator packet;
+    for (packet = packetTotals.begin(); packet != packetTotals.end(); ++packet) {
+        LOG("Network", ("Overflow packet class this frame: [%s] %u bytes", packet->first.c_str(), packet->second));
     }
 
 //	ErrorMessage err(name, desc, false);
@@ -1083,6 +1088,18 @@ void ClientConnection::send(const GameNetworkMessage &message, const bool reliab
 
 
     ServerConnection::send(message, reliable);
+}
+
+//-----------------------------------------------------------------------
+
+void ClientConnection::recordForwardedPacket(const std::string &messageName, int messageSize) {
+    const uint32 currentFrame = NetworkHandler::getCurrentFrame();
+    if (currentFrame != m_forwardedPacketFrame) {
+        m_pendingPackets.clear();
+        m_forwardedPacketFrame = currentFrame;
+    }
+    m_pendingPackets.push_back(std::make_pair(messageName, messageSize));
+    sm_outgoingBytesMap_Working[messageName] += static_cast<uint32>(messageSize);
 }
 
 //-----------------------------------------------------------------------

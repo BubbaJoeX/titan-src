@@ -86,6 +86,7 @@ public:
 	virtual void                  onReceive                (const Archive::ByteStream & message);
 	virtual void                  send                     (const GameNetworkMessage & message, const bool reliable);
 	void                          sendByteStream           (const Archive::ByteStream &bs, bool reliable);
+	void                          recordForwardedPacket    (const std::string &messageName, int messageSize);
 	const bool                    sendToGameServer         (uint32 gameServerId);
 	const bool                    sendToGameServer         ();
 
@@ -177,6 +178,7 @@ private:
 	std::vector<std::pair<NetworkId, std::string> > m_consumedRewardEvents;
 	std::vector<std::pair<NetworkId, std::string> > m_claimedRewardItems;
 
+	uint32				  m_forwardedPacketFrame;
 	bool				  m_sendToStarport;
 
 	// chat enter room requests that came from the client that's awaiting
