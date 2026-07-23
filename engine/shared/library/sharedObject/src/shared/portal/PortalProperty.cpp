@@ -1056,6 +1056,21 @@ void PortalProperty::collectPortalSockets(PortalSocketInfoList &outSockets) cons
 		int const portalCount = cell->getPortalCount();
 		for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
 		{
+			if (m_customSockets)
+			{
+				bool skipPortal = false;
+				for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+				{
+					if (it->cellIndex == cellIndex && it->materializedPortalIndex == portalIndex)
+					{
+						skipPortal = true;
+						break;
+					}
+				}
+				if (skipPortal)
+					continue;
+			}
+
 			Portal *const portal = cell->getPortal(portalIndex);
 			if (!portal)
 				continue;
