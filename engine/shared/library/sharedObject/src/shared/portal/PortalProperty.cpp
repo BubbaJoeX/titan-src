@@ -583,7 +583,18 @@ int PortalProperty::getBaseTemplateCellCount() const
 CellProperty *PortalProperty::getCell(int index)
 {
 	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, index, getNumberOfCells());
-	return (*m_cellList)[static_cast<CellList::size_type>(index)];
+	CellProperty *const cell = (*m_cellList)[static_cast<CellList::size_type>(index)];
+	if (!cell)
+		return 0;
+
+	Object &cellOwner = cell->getOwner();
+	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
+	{
+		(*m_cellList)[static_cast<CellList::size_type>(index)] = 0;
+		return 0;
+	}
+
+	return cell;
 }
 
 // ----------------------------------------------------------------------
@@ -591,7 +602,15 @@ CellProperty *PortalProperty::getCell(int index)
 const CellProperty *PortalProperty::getCell(int index) const
 {
 	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, index, getNumberOfCells());
-	return (*m_cellList)[static_cast<CellList::size_type>(index)];
+	CellProperty const *const cell = (*m_cellList)[static_cast<CellList::size_type>(index)];
+	if (!cell)
+		return 0;
+
+	Object const &cellOwner = cell->getOwner();
+	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
+		return 0;
+
+	return cell;
 }
 
 // ----------------------------------------------------------------------
