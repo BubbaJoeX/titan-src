@@ -7176,11 +7176,31 @@ namespace
 		return channels.red->getValue() == 0 && channels.green->getValue() == 0 && channels.blue->getValue() == 0;
 	}
 
+	bool ensureDirectColorSlots(CustomizationData &data, std::string const &prefix)
+	{
+		char const * const slotNames[] =
+		{
+			"direct_color_0_r", "direct_color_0_g", "direct_color_0_b",
+			"direct_color_1_r", "direct_color_1_g", "direct_color_1_b"
+		};
+		for (int i = 0; i < 6; ++i)
+		{
+			std::string const slotPath = prefix + slotNames[i];
+			if (!data.findConstVariable(slotPath))
+				data.addVariableTakeOwnership(slotPath, new BasicRangedIntCustomizationVariable(0, 0, 32768));
+			if (!data.findConstVariable(slotPath))
+				return false;
+		}
+		return true;
+	}
+
 	bool setDirectColor(CustomizationData &data, std::string const &baseName, int r, int g, int b, bool enabled)
 	{
 		std::string prefix;
 		int baseId = 0;
 		if (!getDirectColorBase(baseName, prefix, baseId))
+			return false;
+		if (enabled && !ensureDirectColorSlots(data, prefix))
 			return false;
 
 		DirectColorChannels emptySlot = {nullptr, nullptr, nullptr};
