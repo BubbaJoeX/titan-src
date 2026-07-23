@@ -49,6 +49,8 @@ public:
 
 	void                          onCharacterDeletedFromLoginDatabase   (const NetworkId & characterId);
 	void                          onCharacterDeletedFromCluster         (const NetworkId & characterId);
+	void                          setAvailableCharacterSlots            (const std::vector<std::pair<uint32, int> > & slots);
+	bool                          sendAvailableCharacterSlots           ();
 	
 private:
 	ClientConnection(const ClientConnection&);
@@ -69,6 +71,7 @@ private:
 	bool              m_waitingForCharacterLoginDeletion;
 	bool              m_waitingForCharacterClusterDeletion;
 	std::vector<NetworkId>  m_charactersPendingDeletion;
+	std::vector<std::pair<uint32, int> > m_availableCharacterSlots;
 
 }; //lint !e1712 // default constructor not defined
 

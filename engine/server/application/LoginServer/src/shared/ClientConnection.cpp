@@ -30,7 +30,8 @@
 ClientConnection::ClientConnection(UdpConnectionMT *u, TcpClient *t)
         : ServerConnection(u, t), m_clientId(0), m_isValidated(false), m_isSecure(false), m_adminLevel(-1),
           m_stationId(0), m_requestedAdminSuid(0), m_gameBits(0), m_subscriptionBits(0),
-          m_waitingForCharacterLoginDeletion(false), m_waitingForCharacterClusterDeletion(false) {
+          m_waitingForCharacterLoginDeletion(false), m_waitingForCharacterClusterDeletion(false),
+          m_availableCharacterSlots() {
 }
 
 //-----------------------------------------------------------------------
@@ -141,11 +142,41 @@ void ClientConnection::onReceive(const Archive::ByteStream &message) {
                 }
                 break;
             }
+            case constcrc("RequestAvailableCharacterSlotsV1") : {
+                GenericValueTypeMessage<bool> const request(ri);
+                if (request.getValue() && !sendAvailableCharacterSlots()) {
+                    DatabaseConnection::getInstance().requestAvatarListForAccount(getStationId(), 0);
+                }
+                break;
+            }
         }
     } catch (const Archive::ReadException &readException) {
         WARNING(true, ("Archive read error (%s) on message from client. Disconnecting client.", readException.what()));
         disconnect();
     }
+}
+
+//-----------------------------------------------------------------------
+
+void ClientConnection::setAvailableCharacterSlots(const std::vector<std::pair<uint32, int> > &slots) {
+    if (slots != m_availableCharacterSlots) {
+        m_availableCharacterSlots = slots;
+        for (std::vector<std::pair<uint32, int> >::const_iterator slot = slots.begin(); slot != slots.end(); ++slot) {
+            REPORT_LOG(true, ("AvailableCharacterSlotsV1 cluster %lu count %d\n", slot->first, slot->second));
+        }
+    }
+}
+
+//-----------------------------------------------------------------------
+
+bool ClientConnection::sendAvailableCharacterSlots() {
+    if (m_availableCharacterSlots.empty()) {
+        return false;
+    }
+
+    GenericValueTypeMessage<std::vector<std::pair<uint32, int> > > const message("AvailableCharacterSlotsV1", m_availableCharacterSlots);
+    send(message, true);
+    return true;
 }
 
 //-----------------------------------------------------------------------

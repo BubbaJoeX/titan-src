@@ -1182,8 +1182,10 @@ LoginServer::sendAvatarList(const StationId &stationId, int stationIdNumberJediS
             conn->send(msg, true);
 
             // Additive/versioned message: legacy clients safely ignore unknown message types.
-            GenericValueTypeMessage<std::vector<std::pair<uint32, int> > > const slotsMessage("AvailableCharacterSlotsV1", availableCharacterSlots);
-            conn->send(slotsMessage, true);
+            // Cache it on the connection so a client can request a replay if its UI listener
+            // was not active when the initial enumeration completed.
+            conn->setAvailableCharacterSlots(availableCharacterSlots);
+            IGNORE_RETURN(conn->sendAvailableCharacterSlots());
         } else {
             DEBUG_REPORT_LOG(true, ("Could not send avatar list to StationId %lu.\n", stationId));
             LOG("LoginClientConnection", ("sendAvatarList() for stationId (%lu), cannot find connection to client for sending avatar list", stationId));
