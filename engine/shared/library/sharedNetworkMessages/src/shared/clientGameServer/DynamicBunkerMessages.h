@@ -10,8 +10,9 @@
 
 #include "sharedMath/Transform.h"
 #include "sharedMathArchive/TransformArchive.h"
+#include "sharedFoundation/NetworkId.h"
+#include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
-#include "../../../../../../engine/shared/library/sharedFoundation/include/public/sharedFoundation/NetworkId.h"
 
 #include <string>
 #include <vector>

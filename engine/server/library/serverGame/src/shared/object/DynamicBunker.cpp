@@ -238,7 +238,7 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 		entry.portalIndex = socket.portalIndex;
 		entry.open = socket.open && socket.passable;
 		char label[96];
-		snprintf(label, sizeof(label), "portal %d", socket.portalIndex);
+		snprintf(label, sizeof(label), "cell %d / portal %d", socket.cellIndex, socket.portalIndex);
 		entry.label = label;
 		socketEntries.push_back(entry);
 	}
@@ -252,12 +252,93 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 		socketEntries);
 	client.send(message, true);
 
-	LOG("dynamic_bunker", ("openFloorplan player=%s building=%s rooms=%d sockets=%d",
+	LOG("dynamic_bunker", ("openFloorplan player=%s building=%s rooms=%d sockets=%d selected=%d/%d",
 		client.getCharacterObjectId().getValueString().c_str(),
 		building.getNetworkId().getValueString().c_str(),
 		static_cast<int>(rooms.size()),
-		static_cast<int>(socketEntries.size())));
+		static_cast<int>(socketEntries.size()),
+		selectedCellIndex,
+		selectedPortalIndex));
 	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool DynamicBunker::openFloorplanForClient(Client &client)
+{
+	ServerObject *const character = client.getCharacterObject();
+	if (!character)
+		return false;
+
+	Object *const topmost = ContainerInterface::getTopmostContainer(*character);
+	ServerObject *const building = topmost ? safe_cast<ServerObject *>(topmost) : 0;
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::openFloorplanForClient - player %s is not inside a POB building",
+			client.getCharacterObjectId().getValueString().c_str()));
+		return false;
+	}
+
+	PortalProperty const *const portalProperty = building->getPortalProperty();
+	NOT_NULL(portalProperty);
+
+	int preferredCell = 1;
+	CellObject const *const containingCell = ContainerInterface::getContainingCellObject(*character);
+	if (containingCell)
+		preferredCell = containingCell->getCell();
+
+	PortalProperty::PortalSocketInfoList sockets;
+	portalProperty->collectPortalSockets(sockets);
+
+	int selectedCell = preferredCell;
+	int selectedPortal = 0;
+	bool found = false;
+
+	// Prefer an open passable portal on the player's current cell.
+	for (size_t i = 0; i < sockets.size(); ++i)
+	{
+		PortalProperty::PortalSocketInfo const &socket = sockets[i];
+		if (socket.cellIndex == preferredCell && socket.open && socket.passable)
+		{
+			selectedCell = socket.cellIndex;
+			selectedPortal = socket.portalIndex;
+			found = true;
+			break;
+		}
+	}
+
+	// Else any open passable socket in the building.
+	if (!found)
+	{
+		for (size_t i = 0; i < sockets.size(); ++i)
+		{
+			PortalProperty::PortalSocketInfo const &socket = sockets[i];
+			if (socket.open && socket.passable)
+			{
+				selectedCell = socket.cellIndex;
+				selectedPortal = socket.portalIndex;
+				found = true;
+				break;
+			}
+		}
+	}
+
+	// Else first socket, or the player's cell with portal 0.
+	if (!found && !sockets.empty())
+	{
+		selectedCell = sockets[0].cellIndex;
+		selectedPortal = sockets[0].portalIndex;
+		found = true;
+	}
+
+	if (!found)
+	{
+		selectedCell = preferredCell > 0 ? preferredCell : 1;
+		selectedPortal = 0;
+	}
+
+	// No dedicated terminal — use the building as the message context object.
+	return openFloorplan(client, *building, *building, selectedCell, selectedPortal);
 }
 
 // ----------------------------------------------------------------------

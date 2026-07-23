@@ -8,6 +8,7 @@
 #include "sharedNetworkMessages/FirstSharedNetworkMessages.h"
 #include "sharedNetworkMessages/DynamicBunkerMessages.h"
 
+#include "sharedFoundation/NetworkIdArchive.h"
 #include "sharedMathArchive/TransformArchive.h"
 
 // ======================================================================

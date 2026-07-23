@@ -29,6 +29,7 @@
 #include "serverGame/CreatureController.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/DraftSchematicObject.h"
+#include "serverGame/DynamicBunker.h"
 #include "serverGame/FactoryObject.h"
 #include "serverGame/FormManagerServer.h"
 #include "serverGame/GameServer.h"
@@ -7955,6 +7956,28 @@ static void commandFuncReceiveReward(Command const &, NetworkId const & actor, N
 
 //----------------------------------------------------------------------
 
+//----------------------------------------------------------------------
+
+static void commandFuncDynamicBunker(Command const &, NetworkId const &actor, NetworkId const &, Unicode::String const &)
+{
+	CreatureObject *const creature = safe_cast<CreatureObject *>(NetworkIdManager::getObjectById(actor));
+	if (!creature)
+		return;
+
+	Client *const client = creature->getClient();
+	if (!client)
+		return;
+
+	if (!DynamicBunker::openFloorplanForClient(*client))
+	{
+		Chat::sendSystemMessage(*creature, Unicode::narrowToWide(
+			"[DynamicBunker] Stand inside a POB building (cell) and try again. Client must support the floorplan UI."),
+			Unicode::emptyString);
+	}
+}
+
+//----------------------------------------------------------------------
+
 static void commandFuncAbandonQuest(Command const &, NetworkId const & actor, NetworkId const &, Unicode::String const & params)
 {
 	size_t pos = 0;
@@ -9955,6 +9978,7 @@ void CommandCppFuncs::install()
 	CommandTable::addCppFunction("acceptQuest", commandFuncAcceptQuest);
 	CommandTable::addCppFunction("completeQuest", commandFuncReceiveReward);
 	CommandTable::addCppFunction("abandonQuest", commandFuncAbandonQuest);
+	CommandTable::addCppFunction("dynamicBunker", commandFuncDynamicBunker);
 
 	// exchange
 	CommandTable::addCppFunction("exchangeListCredits", commandFuncExchangeListCredits);
