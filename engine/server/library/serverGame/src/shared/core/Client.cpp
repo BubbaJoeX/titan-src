@@ -216,9 +216,14 @@ Client::Client(ConnectionServerConnection &connection, const NetworkId &characte
     connectToEmitter(connection, "ConnectionServerConnectionClosed");
     connectToEmitter(connection, "ConnectionServerConnectionDestroyed");
 
-    if (usingAdminLogin != (m_rawGodLevel > 0)) {
-        LOG("GodMode", ("Admin authorization mismatch for account [%s]: connectionServerAdmin=%d gameServerAccountLevel=%d table=[%s]",
-                m_accountName.c_str(), usingAdminLogin ? 1 : 0, m_rawGodLevel, ConfigServerGame::getAdminAccountDataTable()));
+    // usingAdminLogin means a secure cross-account admin login; it is not the
+    // ordinary account's Titan admin bit.  Log only actionable lookup results.
+    if (usingAdminLogin && m_rawGodLevel <= 0) {
+        LOG("GodMode", ("Cross-account admin login [%s] has no Titan account level in table [%s]",
+                m_accountName.c_str(), ConfigServerGame::getAdminAccountDataTable()));
+    } else if (m_rawGodLevel > 0) {
+        LOG("GodMode", ("Titan admin authorization resolved account [%s] level=%d crossAccountLogin=%d table=[%s]",
+                m_accountName.c_str(), m_rawGodLevel, usingAdminLogin ? 1 : 0, ConfigServerGame::getAdminAccountDataTable()));
     }
 
     // See if our controlled object is ready yet.
