@@ -125,9 +125,9 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 	cell->setCell(graftedCellIndex);
 
 	Container::ContainerErrorCode tmp = Container::CEC_Success;
-	if (!portalProperty->addToContents(*cellObject, tmp))
+	if (!portalProperty->addCellObject(*cellObject, tmp))
 	{
-		WARNING(true, ("DynamicBunker::addRoomHook - addToContents failed (%d)", static_cast<int>(tmp)));
+		WARNING(true, ("DynamicBunker::addRoomHook - addCellObject failed (%d)", static_cast<int>(tmp)));
 		cellObject->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
 		return false;
 	}

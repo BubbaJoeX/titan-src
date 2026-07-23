@@ -777,6 +777,13 @@ int PortalProperty::reserveGraftedCellSlot(char const *donorPobName, int donorCe
 
 // ----------------------------------------------------------------------
 
+bool PortalProperty::addCellObject(Object &cellObject, ContainerErrorCode &error)
+{
+	return addToContents(cellObject, error) >= 0;
+}
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::ensureGraftedCellSlot(int graftedCellIndex, char const *donorPobName, int donorCellIndex)
 {
 	NOT_NULL(donorPobName);

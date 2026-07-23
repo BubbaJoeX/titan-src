@@ -123,6 +123,7 @@ public:
 	bool                          isGraftedCell(int cellIndex) const;
 	int                           reserveGraftedCellSlot(char const *donorPobName, int donorCellIndex);
 	bool                          ensureGraftedCellSlot(int graftedCellIndex, char const *donorPobName, int donorCellIndex);
+	bool                          addCellObject(Object &cellObject, ContainerErrorCode &error);
 	bool                          linkCellPortals(int cellIndexA, int portalIndexA, int cellIndexB, int portalIndexB);
 	bool                          computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p) const;
 	bool                          recordDynamicRoomGraft(DynamicRoomGraft const &graft);
