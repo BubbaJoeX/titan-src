@@ -23,6 +23,7 @@
 #include "sharedObject/Portal.h"
 #include "sharedObject/PortalPropertyTemplate.h"
 #include "sharedObject/PortalPropertyTemplateList.h"
+#include "sharedFoundation/Crc.h"
 
 #include <algorithm>
 #include <limits>
@@ -1125,6 +1126,14 @@ bool PortalProperty::removeCustomSocket(int socketIndex)
 
 // ----------------------------------------------------------------------
 
+void PortalProperty::clearCustomSockets()
+{
+	NOT_NULL(m_customSockets);
+	m_customSockets->clear();
+}
+
+// ----------------------------------------------------------------------
+
 PortalProperty::CustomSocketList const &PortalProperty::getCustomSockets() const
 {
 	NOT_NULL(m_customSockets);
@@ -1307,6 +1316,50 @@ PortalProperty::BridgeSegmentList const &PortalProperty::getBridgeSegments() con
 {
 	NOT_NULL(m_bridgeSegments);
 	return *m_bridgeSegments;
+}
+
+// ----------------------------------------------------------------------
+
+uint32 PortalProperty::computeEffectiveLayoutCrc() const
+{
+	uint32 crc = static_cast<uint32>(getCrc());
+
+	DynamicRoomGraftList const &grafts = getDynamicRoomGrafts();
+	for (size_t i = 0; i < grafts.size(); ++i)
+	{
+		DynamicRoomGraft const &graft = grafts[i];
+		crc = Crc::calculate(&graft.graftedCellIndex, sizeof(graft.graftedCellIndex), crc);
+		crc = Crc::calculate(&graft.hostCellIndex, sizeof(graft.hostCellIndex), crc);
+		crc = Crc::calculate(&graft.hostPortalIndex, sizeof(graft.hostPortalIndex), crc);
+		crc = Crc::calculate(&graft.graftedPortalIndex, sizeof(graft.graftedPortalIndex), crc);
+		crc = Crc::calculate(&graft.donorCellIndex, sizeof(graft.donorCellIndex), crc);
+		if (!graft.donorPobName.empty())
+			crc = Crc::calculate(graft.donorPobName.c_str(), static_cast<int>(graft.donorPobName.size()), crc);
+
+		uint32 donorCrc = 0;
+		if (PortalPropertyTemplate::extractPortalLayoutCrc(graft.donorPobName.c_str(), donorCrc))
+			crc = Crc::calculate(&donorCrc, sizeof(donorCrc), crc);
+	}
+
+	if (m_customSockets)
+	{
+		for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+		{
+			CustomSocket const &socket = *it;
+			crc = Crc::calculate(&socket.cellIndex, sizeof(socket.cellIndex), crc);
+			crc = Crc::calculate(&socket.socketIndex, sizeof(socket.socketIndex), crc);
+			if (!socket.label.empty())
+				crc = Crc::calculate(socket.label.c_str(), static_cast<int>(socket.label.size()), crc);
+
+			Vector const pos = socket.doorTransform_o2p.getPosition_p();
+			crc = Crc::calculate(&pos, sizeof(pos), crc);
+
+			int const openFlag = socket.open ? 1 : 0;
+			crc = Crc::calculate(&openFlag, sizeof(openFlag), crc);
+		}
+	}
+
+	return crc;
 }
 
 // ======================================================================

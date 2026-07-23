@@ -302,6 +302,50 @@ namespace DynamicBunkerNamespace
 		}
 	}
 
+	void buildCustomSocketEntries(
+		PortalProperty const &portalProperty,
+		DynamicBunkerOpenFloorplanMessage::CustomSocketList &customSocketEntries)
+	{
+		PortalProperty::CustomSocketList const &sockets = portalProperty.getCustomSockets();
+		customSocketEntries.reserve(sockets.size());
+		for (size_t i = 0; i < sockets.size(); ++i)
+		{
+			PortalProperty::CustomSocket const &socket = sockets[i];
+			DynamicBunkerOpenFloorplanMessage::CustomSocketEntry entry;
+			entry.cellIndex = socket.cellIndex;
+			entry.socketIndex = socket.socketIndex;
+			entry.label = socket.label;
+			entry.doorTransform_o2p = socket.doorTransform_o2p;
+			entry.open = socket.open;
+			customSocketEntries.push_back(entry);
+		}
+	}
+
+	void updatePortalLayoutCrc(ServerObject &building, PortalProperty const &portalProperty)
+	{
+		uint32 const crc = portalProperty.computeEffectiveLayoutCrc();
+		building.setObjVarItem("portalProperty.crc", static_cast<int>(crc));
+	}
+
+	void broadcastCustomSocket(ServerObject &building, PortalProperty::CustomSocket const &socket)
+	{
+		DynamicBunkerCustomSocketSyncMessage const message(
+			building.getNetworkId(),
+			socket.cellIndex,
+			socket.socketIndex,
+			socket.label,
+			socket.doorTransform_o2p,
+			socket.open);
+		building.sendToClientsInUpdateRange(message, true, false);
+	}
+
+	void broadcastAllCustomSockets(ServerObject &building, PortalProperty const &portalProperty)
+	{
+		PortalProperty::CustomSocketList const &sockets = portalProperty.getCustomSockets();
+		for (size_t i = 0; i < sockets.size(); ++i)
+			broadcastCustomSocket(building, sockets[i]);
+	}
+
 	void broadcastGraft(ServerObject &building, PortalProperty::DynamicRoomGraft const &graft, NetworkId const &cellId, Transform const &cellTransform)
 	{
 		DynamicBunkerGraftMessage const message(
@@ -434,6 +478,7 @@ namespace DynamicBunkerNamespace
 			IGNORE_RETURN(portalProperty.markCustomSocketOpen(graft.hostCellIndex, graft.hostPortalIndex, true));
 		persistGrafts(building, portalProperty);
 		broadcastUngraft(building, graft, cellId);
+		updatePortalLayoutCrc(building, portalProperty);
 
 		LOG("dynamic_bunker", ("removeGraft building=%s graftedCell=%d host=%d/%d cellId=%s",
 			building.getNetworkId().getValueString().c_str(),
@@ -554,6 +599,7 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 
 	outCellId = cellObject->getNetworkId();
 	broadcastGraft(building, graft, outCellId, cellTransform);
+	updatePortalLayoutCrc(building, *portalProperty);
 
 	LOG("dynamic_bunker", ("addRoomHook building=%s hostCell=%d hostPortal=%d donor=%s donorCell=%d donorPortal=%d graftedCell=%d cellId=%s",
 		building.getNetworkId().getValueString().c_str(),
@@ -649,6 +695,9 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 	DynamicBunkerOpenFloorplanMessage::BridgeList bridgeEntries;
 	buildBridgeEntries(*portalProperty, bridgeEntries);
 
+	DynamicBunkerOpenFloorplanMessage::CustomSocketList customSocketEntries;
+	buildCustomSocketEntries(*portalProperty, customSocketEntries);
+
 	DynamicBunkerOpenFloorplanMessage const message(
 		building.getNetworkId(),
 		terminal.getNetworkId(),
@@ -656,7 +705,8 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 		selectedPortalIndex,
 		rooms,
 		socketEntries,
-		bridgeEntries);
+		bridgeEntries,
+		customSocketEntries);
 	client.send(message, true);
 
 	LOG("dynamic_bunker", ("openFloorplan player=%s building=%s rooms=%d sockets=%d selected=%d/%d",
@@ -860,6 +910,8 @@ void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreate
 	}
 
 	persistCustomSockets(*building, *portalProperty);
+	updatePortalLayoutCrc(*building, *portalProperty);
+	broadcastCustomSocket(*building, socket);
 
 	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
 	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, socket.cellIndex, socket.socketIndex));
@@ -965,6 +1017,9 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 		if (portalProperty->getCell(hostCell) && portalProperty->getCell(graftedCell))
 			IGNORE_RETURN(portalProperty->linkCellPortals(hostCell, hostPortal, graftedCell, graftPortal));
 	}
+
+	updatePortalLayoutCrc(building, *portalProperty);
+	broadcastAllCustomSockets(building, *portalProperty);
 
 	LOG("dynamic_bunker", ("restoreGraftsFromObjVars building=%s count=%d", building.getNetworkId().getValueString().c_str(), count));
 }

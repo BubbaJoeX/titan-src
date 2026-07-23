@@ -108,9 +108,19 @@ public:
 		float height;
 	};
 
+	struct CustomSocketEntry
+	{
+		int32 cellIndex;
+		int32 socketIndex;
+		std::string label;
+		Transform doorTransform_o2p;
+		bool open;
+	};
+
 	typedef std::vector<RoomEntry> RoomList;
 	typedef std::vector<SocketEntry> SocketList;
 	typedef std::vector<BridgeEntry> BridgeList;
+	typedef std::vector<CustomSocketEntry> CustomSocketList;
 
 	DynamicBunkerOpenFloorplanMessage(
 		NetworkId const &buildingId,
@@ -119,7 +129,8 @@ public:
 		int32 selectedPortalIndex,
 		RoomList const &rooms,
 		SocketList const &sockets,
-		BridgeList const &bridges);
+		BridgeList const &bridges,
+		CustomSocketList const &customSockets);
 
 	explicit DynamicBunkerOpenFloorplanMessage(Archive::ReadIterator &source);
 	~DynamicBunkerOpenFloorplanMessage();
@@ -131,6 +142,7 @@ public:
 	RoomList const &getRooms() const { return m_rooms.get(); }
 	SocketList const &getSockets() const { return m_sockets.get(); }
 	BridgeList const &getBridges() const { return m_bridges.get(); }
+	CustomSocketList const &getCustomSockets() const { return m_customSockets.get(); }
 
 private:
 
@@ -141,6 +153,7 @@ private:
 	Archive::AutoVariable<RoomList> m_rooms;
 	Archive::AutoVariable<SocketList> m_sockets;
 	Archive::AutoVariable<BridgeList> m_bridges;
+	Archive::AutoVariable<CustomSocketList> m_customSockets;
 };
 
 // ======================================================================
@@ -246,6 +259,44 @@ private:
 };
 
 // ======================================================================
+// Server -> client: sync a custom snap point onto the local PortalProperty
+// ======================================================================
+
+class DynamicBunkerCustomSocketSyncMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	DynamicBunkerCustomSocketSyncMessage(
+		NetworkId const &buildingId,
+		int32 cellIndex,
+		int32 socketIndex,
+		std::string const &label,
+		Transform const &doorTransform_o2p,
+		bool open);
+
+	explicit DynamicBunkerCustomSocketSyncMessage(Archive::ReadIterator &source);
+	~DynamicBunkerCustomSocketSyncMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+	int32 getCellIndex() const { return m_cellIndex.get(); }
+	int32 getSocketIndex() const { return m_socketIndex.get(); }
+	std::string const &getLabel() const { return m_label.get(); }
+	Transform const &getDoorTransform_o2p() const { return m_doorTransform_o2p.get(); }
+	bool getOpen() const { return m_open.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+	Archive::AutoVariable<int32> m_cellIndex;
+	Archive::AutoVariable<int32> m_socketIndex;
+	Archive::AutoVariable<std::string> m_label;
+	Archive::AutoVariable<Transform> m_doorTransform_o2p;
+	Archive::AutoVariable<bool> m_open;
+};
+
+// ======================================================================
 // Client -> server: create a custom snap point on a cell wall
 // ======================================================================
 
@@ -290,6 +341,8 @@ namespace Archive
 	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::SocketEntry const &source);
 	void get(ReadIterator &source, DynamicBunkerOpenFloorplanMessage::BridgeEntry &target);
 	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::BridgeEntry const &source);
+	void get(ReadIterator &source, DynamicBunkerOpenFloorplanMessage::CustomSocketEntry &target);
+	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::CustomSocketEntry const &source);
 }
 
 // ======================================================================
