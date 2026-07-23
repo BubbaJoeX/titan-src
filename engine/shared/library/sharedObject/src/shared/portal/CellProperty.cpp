@@ -1241,6 +1241,29 @@ int CellProperty::appendRuntimePortal(PortalPropertyTemplateCellPortal const & p
 
 // ----------------------------------------------------------------------
 
+bool CellProperty::replaceRuntimePortal(int portalIndex, PortalPropertyTemplateCellPortal const & portalTemplate)
+{
+	if (!m_portalObjectList || m_portalObjectList->empty())
+		return false;
+
+	PortalList * const portalList = m_portalObjectList->front().portalList;
+	if (!portalList || portalIndex < 0 || portalIndex >= static_cast<int>(portalList->size()))
+		return false;
+
+	Portal * const oldPortal = (*portalList)[static_cast<PortalList::size_type>(portalIndex)];
+	if (oldPortal)
+	{
+		oldPortal->clearNeighbor();
+		oldPortal->removeFromDpvs();
+		delete oldPortal;
+	}
+
+	(*portalList)[static_cast<PortalList::size_type>(portalIndex)] = new Portal(portalTemplate, this, &getOwner());
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 int CellProperty::getNumberOfPortalObjects() const
 {
 	return static_cast<int>(m_portalObjectList->size());
