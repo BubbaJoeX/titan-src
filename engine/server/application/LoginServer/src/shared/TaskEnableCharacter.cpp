@@ -70,6 +70,8 @@ void TaskEnableCharacter::onComplete()
 	GenericValueTypeMessage<std::pair<std::string, std::string> > reply("EnableCharacterReplyMessage",
 		std::make_pair(m_whoRequested, message));
 	LoginServer::getInstance().sendToCluster(m_clusterId, reply);
+	if (m_result == 1)
+		DatabaseConnection::getInstance().requestAvatarListForAccount(m_stationId, 0);
 }
 
 // ----------------------------------------------------------------------

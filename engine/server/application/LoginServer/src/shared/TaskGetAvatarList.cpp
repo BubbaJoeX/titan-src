@@ -27,6 +27,7 @@
 namespace
 {
 	std::set<uint32> s_reportedSlotPolicyMismatch;
+	std::set<uint32> s_reportedMissingNormalSlotPolicy;
 }
 
 // ======================================================================
@@ -165,21 +166,38 @@ bool TaskGetAvatarList::process(DB::Session *session)
 				return false;
 
 			int slotsByType[4] = { 0, 0, 0, 0 };
+			bool hasNormalSlotPolicy = false;
 			while ((rowsFetched = slotsQuery.fetch()) > 0)
 			{
 				int const type = static_cast<int>(slotsQuery.character_type_id.getValue());
 				if (type >= 0 && type < 4)
+				{
 					slotsByType[type] = std::max(0, static_cast<int>(slotsQuery.num_open_slots.getValue()));
+					if (type == 1)
+						hasNormalSlotPolicy = true;
+				}
 			}
 			slotsQuery.done();
 			if (rowsFetched < 0)
 				return false;
 
-			int const rawCount = slotsByType[1] + std::min(slotsByType[2], slotsByType[3]);
+			// A missing type-1 row means this account uses the configured account
+			// allowance. policyCapacity already subtracts enabled characters and
+			// applies the account and cluster limits exactly once.
+			int const normalRemaining = hasNormalSlotPolicy ? slotsByType[1] : policyCapacity;
+			if (!hasNormalSlotPolicy && s_reportedMissingNormalSlotPolicy.insert(*clusterId).second)
+				REPORT_LOG(true, ("AvailableCharacterSlotsV1 cluster %lu has no type-1 row; using configured capacity %d as normal remaining (further warnings suppressed)\n", *clusterId, policyCapacity));
+
+			// Existing validation explicitly requires both the unlocked (type 2)
+			// and spectral backing (type 3) slots to create that character type.
+			int const unlockedRemaining = (slotsByType[2] > 0 && slotsByType[3] > 0)
+				? std::min(slotsByType[2], slotsByType[3])
+				: 0;
+			int const rawCount = normalRemaining + unlockedRemaining;
 			int const availableCount = std::max(0, std::min(configuredMaximum, std::min(policyCapacity, rawCount)));
 			bool const policyMismatch = rawPolicyCapacity < 0 || std::min(policyCapacity, rawCount) > configuredMaximum;
 			if (policyMismatch && s_reportedSlotPolicyMismatch.insert(*clusterId).second)
-				DEBUG_WARNING(true, ("Available character slot policy mismatch for cluster %lu; capacity=%d calculated=%d configured=%d (further warnings suppressed)", *clusterId, rawPolicyCapacity, rawCount, configuredMaximum));
+				DEBUG_WARNING(true, ("Available character slot policy mismatch for cluster %lu; capacity=%d normal=%d unlocked=%d configured=%d (further warnings suppressed)", *clusterId, rawPolicyCapacity, normalRemaining, unlockedRemaining, configuredMaximum));
 			m_availableCharacterSlots.push_back(std::make_pair(*clusterId, availableCount));
 		}
 	}

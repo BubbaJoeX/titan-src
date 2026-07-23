@@ -139,7 +139,12 @@ as
 			from extra_character_slots cls, default_character_slots def
 			where def.character_type_id = cls.character_type_id (+)
 			and cls.station_id (+) = p_station_id
-			and cls.cluster_id (+) = p_cluster_id) limits,
+			and cls.cluster_id (+) = p_cluster_id
+			union all
+			select 1 character_type_id, account_limit limit
+			from default_char_limits
+			where not exists
+				(select 1 from default_character_slots where character_type_id = 1)) limits,
 
 			(select character_type, count(*) num
 			from swg_characters
@@ -167,7 +172,12 @@ as
 			from extra_character_slots cls, default_character_slots def
 			where def.character_type_id = cls.character_type_id (+)
 			and cls.station_id (+) = p_station_id
-			and cls.cluster_id (+) = p_cluster_id) limits,
+			and cls.cluster_id (+) = p_cluster_id
+			union all
+			select 1 character_type_id, account_limit limit
+			from default_char_limits
+			where not exists
+				(select 1 from default_character_slots where character_type_id = 1)) limits,
 
 			(select character_type, count(*) num
 			from swg_characters

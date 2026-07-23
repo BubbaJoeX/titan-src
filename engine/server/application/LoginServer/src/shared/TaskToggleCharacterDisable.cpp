@@ -44,6 +44,7 @@ bool TaskToggleCharacterDisable::process(DB::Session *session)
 
 void TaskToggleCharacterDisable::onComplete()
 {
+	DatabaseConnection::getInstance().requestAvatarListForAccount(m_stationId, 0);
 }
 
 // ----------------------------------------------------------------------

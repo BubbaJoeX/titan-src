@@ -61,6 +61,11 @@ void TaskChangeStationId::onComplete()
 	LOG("CustomerService", ("CharacterTransfer: Completed database change for account transfer from %lu to %lu: sending reply back to transfer server on %s", m_sourceStationId, m_destinationStationId, m_requestData->getStartGalaxy().c_str()));
 	const GenericValueTypeMessage<TransferAccountData> response("TransferAccountReplySuccessTransferServer", *m_requestData);
 	CentralServerConnection::sendToCentralServer(m_requestData->getStartGalaxy(), response);
+	if (m_success)
+	{
+		DatabaseConnection::getInstance().requestAvatarListForAccount(m_sourceStationId, 0);
+		DatabaseConnection::getInstance().requestAvatarListForAccount(m_destinationStationId, 0);
+	}
 }
 
 // ======================================================================
