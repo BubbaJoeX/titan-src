@@ -222,6 +222,8 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 	if (!portalProperty)
 		return false;
 
+	// Prefer client-side catalog (local POBs). Still send a server catalog for
+	// older clients / fallback when the client rebuild finds nothing.
 	DynamicBunkerOpenFloorplanMessage::RoomList rooms;
 	DynamicBunkerRoomCatalog::buildCatalog(rooms);
 

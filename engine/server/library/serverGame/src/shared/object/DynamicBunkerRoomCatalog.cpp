@@ -126,23 +126,21 @@ namespace DynamicBunkerRoomCatalogNamespace
 			char const *const appearance = cell.getAppearanceName();
 			char const *const cellName = cell.getName();
 
-			// One catalog entry per portal on the cell so any inward socket can be chosen.
-			for (int portalIndex = 0; portalIndex < static_cast<int>(portals->size()); ++portalIndex)
-			{
-				DynamicBunkerOpenFloorplanMessage::RoomEntry room;
-				room.roomId = makeRoomId(pobPath, cellIndex, portalIndex);
-				room.displayName = makeDisplayName(pobPath, cellName, cellIndex, portalIndex);
-				room.donorPob = pobPath;
-				room.appearanceHint = appearance ? appearance : "";
-				room.socketType = "auto";
-				room.donorCellIndex = cellIndex;
-				room.donorPortalIndex = portalIndex;
+			// One catalog entry per cell; first portal is the graft socket.
+			int const portalIndex = 0;
+			DynamicBunkerOpenFloorplanMessage::RoomEntry room;
+			room.roomId = makeRoomId(pobPath, cellIndex, portalIndex);
+			room.displayName = makeDisplayName(pobPath, cellName, cellIndex, portalIndex);
+			room.donorPob = pobPath;
+			room.appearanceHint = appearance ? appearance : "";
+			room.socketType = "auto";
+			room.donorCellIndex = cellIndex;
+			room.donorPortalIndex = portalIndex;
 
-				if (byId.find(room.roomId) == byId.end())
-				{
-					byId[room.roomId] = room;
-					rooms.push_back(room);
-				}
+			if (byId.find(room.roomId) == byId.end())
+			{
+				byId[room.roomId] = room;
+				rooms.push_back(room);
 			}
 		}
 
