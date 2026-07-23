@@ -16,6 +16,8 @@
 char const * const DynamicBunkerGraftMessage::MessageType = "DynamicBunkerGraftMessage";
 char const * const DynamicBunkerOpenFloorplanMessage::MessageType = "DynamicBunkerOpenFloorplanMessage";
 char const * const DynamicBunkerAssignRoomMessage::MessageType = "DynamicBunkerAssignRoomMessage";
+char const * const DynamicBunkerUnassignRoomMessage::MessageType = "DynamicBunkerUnassignRoomMessage";
+char const * const DynamicBunkerUngraftMessage::MessageType = "DynamicBunkerUngraftMessage";
 
 // ----------------------------------------------------------------------
 
@@ -208,6 +210,85 @@ DynamicBunkerAssignRoomMessage::DynamicBunkerAssignRoomMessage(Archive::ReadIter
 }
 
 DynamicBunkerAssignRoomMessage::~DynamicBunkerAssignRoomMessage()
+{
+}
+
+// ======================================================================
+
+DynamicBunkerUnassignRoomMessage::DynamicBunkerUnassignRoomMessage(
+	NetworkId const &buildingId,
+	NetworkId const &terminalId,
+	int32 hostCellIndex,
+	int32 hostPortalIndex)
+: GameNetworkMessage(MessageType),
+	m_buildingId(buildingId),
+	m_terminalId(terminalId),
+	m_hostCellIndex(hostCellIndex),
+	m_hostPortalIndex(hostPortalIndex)
+{
+	addVariable(m_buildingId);
+	addVariable(m_terminalId);
+	addVariable(m_hostCellIndex);
+	addVariable(m_hostPortalIndex);
+}
+
+DynamicBunkerUnassignRoomMessage::DynamicBunkerUnassignRoomMessage(Archive::ReadIterator &source)
+: GameNetworkMessage(MessageType),
+	m_buildingId(),
+	m_terminalId(),
+	m_hostCellIndex(0),
+	m_hostPortalIndex(0)
+{
+	addVariable(m_buildingId);
+	addVariable(m_terminalId);
+	addVariable(m_hostCellIndex);
+	addVariable(m_hostPortalIndex);
+	unpack(source);
+}
+
+DynamicBunkerUnassignRoomMessage::~DynamicBunkerUnassignRoomMessage()
+{
+}
+
+// ======================================================================
+
+DynamicBunkerUngraftMessage::DynamicBunkerUngraftMessage(
+	NetworkId const &buildingId,
+	NetworkId const &cellId,
+	int32 graftedCellIndex,
+	int32 hostCellIndex,
+	int32 hostPortalIndex)
+: GameNetworkMessage(MessageType),
+	m_buildingId(buildingId),
+	m_cellId(cellId),
+	m_graftedCellIndex(graftedCellIndex),
+	m_hostCellIndex(hostCellIndex),
+	m_hostPortalIndex(hostPortalIndex)
+{
+	addVariable(m_buildingId);
+	addVariable(m_cellId);
+	addVariable(m_graftedCellIndex);
+	addVariable(m_hostCellIndex);
+	addVariable(m_hostPortalIndex);
+}
+
+DynamicBunkerUngraftMessage::DynamicBunkerUngraftMessage(Archive::ReadIterator &source)
+: GameNetworkMessage(MessageType),
+	m_buildingId(),
+	m_cellId(),
+	m_graftedCellIndex(0),
+	m_hostCellIndex(0),
+	m_hostPortalIndex(0)
+{
+	addVariable(m_buildingId);
+	addVariable(m_cellId);
+	addVariable(m_graftedCellIndex);
+	addVariable(m_hostCellIndex);
+	addVariable(m_hostPortalIndex);
+	unpack(source);
+}
+
+DynamicBunkerUngraftMessage::~DynamicBunkerUngraftMessage()
 {
 }
 

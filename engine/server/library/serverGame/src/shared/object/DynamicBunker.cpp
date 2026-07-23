@@ -12,6 +12,7 @@
 #include "serverGame/CellObject.h"
 #include "serverGame/Client.h"
 #include "serverGame/ContainerInterface.h"
+#include "serverGame/CreatureObject.h"
 #include "serverGame/DynamicBunkerRoomCatalog.h"
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerWorld.h"
@@ -31,6 +32,7 @@ namespace DynamicBunkerNamespace
 {
 	char const *const OV_ROOT = "dynamicBunker";
 	char const *const OV_COUNT = "dynamicBunker.count";
+	char const *const OV_ASSIGNED_ROOM = "dynamicBunker.assignedRoom";
 
 	std::string graftKey(int index, char const *field)
 	{
@@ -39,10 +41,21 @@ namespace DynamicBunkerNamespace
 		return buffer;
 	}
 
+	std::string assignedRoomKey(int hostCellIndex, int hostPortalIndex)
+	{
+		char buffer[128];
+		snprintf(buffer, sizeof(buffer), "%s.%d.%d", OV_ASSIGNED_ROOM, hostCellIndex, hostPortalIndex);
+		return buffer;
+	}
+
 	void persistGrafts(ServerObject &building, PortalProperty const &portalProperty)
 	{
+		int oldCount = 0;
+		IGNORE_RETURN(building.getObjVars().getItem(OV_COUNT, oldCount));
+
 		PortalProperty::DynamicRoomGraftList const &grafts = portalProperty.getDynamicRoomGrafts();
-		building.setObjVarItem(OV_COUNT, static_cast<int>(grafts.size()));
+		int const newCount = static_cast<int>(grafts.size());
+		building.setObjVarItem(OV_COUNT, newCount);
 
 		for (size_t i = 0; i < grafts.size(); ++i)
 		{
@@ -54,6 +67,16 @@ namespace DynamicBunkerNamespace
 			building.setObjVarItem(graftKey(index, "graftPortal"), graft.graftedPortalIndex);
 			building.setObjVarItem(graftKey(index, "donorCell"), graft.donorCellIndex);
 			building.setObjVarItem(graftKey(index, "donorPob"), graft.donorPobName);
+		}
+
+		for (int i = newCount; i < oldCount; ++i)
+		{
+			building.removeObjVarItem(graftKey(i, "graftedCell"));
+			building.removeObjVarItem(graftKey(i, "hostCell"));
+			building.removeObjVarItem(graftKey(i, "hostPortal"));
+			building.removeObjVarItem(graftKey(i, "graftPortal"));
+			building.removeObjVarItem(graftKey(i, "donorCell"));
+			building.removeObjVarItem(graftKey(i, "donorPob"));
 		}
 	}
 
@@ -71,6 +94,131 @@ namespace DynamicBunkerNamespace
 			cellTransform);
 
 		building.sendToClientsInUpdateRange(message, true, false);
+	}
+
+	void broadcastUngraft(ServerObject &building, PortalProperty::DynamicRoomGraft const &graft, NetworkId const &cellId)
+	{
+		DynamicBunkerUngraftMessage const message(
+			building.getNetworkId(),
+			cellId,
+			graft.graftedCellIndex,
+			graft.hostCellIndex,
+			graft.hostPortalIndex);
+
+		building.sendToClientsInUpdateRange(message, true, false);
+	}
+
+	void ejectCellContentsToHost(PortalProperty &portalProperty, int fromCellIndex, int toCellIndex)
+	{
+		CellProperty *const fromCell = portalProperty.getCell(fromCellIndex);
+		CellProperty *const toCell = portalProperty.getCell(toCellIndex);
+		if (!fromCell || !toCell)
+			return;
+
+		ServerObject *const toCellObject = safe_cast<ServerObject *>(&toCell->getOwner());
+		if (!toCellObject)
+			return;
+
+		std::vector<ServerObject *> contents;
+		for (ContainerIterator it = fromCell->begin(); it != fromCell->end(); ++it)
+		{
+			Object *const obj = (*it).getObject();
+			ServerObject *const so = obj ? obj->asServerObject() : 0;
+			if (so)
+				contents.push_back(so);
+		}
+
+		Transform const destTransform = toCellObject->getTransform_o2p();
+		for (size_t i = 0; i < contents.size(); ++i)
+		{
+			ServerObject *const so = contents[i];
+			if (!so)
+				continue;
+
+			Container::ContainerErrorCode error = Container::CEC_Success;
+			if (so->asCreatureObject())
+			{
+				if (!ContainerInterface::transferItemToCell(*toCellObject, *so, destTransform, 0, error))
+				{
+					WARNING(true, ("DynamicBunker - failed to eject creature %s from grafted cell %d (%d)",
+						so->getNetworkId().getValueString().c_str(), fromCellIndex, static_cast<int>(error)));
+				}
+			}
+			else
+			{
+				IGNORE_RETURN(so->permanentlyDestroy(DeleteReasons::Replaced));
+			}
+		}
+	}
+
+	bool removeGraftRecursive(ServerObject &building, PortalProperty &portalProperty, int graftedCellIndex)
+	{
+		// Cascade: remove grafts whose host is this grafted cell first.
+		bool removedChild = true;
+		while (removedChild)
+		{
+			removedChild = false;
+			PortalProperty::DynamicRoomGraftList const &grafts = portalProperty.getDynamicRoomGrafts();
+			for (size_t i = 0; i < grafts.size(); ++i)
+			{
+				if (grafts[i].hostCellIndex == graftedCellIndex)
+				{
+					if (!removeGraftRecursive(building, portalProperty, grafts[i].graftedCellIndex))
+						return false;
+					removedChild = true;
+					break;
+				}
+			}
+		}
+
+		PortalProperty::DynamicRoomGraft graft;
+		bool found = false;
+		{
+			PortalProperty::DynamicRoomGraftList const &grafts = portalProperty.getDynamicRoomGrafts();
+			for (size_t i = 0; i < grafts.size(); ++i)
+			{
+				if (grafts[i].graftedCellIndex == graftedCellIndex)
+				{
+					graft = grafts[i];
+					found = true;
+					break;
+				}
+			}
+		}
+		if (!found)
+		{
+			WARNING(true, ("DynamicBunker::removeGraftRecursive - no graft record for cell %d", graftedCellIndex));
+			return false;
+		}
+
+		IGNORE_RETURN(portalProperty.unlinkCellPortal(graft.hostCellIndex, graft.hostPortalIndex));
+		portalProperty.unlinkAllCellPortals(graftedCellIndex);
+
+		ejectCellContentsToHost(portalProperty, graftedCellIndex, graft.hostCellIndex);
+
+		CellProperty *const graftedCell = portalProperty.getCell(graftedCellIndex);
+		ServerObject *const cellObject = graftedCell ? safe_cast<ServerObject *>(&graftedCell->getOwner()) : 0;
+		NetworkId const cellId = cellObject ? cellObject->getNetworkId() : NetworkId::cms_invalid;
+
+		IGNORE_RETURN(portalProperty.clearLoadedCellSlot(graftedCellIndex));
+		IGNORE_RETURN(portalProperty.removeDynamicRoomGraft(graftedCellIndex));
+		IGNORE_RETURN(portalProperty.releaseGraftedCellSlot(graftedCellIndex));
+
+		if (cellObject)
+			IGNORE_RETURN(cellObject->permanentlyDestroy(DeleteReasons::Replaced));
+
+		building.removeObjVarItem(assignedRoomKey(graft.hostCellIndex, graft.hostPortalIndex));
+		persistGrafts(building, portalProperty);
+		broadcastUngraft(building, graft, cellId);
+
+		LOG("dynamic_bunker", ("removeGraft building=%s graftedCell=%d host=%d/%d cellId=%s",
+			building.getNetworkId().getValueString().c_str(),
+			graftedCellIndex,
+			graft.hostCellIndex,
+			graft.hostPortalIndex,
+			cellId.getValueString().c_str()));
+
+		return true;
 	}
 }
 
@@ -100,6 +248,17 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 	{
 		WARNING(true, ("DynamicBunker::addRoomHook - host cell %d not loaded", hostCellIndex));
 		return false;
+	}
+
+	// Replace: if this socket already owns a dynamic graft, tear it down first.
+	PortalProperty::DynamicRoomGraft existing;
+	if (portalProperty->findDynamicRoomGraftForSocket(hostCellIndex, hostPortalIndex, existing))
+	{
+		if (!removeGraftRecursive(building, *portalProperty, existing.graftedCellIndex))
+		{
+			WARNING(true, ("DynamicBunker::addRoomHook - failed to unassign existing graft before replace"));
+			return false;
+		}
 	}
 
 	Transform cellTransform;
@@ -163,6 +322,24 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 		outCellId.getValueString().c_str()));
 
 	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool DynamicBunker::removeRoomHook(ServerObject &building, int hostCellIndex, int hostPortalIndex)
+{
+	PortalProperty *const portalProperty = building.getPortalProperty();
+	if (!portalProperty)
+		return false;
+
+	PortalProperty::DynamicRoomGraft graft;
+	if (!portalProperty->findDynamicRoomGraftForSocket(hostCellIndex, hostPortalIndex, graft))
+	{
+		WARNING(true, ("DynamicBunker::removeRoomHook - no dynamic graft on socket %d/%d", hostCellIndex, hostPortalIndex));
+		return false;
+	}
+
+	return removeGraftRecursive(building, *portalProperty, graft.graftedCellIndex);
 }
 
 // ----------------------------------------------------------------------
@@ -368,8 +545,39 @@ void DynamicBunker::handleAssignRoom(Client &client, DynamicBunkerAssignRoomMess
 		return;
 	}
 
-	UNREF(client);
+	building->setObjVarItem(assignedRoomKey(message.getHostCellIndex(), message.getHostPortalIndex()), message.getRoomId());
+
+	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
+	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, message.getHostCellIndex(), message.getHostPortalIndex()));
+
 	LOG("dynamic_bunker", ("handleAssignRoom ok room=%s cell=%s", message.getRoomId().c_str(), cellId.getValueString().c_str()));
+}
+
+// ----------------------------------------------------------------------
+
+void DynamicBunker::handleUnassignRoom(Client &client, DynamicBunkerUnassignRoomMessage const &message)
+{
+	ServerObject *const building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::handleUnassignRoom - invalid building %s", message.getBuildingId().getValueString().c_str()));
+		return;
+	}
+
+	if (!removeRoomHook(*building, message.getHostCellIndex(), message.getHostPortalIndex()))
+	{
+		WARNING(true, ("DynamicBunker::handleUnassignRoom - failed for socket %d/%d",
+			message.getHostCellIndex(), message.getHostPortalIndex()));
+		return;
+	}
+
+	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
+	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, message.getHostCellIndex(), message.getHostPortalIndex()));
+
+	LOG("dynamic_bunker", ("handleUnassignRoom ok building=%s socket=%d/%d",
+		building->getNetworkId().getValueString().c_str(),
+		message.getHostCellIndex(),
+		message.getHostPortalIndex()));
 }
 
 // ----------------------------------------------------------------------

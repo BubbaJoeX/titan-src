@@ -1188,6 +1188,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("DynamicBunkerUnassignRoomMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                DynamicBunkerUnassignRoomMessage const unassignMsg(ri);
+                DynamicBunker::handleUnassignRoom(*this, unassignMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("CityTerrainPaintRequestMessage") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 CityTerrainPaintRequestMessage const paintMsg(ri);

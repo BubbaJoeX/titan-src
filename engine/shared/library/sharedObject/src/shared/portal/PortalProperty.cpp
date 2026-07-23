@@ -846,6 +846,70 @@ bool PortalProperty::linkCellPortals(int cellIndexA, int portalIndexA, int cellI
 
 // ----------------------------------------------------------------------
 
+bool PortalProperty::unlinkCellPortal(int cellIndex, int portalIndex)
+{
+	CellProperty *const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	Portal *const portal = cell->getPortal(portalIndex);
+	if (!portal)
+		return false;
+
+	portal->clearNeighbor();
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::unlinkAllCellPortals(int cellIndex)
+{
+	CellProperty *const cell = getCell(cellIndex);
+	if (!cell)
+		return;
+
+	int const portalCount = cell->getPortalCount();
+	for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
+	{
+		Portal *const portal = cell->getPortal(portalIndex);
+		if (portal)
+			portal->clearNeighbor();
+	}
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::clearLoadedCellSlot(int cellIndex)
+{
+	NOT_NULL(m_cellList);
+	if (cellIndex < 1 || cellIndex >= static_cast<int>(m_cellList->size()))
+		return false;
+
+	(*m_cellList)[static_cast<CellList::size_type>(cellIndex)] = nullptr;
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::releaseGraftedCellSlot(int graftedCellIndex)
+{
+	NOT_NULL(m_graftedCellMap);
+	GraftedCellMap::iterator const i = m_graftedCellMap->find(graftedCellIndex);
+	if (i == m_graftedCellMap->end())
+		return false;
+
+	if (i->second.donorTemplate)
+	{
+		i->second.donorTemplate->release();
+		i->second.donorTemplate = 0;
+	}
+
+	IGNORE_RETURN(m_graftedCellMap->erase(i));
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p) const
 {
 	NOT_NULL(donorPobName);
@@ -919,6 +983,23 @@ bool PortalProperty::removeDynamicRoomGraft(int graftedCellIndex)
 		if (i->graftedCellIndex == graftedCellIndex)
 		{
 			IGNORE_RETURN(m_dynamicRoomGrafts->erase(i));
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::findDynamicRoomGraftForSocket(int cellIndex, int portalIndex, DynamicRoomGraft &outGraft) const
+{
+	NOT_NULL(m_dynamicRoomGrafts);
+	for (DynamicRoomGraftList::const_iterator i = m_dynamicRoomGrafts->begin(); i != m_dynamicRoomGrafts->end(); ++i)
+	{
+		if ((i->hostCellIndex == cellIndex && i->hostPortalIndex == portalIndex) ||
+			(i->graftedCellIndex == cellIndex && i->graftedPortalIndex == portalIndex))
+		{
+			outGraft = *i;
 			return true;
 		}
 	}

@@ -158,6 +158,73 @@ private:
 };
 
 // ======================================================================
+// Client -> server: unassign / detach graft from a snap socket
+// ======================================================================
+
+class DynamicBunkerUnassignRoomMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	DynamicBunkerUnassignRoomMessage(
+		NetworkId const &buildingId,
+		NetworkId const &terminalId,
+		int32 hostCellIndex,
+		int32 hostPortalIndex);
+
+	explicit DynamicBunkerUnassignRoomMessage(Archive::ReadIterator &source);
+	~DynamicBunkerUnassignRoomMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+	NetworkId const &getTerminalId() const { return m_terminalId.get(); }
+	int32 getHostCellIndex() const { return m_hostCellIndex.get(); }
+	int32 getHostPortalIndex() const { return m_hostPortalIndex.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+	Archive::AutoVariable<NetworkId> m_terminalId;
+	Archive::AutoVariable<int32> m_hostCellIndex;
+	Archive::AutoVariable<int32> m_hostPortalIndex;
+};
+
+// ======================================================================
+// Server -> client: remove a previously grafted room
+// ======================================================================
+
+class DynamicBunkerUngraftMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	DynamicBunkerUngraftMessage(
+		NetworkId const &buildingId,
+		NetworkId const &cellId,
+		int32 graftedCellIndex,
+		int32 hostCellIndex,
+		int32 hostPortalIndex);
+
+	explicit DynamicBunkerUngraftMessage(Archive::ReadIterator &source);
+	~DynamicBunkerUngraftMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+	NetworkId const &getCellId() const { return m_cellId.get(); }
+	int32 getGraftedCellIndex() const { return m_graftedCellIndex.get(); }
+	int32 getHostCellIndex() const { return m_hostCellIndex.get(); }
+	int32 getHostPortalIndex() const { return m_hostPortalIndex.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+	Archive::AutoVariable<NetworkId> m_cellId;
+	Archive::AutoVariable<int32> m_graftedCellIndex;
+	Archive::AutoVariable<int32> m_hostCellIndex;
+	Archive::AutoVariable<int32> m_hostPortalIndex;
+};
+
+// ======================================================================
 
 namespace Archive
 {

@@ -66,6 +66,7 @@ namespace ScriptMethodsInteriorsNamespace
 	jboolean     JNICALL setCellLight(JNIEnv * env, jobject self, jlong cellId, jfloat r, jfloat g, jfloat b, jfloat brightness);
 
 	jlong        JNICALL addRoomHook(JNIEnv *env, jobject self, jlong building, jint hostCellIndex, jint hostPortalIndex, jstring donorPob, jint donorCellIndex, jint donorPortalIndex);
+	jboolean     JNICALL removeRoomHook(JNIEnv *env, jobject self, jlong building, jint hostCellIndex, jint hostPortalIndex);
 	jboolean     JNICALL linkRoomPortals(JNIEnv *env, jobject self, jlong building, jint cellIndexA, jint portalIndexA, jint cellIndexB, jint portalIndexB);
 	jint         JNICALL getCellPortalCount(JNIEnv *env, jobject self, jlong building, jint cellIndex);
 	jstring      JNICALL getCellAppearanceName(JNIEnv *env, jobject self, jlong building, jint cellIndex);
@@ -106,6 +107,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setCellLabelOffset", "(JFFF)Z", setCellLabelOffset),
 	JF("_setCellLight", "(JFFFF)Z", setCellLight),
 	JF("_addRoomHook", "(JIILjava/lang/String;II)J", addRoomHook),
+	JF("_removeRoomHook", "(JII)Z", removeRoomHook),
 	JF("_linkRoomPortals", "(JIIII)Z", linkRoomPortals),
 	JF("_getCellPortalCount", "(JI)I", getCellPortalCount),
 	JF("_getCellAppearanceName", "(JI)Ljava/lang/String;", getCellAppearanceName),
@@ -903,6 +905,17 @@ jlong JNICALL ScriptMethodsInteriorsNamespace::addRoomHook(JNIEnv *env, jobject 
 		return 0;
 
 	return cellId.getValue();
+}
+
+//--------------------------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsInteriorsNamespace::removeRoomHook(JNIEnv * /*env*/, jobject /*self*/, jlong building, jint hostCellIndex, jint hostPortalIndex)
+{
+	ServerObject *buildingObject = nullptr;
+	if (!JavaLibrary::getObject(building, buildingObject) || !buildingObject)
+		return JNI_FALSE;
+
+	return DynamicBunker::removeRoomHook(*buildingObject, hostCellIndex, hostPortalIndex) ? JNI_TRUE : JNI_FALSE;
 }
 
 //--------------------------------------------------------------------------------------

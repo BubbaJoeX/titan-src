@@ -10,6 +10,7 @@
 
 class Client;
 class DynamicBunkerAssignRoomMessage;
+class DynamicBunkerUnassignRoomMessage;
 class NetworkId;
 class ServerObject;
 
@@ -30,6 +31,12 @@ public:
 		int donorPortalIndex,
 		NetworkId &outCellId);
 
+	// Detach the grafted room on this socket (cascades to child grafts).
+	static bool removeRoomHook(
+		ServerObject &building,
+		int hostCellIndex,
+		int hostPortalIndex);
+
 	static bool linkExistingPortals(
 		ServerObject &building,
 		int cellIndexA,
@@ -48,8 +55,11 @@ public:
 	// snap socket (prefer current cell), and open the floorplan UI.
 	static bool openFloorplanForClient(Client &client);
 
-	// Handle client Assign from the floorplan UI.
+	// Handle client Assign / Replace from the floorplan UI.
 	static void handleAssignRoom(Client &client, DynamicBunkerAssignRoomMessage const &message);
+
+	// Handle client Unassign from the floorplan UI.
+	static void handleUnassignRoom(Client &client, DynamicBunkerUnassignRoomMessage const &message);
 
 	// Re-apply graft descriptors stored on the building after load.
 	static void restoreGraftsFromObjVars(ServerObject &building);
