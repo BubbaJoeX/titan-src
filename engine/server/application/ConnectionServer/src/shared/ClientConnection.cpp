@@ -53,6 +53,9 @@
 #include "sharedFoundation/CrcConstexpr.hpp"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <limits>
 
 #include "webAPI.h"
 
@@ -60,6 +63,51 @@
 
 namespace ClientConnectionNamespace {
     unsigned long gs_receiveDelayMaxMs = 16384;
+
+    static bool parseExplicitStationId(std::string const &identifier, StationId &stationId)
+    {
+        stationId = 0;
+        if (identifier.empty())
+            return false;
+
+        std::string::size_type digitOffset = 0;
+        bool const isNegative = identifier[0] == '-';
+        if (isNegative || identifier[0] == '+')
+            digitOffset = 1;
+
+        if (digitOffset == identifier.size())
+            return false;
+
+        for (std::string::size_type i = digitOffset; i < identifier.size(); ++i)
+        {
+            if (identifier[i] < '0' || identifier[i] > '9')
+                return false;
+        }
+
+        char *end = 0;
+        errno = 0;
+        if (isNegative)
+        {
+            long const parsed = std::strtol(identifier.c_str(), &end, 10);
+            if (errno == ERANGE || end != identifier.c_str() + identifier.size() ||
+                parsed >= 0 || parsed < std::numeric_limits<int32>::min())
+                return false;
+
+            stationId = static_cast<StationId>(static_cast<int32>(parsed));
+        }
+        else
+        {
+            unsigned long const parsed = std::strtoul(identifier.c_str(), &end, 10);
+            if (errno == ERANGE || end != identifier.c_str() + identifier.size() ||
+                parsed > std::numeric_limits<StationId>::max())
+                return false;
+
+            stationId = static_cast<StationId>(parsed);
+        }
+
+        // Station zero is the legacy sentinel for "resolve as an account name".
+        return stationId != 0;
+    }
 }
 
 using namespace ClientConnectionNamespace;
@@ -336,12 +384,14 @@ void ClientConnection::handleClientIdMessage(const ClientIdMsg& msg)
 		}
 		else
 		{
-			m_suid = atoi(m_accountName.c_str());
-			if (m_suid == 0)
+			bool const explicitStationId = parseExplicitStationId(m_accountName, m_suid);
+			if (!explicitStationId)
 			{
 				std::hash<std::string> h;
 				m_suid = h(m_accountName.c_str());
 			}
+			LOG("TRACE_LOGIN", ("Resolved stationId %u from %s identifier",
+				static_cast<unsigned int>(m_suid), explicitStationId ? "numeric" : "account-name"));
 			onValidateClient(m_suid, m_accountName, m_isSecure, nullptr, ConfigConnectionServer::getDefaultGameFeatures(), ConfigConnectionServer::getDefaultSubscriptionFeatures(), 0, 0, 0, 0, ConfigConnectionServer::getFakeBuddyPoints());
 		}
 	}

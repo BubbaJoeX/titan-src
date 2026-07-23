@@ -25,6 +25,60 @@
 #include "webAPI.h"
 #include "jsonWebAPI.h"
 
+#include <cerrno>
+#include <cstdlib>
+#include <limits>
+
+//-----------------------------------------------------------------------
+
+namespace
+{
+    bool parseExplicitStationId(std::string const &identifier, StationId &stationId)
+    {
+        stationId = 0;
+        if (identifier.empty())
+            return false;
+
+        std::string::size_type digitOffset = 0;
+        bool const isNegative = identifier[0] == '-';
+        if (isNegative || identifier[0] == '+')
+            digitOffset = 1;
+
+        if (digitOffset == identifier.size())
+            return false;
+
+        for (std::string::size_type i = digitOffset; i < identifier.size(); ++i)
+        {
+            if (identifier[i] < '0' || identifier[i] > '9')
+                return false;
+        }
+
+        char *end = 0;
+        errno = 0;
+        if (isNegative)
+        {
+            long const parsed = std::strtol(identifier.c_str(), &end, 10);
+            if (errno == ERANGE || end != identifier.c_str() + identifier.size() ||
+                parsed >= 0 || parsed < std::numeric_limits<int32>::min())
+                return false;
+
+            stationId = static_cast<StationId>(static_cast<int32>(parsed));
+        }
+        else
+        {
+            unsigned long const parsed = std::strtoul(identifier.c_str(), &end, 10);
+            if (errno == ERANGE || end != identifier.c_str() + identifier.size() ||
+                parsed > std::numeric_limits<StationId>::max())
+                return false;
+
+            stationId = static_cast<StationId>(parsed);
+        }
+
+        // Station zero is the legacy sentinel for "resolve as an account name".
+        return stationId != 0;
+    }
+}
+
 //-----------------------------------------------------------------------
 
 ClientConnection::ClientConnection(UdpConnectionMT *u, TcpClient *t)
@@ -201,15 +255,19 @@ void ClientConnection::validateClient(const std::string & id, const std::string 
         return;
     }
 
-    // hash username into station id
-    StationId suid = atoi(lcaseId.c_str());
-    if (suid == 0)
+    // Preserve explicit numeric station identifiers, but require the whole
+    // identifier to be a valid 32-bit value. Names such as "1bubbajoe" must
+    // use the same account-name hash path as every other nonnumeric name.
+    StationId suid = 0;
+    bool const explicitStationId = parseExplicitStationId(lcaseId, suid);
+    if (!explicitStationId)
     {
         std::hash<std::string> h;
         suid = h(lcaseId.c_str()); //lint !e603 // Symbol 'h' not initialized (it's a functor)
     }
 
-    LOG("LoginClientConnection", ("validateClient() for stationId (%lu) at IP (%s), id (%s)", m_stationId, getRemoteAddress().c_str(), lcaseId.c_str()));
+    LOG("LoginClientConnection", ("validateClient() resolved stationId (%u) from %s identifier at IP (%s)",
+        static_cast<unsigned int>(suid), explicitStationId ? "numeric" : "account-name", getRemoteAddress().c_str()));
 
     int authOK = 0;
     std::string authURL(ConfigLoginServer::getExternalAuthUrl());
