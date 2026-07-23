@@ -196,7 +196,7 @@ uint32                          Client::sm_outgoingBytesMap_Worktime = 0; // tim
 
 Client::Client(ConnectionServerConnection &connection, const NetworkId &characterObjectId, const std::string &accountName, const std::string &ipAddr, bool isSecure, bool isSkipLoadScreen, unsigned int stationId, std::set <NetworkId> const &observedObjects, uint32 gameFeatures, uint32 subscriptionFeatures, AccountFeatureIdList const &accountFeatureIds, unsigned int entitlementTotalTime, unsigned int entitlementEntitledTime, unsigned int entitlementTotalTimeSinceLastLogin, unsigned int entitlementEntitledTimeSinceLastLogin, int buddyPoints, std::vector <std::pair<NetworkId, std::string>> const &consumedRewardEvents, std::vector <std::pair<NetworkId, std::string>> const &claimedRewardItems, bool usingAdminLogin, CombatDataTable::CombatSpamFilterType combatSpamFilter, int combatSpamRangeSquaredFilter, int furnitureRotationDegree, bool hasUnoccupiedJediSlot, bool isJediSlotCharacter, bool sendToStarport)
         : MessageDispatch::Receiver(), MessageDispatch::Emitter(), m_accountName(accountName), m_characterName(),
-          m_characterObjectId(characterObjectId), m_connection(&connection), m_controlledObjects(), m_godLevel(0), m_rawGodLevel(0),
+          m_characterObjectId(characterObjectId), m_connection(&connection), m_controlledObjects(), m_godLevel(0), m_rawGodLevel(AdminAccountManager::getAdminLevel(accountName)),
           m_godMode(false), m_godValidated(false), m_ipAddress(ipAddr), m_isReady(false), m_isSecure(isSecure),
           m_isSkipLoadScreen(isSkipLoadScreen), m_primaryControlledObject(NetworkId::cms_invalid), destroyNotifier(),
           m_observing(), m_openedContainers(), m_watchedByList(),
@@ -215,6 +215,11 @@ Client::Client(ConnectionServerConnection &connection, const NetworkId &characte
 
     connectToEmitter(connection, "ConnectionServerConnectionClosed");
     connectToEmitter(connection, "ConnectionServerConnectionDestroyed");
+
+    if (usingAdminLogin != (m_rawGodLevel > 0)) {
+        LOG("GodMode", ("Admin authorization mismatch for account [%s]: connectionServerAdmin=%d gameServerAccountLevel=%d table=[%s]",
+                m_accountName.c_str(), usingAdminLogin ? 1 : 0, m_rawGodLevel, ConfigServerGame::getAdminAccountDataTable()));
+    }
 
     // See if our controlled object is ready yet.
     ServerObject *obj = LogoutTracker::findPendingCharacterSave(characterObjectId);
@@ -515,7 +520,12 @@ void Client::addControlledObject(ServerObject &object) {
     // validate isUsingAdminLogin each onClientReady() call per SWG Source change - 2021 (Aconite)
     // isUsingAdminLogin is used to check if an *account* is in the admin table
     // so we can monitor admin accessed accounts *regardless* of their current god mode/level
+    int const previousAccountLevel = m_rawGodLevel;
     m_rawGodLevel = AdminAccountManager::getAdminLevel(getAccountName());
+    if (previousAccountLevel != m_rawGodLevel) {
+        LOG("GodMode", ("Admin authorization changed while controlling object for account [%s]: previous=%d current=%d table=[%s]",
+                getAccountName().c_str(), previousAccountLevel, m_rawGodLevel, ConfigServerGame::getAdminAccountDataTable()));
+    }
     setUsingAdminLogin(m_rawGodLevel > 0);
 
 }
@@ -2354,7 +2364,12 @@ bool Client::setGodMode(bool value) {
     }
 
     // If we aren't required to be secure, or if we are and we are secure, begin permission checks
+    int const previousAccountLevel = m_rawGodLevel;
     m_rawGodLevel = AdminAccountManager::getAdminLevel(m_accountName);
+    if (previousAccountLevel != m_rawGodLevel) {
+        LOG("GodMode", ("Admin authorization changed during /setGod for account [%s]: previous=%d current=%d table=[%s]",
+                m_accountName.c_str(), previousAccountLevel, m_rawGodLevel, ConfigServerGame::getAdminAccountDataTable()));
+    }
 
     // Start with if everyone can have God Mode, in which case we don't need to bother otherwise
     int godLevel = 0;

@@ -89,7 +89,7 @@ bool ServerCommandPermissionManager::isCommandAllowed (const NetworkId & userId,
 		return false;
 
 	std::string command = Unicode::wideToNarrow(commandPath);
-	int const clientLevel = client->getGodLevel();
+	int const clientLevel = client->getEffectiveAdminLevel();
 	int const commandLevel = resolvePermissionLevel(command, 0, true);
 	bool const retval = commandLevel >= 0 && commandLevel <= clientLevel;
 	if (!retval)

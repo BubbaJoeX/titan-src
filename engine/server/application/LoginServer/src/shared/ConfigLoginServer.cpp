@@ -105,7 +105,7 @@ void ConfigLoginServer::install(void)
 	KEY_BOOL(enableCharacterPurge,true);
 	KEY_INT (updatePurgeAccountListTime, 0);
 	KEY_STRING (purgeAccountSourceTable,"account_extract");
-	KEY_STRING (adminAccountDataTable, "datatables/admin/us_admin.iff");
+	KEY_STRING (adminAccountDataTable, "datatables/admin/titan_admin.iff");
 	KEY_BOOL(allowSkipTutorialToAll,true);
 	KEY_BOOL(internalBypassOnlineLimit,true);
 	KEY_INT (populationExtremelyHeavyThresholdPercent, 50);

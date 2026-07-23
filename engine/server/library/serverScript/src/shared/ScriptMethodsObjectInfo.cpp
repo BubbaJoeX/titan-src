@@ -164,6 +164,7 @@ namespace ScriptMethodsObjectInfoNamespace
 	jboolean     JNICALL setComplexity(JNIEnv *env, jobject self, jlong target, jfloat complexity);
 	jboolean     JNICALL isGod(JNIEnv *env, jobject self, jlong target);
 	jint         JNICALL getGodLevel(JNIEnv *env, jobject self, jlong target);
+	jint         JNICALL getEffectiveAdminLevel(JNIEnv *env, jobject self, jlong target);
 	jstring      JNICALL getStaffRankTitle(JNIEnv *env, jobject self, jlong target);
 	jstring      JNICALL getStaffRankTitleForLevel(JNIEnv *env, jobject self, jint level);
 	jint         JNICALL getCount(JNIEnv *env, jobject self, jlong target);
@@ -416,6 +417,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("_setComplexity", "(JF)Z", setComplexity),
 	JF("_isGod", "(J)Z", isGod),
 	JF("_getGodLevel", "(J)I", getGodLevel),
+	JF("_getEffectiveAdminLevel", "(J)I", getEffectiveAdminLevel),
 	JF("_getStaffRankTitle", "(J)Ljava/lang/String;", getStaffRankTitle),
 	JF("_getStaffRankTitleForLevel", "(I)Ljava/lang/String;", getStaffRankTitleForLevel),
 	JF("_getCount", "(J)I", getCount),
@@ -3963,6 +3965,20 @@ jint JNICALL ScriptMethodsObjectInfoNamespace::getGodLevel(JNIEnv *env, jobject 
 		return object->getClient()->getGodLevel();
 	return 0;
 }	// JavaLibrary::getGodLevel
+
+//----------------------------------------------------------------------
+
+jint JNICALL ScriptMethodsObjectInfoNamespace::getEffectiveAdminLevel(JNIEnv *env, jobject self, jlong target)
+{
+	UNREF(self);
+
+	ServerObject const * object = nullptr;
+	if (!JavaLibrary::getObject(target, object))
+		return 0;
+
+	Client const * const client = object->getClient();
+	return client ? client->getEffectiveAdminLevel() : 0;
+}
 
 //----------------------------------------------------------------------
 

@@ -1399,10 +1399,10 @@ void CommandQueue::executeCommand(Command const &command, NetworkId const &targe
 					status = Command::CEC_GodLevel;
 					LOGU("CustomerService", ("Avatar:%s denied command %s (missing %s in command_permissions)", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), slashPath.c_str()), params);
 				}
-				else if (client->getGodLevel() < requiredLevel)
+				else if (client->getEffectiveAdminLevel() < requiredLevel)
 				{
 					status = Command::CEC_GodLevel;
-					LOGU("CustomerService", ("Avatar:%s denied command %s (needs level %d, effective level %d) >%s", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), requiredLevel, client->getGodLevel(), targetId.getValueString().c_str()), params);
+					LOGU("CustomerService", ("Avatar:%s denied command %s (needs level %d, account level %d, active god level %d, effective level %d) >%s", PlayerObject::getAccountDescription(creatureOwner).c_str(), command.m_commandName.c_str(), requiredLevel, client->getRawGodLevel(), client->getGodLevel(), client->getEffectiveAdminLevel(), targetId.getValueString().c_str()), params);
 				}
 
 				if (status == Command::CEC_Success)

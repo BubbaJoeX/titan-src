@@ -35,6 +35,12 @@ static char const *const ms_claimTerminal = "claim.is_terminal";
 
 namespace
 {
+bool hasEffectiveAdminAuthorization(CreatureObject const *actor)
+{
+	Client const *const client = actor ? actor->getClient() : nullptr;
+	return client && client->getEffectiveAdminLevel() > 0;
+}
+
 bool isMarkerOrTerminal(ServerObject const &obj)
 {
 	int v = 0;
@@ -660,6 +666,14 @@ bool ClaimManager::canManipulateClaimObject(CreatureObject const *actor, ServerO
 
 bool ClaimManager::validateManipulateWorldPosition(CreatureObject const *actor, ServerObject const &targetObject, Vector const &newWorldPos) const
 {
+	if (!std::isfinite(newWorldPos.x)
+		|| !std::isfinite(newWorldPos.y)
+		|| !std::isfinite(newWorldPos.z))
+		return false;
+
+	if (hasEffectiveAdminAuthorization(actor))
+		return true;
+
 	int claimIdInt = 0;
 	if (!tryGetClaimId(targetObject, claimIdInt))
 	{
@@ -968,7 +982,13 @@ bool ClaimManager::allowContainerTransfer(ServerObject *transferer, ServerObject
 	if (!actor)
 		return true;
 
+	// Preserve the legacy active-god bypass for all container operations.
 	if (actor->getClient() && actor->getClient()->isGod())
+		return true;
+
+	// Account-level staff authorization bypasses claim ownership only for the
+	// requested open-world drop path, not unrelated container transfers.
+	if (!destination && hasEffectiveAdminAuthorization(actor))
 		return true;
 
 	StationId const actorAccount = getStationIdForCreature(actor);
@@ -1023,7 +1043,7 @@ bool ClaimManager::allowWorldManipulation(ServerObject const *actorCreature, Ser
 	if (!actor)
 		return true;
 
-	if (actor->getClient() && actor->getClient()->isGod())
+	if (hasEffectiveAdminAuthorization(actor))
 		return true;
 
 	StationId const actorAccount = getStationIdForCreature(actor);

@@ -97,7 +97,7 @@ void ConfigConnectionServer::install(void)
 	KEY_BOOL     (disconnectOnInactive, false);
 	KEY_BOOL     (disconnectFreeTrialOnInactive, false);
 
-	KEY_STRING  (adminAccountDataTable, "datatables/admin/us_admin.iff");
+	KEY_STRING  (adminAccountDataTable, "datatables/admin/titan_admin.iff");
 
 	KEY_INT     (requiredSubscriptionBits, 0);
 	KEY_INT     (requiredGameBits, 0);

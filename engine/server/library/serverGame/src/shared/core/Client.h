@@ -150,6 +150,13 @@ public:
     /** Account admin tier from admin table, ignoring /gm toggle (0 if not a staff account). */
     int getRawGodLevel() const;
 
+    /**
+     * Authorization tier used for privileged server actions.  Account-admin
+     * authorization remains valid with /gm off; an explicitly active god level
+     * (including adminGodToAll) may raise it.
+     */
+    int getEffectiveAdminLevel() const;
+
     bool isGodValidated() const;
 
     void onLoadPlayer(CreatureObject &newCharacter);
@@ -417,6 +424,13 @@ inline int Client::getGodLevel() const {
 
 inline int Client::getRawGodLevel() const {
     return m_rawGodLevel;
+}
+
+//-----------------------------------------------------------------------
+
+inline int Client::getEffectiveAdminLevel() const {
+    int const activeGodLevel = getGodLevel();
+    return m_rawGodLevel > activeGodLevel ? m_rawGodLevel : activeGodLevel;
 }
 
 //-----------------------------------------------------------------------

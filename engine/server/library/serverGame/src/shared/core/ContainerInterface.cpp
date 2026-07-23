@@ -40,7 +40,6 @@
 #include "sharedObject/SlotIdManager.h"
 #include "sharedObject/VolumeContainer.h"
 #include "sharedObject/VolumeContainmentProperty.h"
-#include "serverUtility/AdminAccountManager.h"
 
 #include <string>
 
@@ -1011,8 +1010,18 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 	error = Container::CEC_Success;
 
 	Client const * const client = transferer ? transferer->getClient() : nullptr;
-	bool const isAdminOrGod = client
-		&& (client->isGod() || AdminAccountManager::getAdminLevel(client->getAccountName()) > 0);
+	bool const isActiveGod = client && client->isGod();
+	bool const isAdminOrGod = client && client->getEffectiveAdminLevel() > 0;
+
+	if (client
+		&& !isActiveGod
+		&& ConfigServerGame::getClaimSystemEnabled()
+		&& ClaimManager::getInstance().isItemBlockedFromOpenWorldPlacement(item))
+	{
+		DEBUG_REPORT_LOG(true, ("Player tried to drop a noTrade/nomove item into the open world.\n"));
+		error = Container::CEC_NoPermission;
+		return false;
+	}
 
 	if (client && !isAdminOrGod)
 	{
@@ -1038,13 +1047,6 @@ bool ContainerInterface::transferItemToWorld(ServerObject &item, Transform const
 			return false;
 		}
 
-		if (ConfigServerGame::getClaimSystemEnabled()
-			&& ClaimManager::getInstance().isItemBlockedFromOpenWorldPlacement(item))
-		{
-			DEBUG_REPORT_LOG(true, ("Player tried to drop a noTrade/nomove item into the open world.\n"));
-			error = Container::CEC_NoPermission;
-			return false;
-		}
 	}
 
 	if (!item.canDropInWorld())

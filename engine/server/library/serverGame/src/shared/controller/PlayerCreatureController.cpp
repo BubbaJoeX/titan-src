@@ -13,6 +13,7 @@
 #include "serverGame/BuildingObject.h"
 #include "serverGame/CellObject.h"
 #include "serverGame/Chat.h"
+#include "serverGame/ClaimManager.h"
 #include "serverGame/Client.h"
 #include "serverGame/CommandQueue.h"
 #include "serverGame/ConfigServerGame.h"
@@ -2159,6 +2160,7 @@ void PlayerCreatureController::handleObjectMenuRequest(MessageQueueObjectMenuReq
 					static const int rotate_random_roll_type = RadialMenuManager::getMenuTypeByName ("ITEM_ROTATE_RANDOM_ROLL");
 					static const int rotate_reset_type   = RadialMenuManager::getMenuTypeByName ("ITEM_ROTATE_RESET");
 					static const int rotate_copy_type    = RadialMenuManager::getMenuTypeByName ("ITEM_ROTATE_COPY");
+					static const int drop_type           = RadialMenuManager::getMenuTypeByName ("ITEM_DROP");
 
 					// Holocron check.
 					Object const * const containedByObj = ContainerInterface::getContainedByObject(*target);
@@ -2236,6 +2238,31 @@ void PlayerCreatureController::handleObjectMenuRequest(MessageQueueObjectMenuReq
 								IGNORE_RETURN(RadialMenuManager::addSubMenu(dv, rotate_id, rotate_reset_type, Unicode::emptyString, false));
 								IGNORE_RETURN(RadialMenuManager::addSubMenu(dv, rotate_id, rotate_copy_type, Unicode::emptyString, false));
 							}
+						}
+					}
+
+					// The client normally omits ITEM_DROP while standing in the
+					// world cell.  Authoritatively add it for staff accounts (or
+					// an active effective god) only when this is a droppable
+					// inventory object.  Never trust the client's admin state or
+					// allow this helper to expose claim-blocked no-drop items.
+					Client const * const requestingClient = creatureOwner->getClient();
+					ServerObject const * const inventory = creatureOwner->getInventory();
+					bool const authorizedWorldDrop = requestingClient
+						&& requestingClient->getEffectiveAdminLevel() > 0;
+					bool const inventoryObject = inventory
+						&& target->isContainedBy(*inventory, true);
+					bool const blockedFromWorldPlacement = ConfigServerGame::getClaimSystemEnabled()
+						&& ClaimManager::getInstance().isItemBlockedFromOpenWorldPlacement(*target);
+					if (authorizedWorldDrop
+						&& inventoryObject
+						&& target->canDropInWorld()
+						&& !blockedFromWorldPlacement)
+					{
+						if (!RadialMenuManager::addRootMenu(dv, drop_type, Unicode::emptyString, false)
+							&& !RadialMenuManager::findMenuByType(dv, drop_type))
+						{
+							WARNING(true, ("ServerController unable to apply admin drop menu [%d] to menu for %s", drop_type, target->getNetworkId().getValueString().c_str()));
 						}
 					}
 
