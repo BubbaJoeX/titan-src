@@ -1119,7 +1119,7 @@ void LoginServer::run(void) {
 //-----------------------------------------------------------------------
 
 void
-LoginServer::sendAvatarList(const StationId &stationId, int stationIdNumberJediSlot, const AvatarList &avatars, TransferCharacterData *const transferData) {
+LoginServer::sendAvatarList(const StationId &stationId, int stationIdNumberJediSlot, const AvatarList &avatars, const std::vector<std::pair<uint32, int> > &availableCharacterSlots, TransferCharacterData *const transferData) {
     std::vector <EnumerateCharacterId::Chardata> chardata;
     chardata.reserve(avatars.size());
 
@@ -1180,6 +1180,10 @@ LoginServer::sendAvatarList(const StationId &stationId, int stationIdNumberJediS
             conn->send(msgStationIdHasJediSlot, true);
 
             conn->send(msg, true);
+
+            // Additive/versioned message: legacy clients safely ignore unknown message types.
+            GenericValueTypeMessage<std::vector<std::pair<uint32, int> > > const slotsMessage("AvailableCharacterSlotsV1", availableCharacterSlots);
+            conn->send(slotsMessage, true);
         } else {
             DEBUG_REPORT_LOG(true, ("Could not send avatar list to StationId %lu.\n", stationId));
             LOG("LoginClientConnection", ("sendAvatarList() for stationId (%lu), cannot find connection to client for sending avatar list", stationId));
@@ -1771,7 +1775,7 @@ void LoginServer::getAllClusterNamesAndIDs(std::map <std::string, uint32> &resul
 
 // ----------------------------------------------------------------------
 
-void LoginServer::getClusterIds(std::vector <uint32> result) {
+void LoginServer::getClusterIds(std::vector <uint32> &result) {
     result.reserve(m_clusterList.size());
     for (ClusterListType::const_iterator i = m_clusterList.begin(); i != m_clusterList.end(); ++i) {
         result.push_back(NON_NULL(*i)->m_clusterId);

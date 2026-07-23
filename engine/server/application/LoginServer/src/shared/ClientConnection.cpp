@@ -258,6 +258,7 @@ void ClientConnection::onCharacterDeletedFromLoginDatabase(const NetworkId &char
 
         DeleteCharacterReplyMessage reply(DeleteCharacterReplyMessage::rc_OK);
         send(reply, true);
+        DatabaseConnection::getInstance().requestAvatarListForAccount(m_stationId, 0);
         LOG("CustomerService", ("Player:deleted character %s for stationId %u at IP: %s", characterId.getValueString().c_str(), m_stationId, getRemoteAddress().c_str()));
     }
 }
@@ -276,6 +277,7 @@ void ClientConnection::onCharacterDeletedFromCluster(const NetworkId &characterI
 
         DeleteCharacterReplyMessage reply(DeleteCharacterReplyMessage::rc_OK);
         send(reply, true);
+        DatabaseConnection::getInstance().requestAvatarListForAccount(m_stationId, 0);
         LOG("CustomerService", ("Player:deleted character %s for stationId %u at IP: %s", characterId.getValueString().c_str(), m_stationId, getRemoteAddress().c_str()));
     }
 }

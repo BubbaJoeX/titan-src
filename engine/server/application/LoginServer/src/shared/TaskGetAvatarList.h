@@ -24,7 +24,7 @@ class TransferCharacterData;
 class TaskGetAvatarList : public DB::TaskRequest
 {
   public:
-	explicit TaskGetAvatarList  (StationId stationId, int clusterGroupId, const TransferCharacterData * transferCharacterData);
+	explicit TaskGetAvatarList  (StationId stationId, int clusterGroupId, const std::vector<uint32> & clusterIds, const TransferCharacterData * transferCharacterData);
 	explicit TaskGetAvatarList  (int clusterGroupId, const TransferAccountData * transferAccountData);
 	virtual ~TaskGetAvatarList  ();
 	
@@ -33,6 +33,7 @@ class TaskGetAvatarList : public DB::TaskRequest
 	virtual void onComplete  ();
 	AvatarList const & getAvatars() const;
 	StationId getStationId() const;
+	const std::vector<std::pair<uint32, int> > & getAvailableCharacterSlots() const;
 
 	class GetCharactersQuery : public DB::Query
 	{
@@ -57,6 +58,45 @@ class TaskGetAvatarList : public DB::TaskRequest
 		GetCharactersQuery& operator=(const GetCharactersQuery&);
 	};
 
+	class GetOpenCharacterSlotsQuery : public DB::Query
+	{
+	public:
+		GetOpenCharacterSlotsQuery();
+
+		DB::BindableLong station_id;
+		DB::BindableLong cluster_id;
+		DB::BindableLong character_type_id;
+		DB::BindableLong num_open_slots;
+
+		virtual void getSQL(std::string &sql);
+		virtual bool bindParameters();
+		virtual bool bindColumns();
+		virtual QueryMode getExecutionMode() const;
+
+	private:
+		GetOpenCharacterSlotsQuery(const GetOpenCharacterSlotsQuery&);
+		GetOpenCharacterSlotsQuery& operator=(const GetOpenCharacterSlotsQuery&);
+	};
+
+	class GetOpenSlotCapacityQuery : public DB::Query
+	{
+	public:
+		GetOpenSlotCapacityQuery();
+
+		DB::BindableLong station_id;
+		DB::BindableLong cluster_id;
+		DB::BindableLong result;
+
+		virtual void getSQL(std::string &sql);
+		virtual bool bindParameters();
+		virtual bool bindColumns();
+		virtual QueryMode getExecutionMode() const;
+
+	private:
+		GetOpenSlotCapacityQuery(const GetOpenSlotCapacityQuery&);
+		GetOpenSlotCapacityQuery& operator=(const GetOpenSlotCapacityQuery&);
+	};
+
   private:
 	TaskGetAvatarList(); // disabled default constructor
 	TaskGetAvatarList(const TaskGetAvatarList &);
@@ -64,7 +104,9 @@ class TaskGetAvatarList : public DB::TaskRequest
 	StationId                m_stationId;
 	int                      m_stationIdNumberJediSlot;
 	int                      m_clusterGroupId;
+	std::vector<uint32>      m_clusterIds;
 	AvatarList               m_avatars;
+	std::vector<std::pair<uint32, int> > m_availableCharacterSlots;
 	TransferCharacterData *  m_transferCharacterData;
 	TransferAccountData *    m_transferAccountData;
 };

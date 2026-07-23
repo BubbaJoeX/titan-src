@@ -101,14 +101,16 @@ void DatabaseConnection::disconnect()
 void DatabaseConnection::requestAvatarListForAccount(StationId stationId, const TransferCharacterData * characterData)
 {
 	NOT_NULL(m_taskQueue);
-	m_taskQueue->asyncRequest(new TaskGetAvatarList(stationId, ConfigLoginServer::getClusterGroup(), characterData));
+	std::vector<uint32> clusterIds;
+	LoginServer::getInstance().getClusterIds(clusterIds);
+	m_taskQueue->asyncRequest(new TaskGetAvatarList(stationId, ConfigLoginServer::getClusterGroup(), clusterIds, characterData));
 }
 
 // ----------------------------------------------------------------------
 
-void DatabaseConnection::onAvatarListRetrieved(StationId stationId, int stationIdNumberJediSlot, const AvatarList & avatars, TransferCharacterData * const transferData) const
+void DatabaseConnection::onAvatarListRetrieved(StationId stationId, int stationIdNumberJediSlot, const AvatarList & avatars, const std::vector<std::pair<uint32, int> > & availableCharacterSlots, TransferCharacterData * const transferData) const
 {
-	LoginServer::getInstance().sendAvatarList(stationId, stationIdNumberJediSlot, avatars, transferData);
+	LoginServer::getInstance().sendAvatarList(stationId, stationIdNumberJediSlot, avatars, availableCharacterSlots, transferData);
 }
 
 // ----------------------------------------------------------------------

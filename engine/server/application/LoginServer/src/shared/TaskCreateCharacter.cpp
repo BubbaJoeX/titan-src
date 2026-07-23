@@ -59,6 +59,7 @@ void TaskCreateCharacter::onComplete()
 	// let all other galaxies know that a new character has been created for the station account
 	GenericValueTypeMessage<StationId> const ncc("NewCharacterCreated", m_stationId);
 	LoginServer::getInstance().sendToAllClusters(ncc, nullptr, m_clusterId);
+	DatabaseConnection::getInstance().requestAvatarListForAccount(m_stationId, 0);
 }
 
 // ======================================================================

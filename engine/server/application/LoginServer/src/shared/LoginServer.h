@@ -57,7 +57,7 @@ public:
 	static void              run                 (void);
 	void                     onValidateClient    (StationId id, const std::string & username, ClientConnection*,bool, const char*, uint32 gameBits, uint32 subscriptionBits);
 
-	void                     sendAvatarList      (const StationId& stationId, int stationIdNumberJediSlot, const AvatarList &avatars, TransferCharacterData * const);
+	void                     sendAvatarList      (const StationId& stationId, int stationIdNumberJediSlot, const AvatarList &avatars, const std::vector<std::pair<uint32, int> > & availableCharacterSlots, TransferCharacterData * const);
 
 	void                     updateClusterData   (uint32 clusterId, const std::string &clusterName, const std::string &address, const uint16 port, bool secret, bool locked, bool notRecommended, int maxCharactersPerAccount, int onlinePlayerLimit, int onlineFreeTrialLimit, bool freeTrialCanCreateChar, int onlineTutorialLimit);
 	void                     onClusterRegistered (uint32 clusterId, const std::string &clusterName);
@@ -66,7 +66,7 @@ public:
 	void                     sendToCluster       (uint32 clusterId, const GameNetworkMessage &message);
 	void                     sendToAllClusters   (GameNetworkMessage const & message, Connection const * excludeCentralConnection = nullptr, uint32 excludeClusterId = 0, char const * excludeClusterName = nullptr);
 	bool                     areAllClustersUp    () const;
-	void                     getClusterIds       (std::vector<uint32> result);
+	void                     getClusterIds       (std::vector<uint32> & result);
 	void                     performAccountTransfer (const AvatarList &avatars, TransferAccountData * transferAccountData);
 	void                     setDone             (const bool isDone);
 	

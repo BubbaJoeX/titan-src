@@ -43,7 +43,7 @@ class DatabaseConnection : public Singleton<DatabaseConnection>
 	void requestAvatarListForAccount   (StationId stationId, const TransferCharacterData *);
 	void requestClusterList            ();
 	void registerNewCluster            (const std::string &clusterName, const std::string &remoteAddress);
-	void onAvatarListRetrieved         (StationId stationId, int stationIdNumberJediSlot, const AvatarList &avatars, TransferCharacterData * const transferCharacterData) const;
+	void onAvatarListRetrieved         (StationId stationId, int stationIdNumberJediSlot, const AvatarList &avatars, const std::vector<std::pair<uint32, int> > & availableCharacterSlots, TransferCharacterData * const transferCharacterData) const;
 	void update                        ();
 	void getAccountValidationData      (StationId stationId, uint32 clusterId, unsigned int track, uint32 subscriptionBits);
 	void getAccountValidationData      (const TransferRequestMoveValidation & request, uint32 clusterId);
