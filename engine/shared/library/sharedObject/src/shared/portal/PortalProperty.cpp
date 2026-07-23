@@ -510,6 +510,56 @@ char const *PortalProperty::getExteriorFloorName() const
 
 namespace PortalPropertyNamespace
 {
+	int findBestDonorTemplatePortal(
+		PortalPropertyTemplateCell const &donorCell,
+		Transform const &desiredPortal_building,
+		Transform const &hostPortal_building,
+		int preferredIndex)
+	{
+		PortalPropertyTemplateCell::PortalPropertyTemplateCellPortalList const *const portalList = donorCell.getPortalList();
+		if (!portalList || portalList->empty())
+			return -1;
+
+		Vector const hostNormal = hostPortal_building.getLocalFrameK_p();
+		Vector const hostPos = hostPortal_building.getPosition_p();
+
+		int bestIndex = -1;
+		float bestScore = -std::numeric_limits<float>::max();
+
+		for (size_t portalIndex = 0; portalIndex < portalList->size(); ++portalIndex)
+		{
+			PortalPropertyTemplateCellPortal const *const portalTemplate = (*portalList)[portalIndex];
+			if (!portalTemplate || !portalTemplate->isPassable())
+				continue;
+
+			Transform const donorPortal_cell = portalTemplate->getDoorTransform(false);
+			Transform invDonorPortal;
+			invDonorPortal.invert(donorPortal_cell);
+
+			Transform graftTransform;
+			graftTransform.multiply(desiredPortal_building, invDonorPortal);
+
+			Vector const toGraft = graftTransform.getPosition_p() - hostPos;
+			float score = toGraft.dot(hostNormal);
+			if (static_cast<int>(portalIndex) == preferredIndex)
+				score += 0.25f;
+
+			if (score > bestScore)
+			{
+				bestScore = score;
+				bestIndex = static_cast<int>(portalIndex);
+			}
+		}
+
+		if (bestIndex >= 0)
+			return bestIndex;
+
+		if (preferredIndex >= 0 && preferredIndex < static_cast<int>(portalList->size()))
+			return preferredIndex;
+
+		return 0;
+	}
+
 	int resolveTemplateCellPortalIndex(PortalPropertyTemplateCell const &donorCell, int preferredIndex)
 	{
 		PortalPropertyTemplateCell::PortalPropertyTemplateCellPortalList const *const portalList = donorCell.getPortalList();
@@ -992,25 +1042,12 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 {
 	NOT_NULL(donorPobName);
 
-	CellProperty const *const hostCell = getCell(hostCellIndex);
-	if (!hostCell)
+	if (!getCell(hostCellIndex))
 		return false;
 
-	Transform hostPortal_cell;
-	if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
-	{
-		CustomSocket customSocket;
-		if (!findCustomSocket(hostCellIndex, hostPortalIndex, customSocket))
-			return false;
-		hostPortal_cell = customSocket.doorTransform_o2p;
-	}
-	else
-	{
-		Portal const *const hostPortal = const_cast<CellProperty *>(hostCell)->getPortal(hostPortalIndex);
-		if (!hostPortal)
-			return false;
-		hostPortal_cell = hostPortal->getDoorTransform();
-	}
+	Transform hostPortal_building;
+	if (!getPortalSocketTransform_o2p(hostCellIndex, hostPortalIndex, hostPortal_building))
+		return false;
 
 	PortalPropertyTemplate const *const donorTemplate = PortalPropertyTemplateList::fetch(CrcLowerString(donorPobName));
 	if (!donorTemplate)
@@ -1021,19 +1058,19 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 	{
 		PortalPropertyTemplateCell const &donorCell = donorTemplate->getCell(donorCellIndex);
 		PortalPropertyTemplateCell::PortalPropertyTemplateCellPortalList const *const portalList = donorCell.getPortalList();
-		int const resolvedDonorPortal = resolveTemplateCellPortalIndex(donorCell, donorPortalIndex);
+
+		Transform flip;
+		flip.yaw_l(PI);
+
+		Transform desiredPortal_building;
+		desiredPortal_building.multiply(hostPortal_building, flip);
+
+		int const resolvedDonorPortal = findBestDonorTemplatePortal(
+			donorCell, desiredPortal_building, hostPortal_building, donorPortalIndex);
+
 		if (portalList && resolvedDonorPortal >= 0 && resolvedDonorPortal < static_cast<int>(portalList->size()))
 		{
-			Transform hostPortal_building;
-			hostPortal_building.multiply(hostCell->getOwner().getTransform_o2p(), hostPortal_cell);
-
-			Transform flip;
-			flip.yaw_l(PI);
-
-			Transform desiredPortal_building;
-			desiredPortal_building.multiply(hostPortal_building, flip);
-
-			Transform const donorPortal_cell = (*portalList)[static_cast<size_t>(resolvedDonorPortal)]->getDoorTransform();
+			Transform const donorPortal_cell = (*portalList)[static_cast<size_t>(resolvedDonorPortal)]->getDoorTransform(false);
 			Transform invDonorPortal;
 			invDonorPortal.invert(donorPortal_cell);
 

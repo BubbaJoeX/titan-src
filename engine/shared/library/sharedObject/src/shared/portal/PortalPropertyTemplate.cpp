@@ -507,6 +507,13 @@ Transform const PortalPropertyTemplateCellPortal::getDoorTransform(bool useDoorH
 
 // ----------------------------------------------------------------------
 
+bool PortalPropertyTemplateCellPortal::isPassable() const
+{
+	return m_passable && !m_disabled;
+}
+
+// ----------------------------------------------------------------------
+
 void PortalPropertyTemplateCellPortal::flipPassable()
 {
 	m_passable = !m_passable;

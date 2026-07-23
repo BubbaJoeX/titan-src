@@ -42,6 +42,8 @@ public:
 
 	Transform const    getDoorTransform(bool useDoorHardpoint=true) const;
 
+	bool               isPassable() const;
+
 	void               flipPassable();
 	void               preloadAssets() const;
 	void               garbageCollect() const;

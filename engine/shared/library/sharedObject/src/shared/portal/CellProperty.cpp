@@ -466,6 +466,10 @@ void CellProperty::initialize(const PortalProperty &portalProperty, int cellInde
 
 	m_cellIndex = cellIndex;
 	m_cellName = cellTemplate.getName();
+	if (!m_cellName || !m_cellName[0])
+		m_cellName = cellTemplate.getAppearanceName();
+	if (!m_cellName || !m_cellName[0])
+		m_cellName = "dynamic_cell";
 	m_cellNameCrc = Crc::normalizeAndCalculate(m_cellName);
 }
 
