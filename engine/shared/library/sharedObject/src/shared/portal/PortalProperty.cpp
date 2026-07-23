@@ -1040,7 +1040,7 @@ PortalProperty::DynamicRoomGraftList const &PortalProperty::getDynamicRoomGrafts
 void PortalProperty::collectPortalSockets(PortalSocketInfoList &outSockets) const
 {
 	outSockets.clear();
-	int const cellCount = getNumberOfCells();
+	int const cellCount = getBaseTemplateCellCount();
 	for (int cellIndex = 1; cellIndex < cellCount; ++cellIndex)
 	{
 		CellProperty *const cell = const_cast<PortalProperty *>(this)->getCell(cellIndex);
@@ -1198,8 +1198,15 @@ bool PortalProperty::isCustomSocketIndex(int portalIndex)
 
 bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const
 {
+	if (cellIndex < 1 || cellIndex >= getNumberOfCells())
+		return false;
+
 	CellProperty const *const cell = getCell(cellIndex);
 	if (!cell)
+		return false;
+
+	Object const &cellOwner = cell->getOwner();
+	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
 		return false;
 
 	if (isCustomSocketIndex(portalIndex))

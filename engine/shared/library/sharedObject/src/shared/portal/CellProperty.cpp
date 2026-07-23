@@ -25,6 +25,7 @@
 #include "sharedObject/NetworkIdManager.h"
 #include "sharedObject/ObjectNotification.h"
 #include "sharedObject/Portal.h"
+#include "sharedObject/PortalProperty.h"
 #include "sharedObject/PortalPropertyTemplate.h"
 #include "sharedUtility/Location.h"
 
@@ -394,6 +395,9 @@ CellProperty::~CellProperty()
 			delete *i;
 		delete portalList;
 	}
+
+	if (m_portalProperty && m_cellIndex >= 1)
+		const_cast<PortalProperty *>(m_portalProperty)->clearLoadedCellSlot(m_cellIndex);
 
 	m_portalProperty = nullptr;
 	delete m_appearanceObject;

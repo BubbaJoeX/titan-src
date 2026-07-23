@@ -1025,7 +1025,20 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 
 		// Cells should already exist from DB; link portals once both sides are loaded.
 		if (portalProperty->getCell(hostCell) && portalProperty->getCell(graftedCell))
-			IGNORE_RETURN(portalProperty->linkCellPortals(hostCell, hostPortal, graftedCell, graftPortal));
+		{
+			if (PortalProperty::isCustomSocketIndex(hostPortal))
+			{
+				if (!portalProperty->linkCustomSocketGraft(hostCell, hostPortal, graftedCell, graftPortal))
+				{
+					WARNING(true, ("DynamicBunker::restoreGraftsFromObjVars - custom socket link failed for graft %d host=%d/%d graft=%d/%d",
+						i, hostCell, hostPortal, graftedCell, graftPortal));
+				}
+			}
+			else
+			{
+				IGNORE_RETURN(portalProperty->linkCellPortals(hostCell, hostPortal, graftedCell, graftPortal));
+			}
+		}
 	}
 
 	updatePortalLayoutCrc(building, *portalProperty);
