@@ -1227,6 +1227,9 @@ bool PortalProperty::getPortalNeighbor(int cellIndex, int portalIndex, int &outN
 	if (!cell)
 		return false;
 
+	if (portalIndex < 0 || portalIndex >= cell->getPortalCount())
+		return false;
+
 	Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
 	if (!portal || !portal->getNeighbor())
 		return false;
