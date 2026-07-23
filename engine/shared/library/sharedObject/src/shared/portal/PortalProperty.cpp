@@ -1515,11 +1515,9 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellVertices[0], static_cast<int>(cellVertices.size()));
 
-	Transform identity;
-	identity.reset();
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
-		identity,
+		Transform::identity,
 		0);
 	if (!portalTemplate)
 	{
