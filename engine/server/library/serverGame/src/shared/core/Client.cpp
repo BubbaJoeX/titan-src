@@ -1197,6 +1197,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("DynamicBunkerCreateCustomSocketMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                DynamicBunkerCreateCustomSocketMessage const createSocketMsg(ri);
+                DynamicBunker::handleCreateCustomSocket(*this, createSocketMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("CityTerrainPaintRequestMessage") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 CityTerrainPaintRequestMessage const paintMsg(ri);

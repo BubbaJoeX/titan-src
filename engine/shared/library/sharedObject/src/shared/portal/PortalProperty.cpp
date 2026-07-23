@@ -62,7 +62,9 @@ PortalProperty::PortalProperty(Object &owner, const char *fileName)
 	m_fixupList(nullptr),
 	m_hasPassablePortalToParentCell(false),
 	m_graftedCellMap(new GraftedCellMap),
-	m_dynamicRoomGrafts(new DynamicRoomGraftList)
+	m_dynamicRoomGrafts(new DynamicRoomGraftList),
+	m_customSockets(new CustomSocketList),
+	m_bridgeSegments(new BridgeSegmentList)
 {
 #ifdef _DEBUG
 	DataLint::pushAsset(fileName);
@@ -92,6 +94,10 @@ PortalProperty::~PortalProperty()
 	}
 	delete m_dynamicRoomGrafts;
 	m_dynamicRoomGrafts = 0;
+	delete m_customSockets;
+	m_customSockets = 0;
+	delete m_bridgeSegments;
+	m_bridgeSegments = 0;
 
 	delete m_cellList;
 	delete m_fixupList;
@@ -918,9 +924,21 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 	if (!hostCell)
 		return false;
 
-	Portal const *const hostPortal = const_cast<CellProperty *>(hostCell)->getPortal(hostPortalIndex);
-	if (!hostPortal)
-		return false;
+	Transform hostPortal_cell;
+	if (isCustomSocketIndex(hostPortalIndex))
+	{
+		CustomSocket customSocket;
+		if (!findCustomSocket(hostCellIndex, hostPortalIndex, customSocket))
+			return false;
+		hostPortal_cell = customSocket.doorTransform_o2p;
+	}
+	else
+	{
+		Portal const *const hostPortal = const_cast<CellProperty *>(hostCell)->getPortal(hostPortalIndex);
+		if (!hostPortal)
+			return false;
+		hostPortal_cell = hostPortal->getDoorTransform();
+	}
 
 	PortalPropertyTemplate const *const donorTemplate = PortalPropertyTemplateList::fetch(CrcLowerString(donorPobName));
 	if (!donorTemplate)
@@ -933,7 +951,6 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 		PortalPropertyTemplateCell::PortalPropertyTemplateCellPortalList const *const portalList = donorCell.getPortalList();
 		if (portalList && donorPortalIndex >= 0 && donorPortalIndex < static_cast<int>(portalList->size()))
 		{
-			Transform const hostPortal_cell = hostPortal->getDoorTransform();
 			Transform hostPortal_building;
 			hostPortal_building.multiply(hostCell->getOwner().getTransform_o2p(), hostPortal_cell);
 
@@ -1041,6 +1058,193 @@ void PortalProperty::collectPortalSockets(PortalSocketInfoList &outSockets) cons
 			outSockets.push_back(info);
 		}
 	}
+
+	if (m_customSockets)
+	{
+		for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+		{
+			PortalSocketInfo info;
+			info.cellIndex = it->cellIndex;
+			info.portalIndex = it->socketIndex;
+			info.passable = true;
+			info.open = it->open;
+			outSockets.push_back(info);
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+int const PortalProperty::cms_customSocketBase = 10000;
+
+// ----------------------------------------------------------------------
+
+int PortalProperty::allocateCustomSocketIndex() const
+{
+	int nextIndex = cms_customSocketBase;
+	if (m_customSockets)
+	{
+		for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+			nextIndex = std::max(nextIndex, it->socketIndex + 1);
+	}
+	return nextIndex;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::addCustomSocket(CustomSocket const &socket)
+{
+	NOT_NULL(m_customSockets);
+	for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->socketIndex == socket.socketIndex)
+		{
+			*it = socket;
+			return true;
+		}
+	}
+	m_customSockets->push_back(socket);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::removeCustomSocket(int socketIndex)
+{
+	NOT_NULL(m_customSockets);
+	for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->socketIndex == socketIndex)
+		{
+			IGNORE_RETURN(m_customSockets->erase(it));
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+PortalProperty::CustomSocketList const &PortalProperty::getCustomSockets() const
+{
+	NOT_NULL(m_customSockets);
+	return *m_customSockets;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::findCustomSocket(int cellIndex, int portalIndex, CustomSocket &outSocket) const
+{
+	NOT_NULL(m_customSockets);
+	for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->cellIndex == cellIndex && it->socketIndex == portalIndex)
+		{
+			outSocket = *it;
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::isCustomSocketIndex(int portalIndex)
+{
+	return portalIndex >= cms_customSocketBase;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex)
+{
+	CustomSocket customSocket;
+	if (!findCustomSocket(hostCellIndex, customSocketIndex, customSocket))
+		return false;
+
+	CellProperty *const hostCell = getCell(hostCellIndex);
+	if (!hostCell || !getCell(graftCellIndex))
+		return false;
+
+	Transform customPortal_building;
+	customPortal_building.multiply(hostCell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+	Vector const customPos = customPortal_building.getPosition_p();
+
+	int bestPortal = -1;
+	float bestDistSq = std::numeric_limits<float>::max();
+	int const portalCount = hostCell->getPortalCount();
+	for (int portalIndex = 0; portalIndex < portalCount; ++portalIndex)
+	{
+		Portal *const portal = hostCell->getPortal(portalIndex);
+		if (!portal || !portal->isPassable())
+			continue;
+
+		Transform portal_building;
+		portal_building.multiply(hostCell->getOwner().getTransform_o2p(), portal->getDoorTransform());
+		Vector const delta = portal_building.getPosition_p() - customPos;
+		float const distSq = delta.magnitudeSquared();
+		if (distSq < bestDistSq)
+		{
+			bestDistSq = distSq;
+			bestPortal = portalIndex;
+		}
+	}
+
+	if (bestPortal < 0 || bestDistSq > 256.0f)
+		return false;
+
+	return linkCellPortals(hostCellIndex, bestPortal, graftCellIndex, graftPortalIndex);
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::markCustomSocketOpen(int cellIndex, int socketIndex, bool open)
+{
+	NOT_NULL(m_customSockets);
+	for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->cellIndex == cellIndex && it->socketIndex == socketIndex)
+		{
+			it->open = open;
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::clearBridgeSegments()
+{
+	if (m_bridgeSegments)
+		m_bridgeSegments->clear();
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::recordBridgeSegment(BridgeSegment const &segment)
+{
+	NOT_NULL(m_bridgeSegments);
+	for (BridgeSegmentList::iterator it = m_bridgeSegments->begin(); it != m_bridgeSegments->end(); ++it)
+	{
+		if (it->hostCellIndex == segment.hostCellIndex &&
+			it->hostPortalIndex == segment.hostPortalIndex &&
+			it->graftedCellIndex == segment.graftedCellIndex &&
+			it->graftedPortalIndex == segment.graftedPortalIndex)
+		{
+			*it = segment;
+			return;
+		}
+	}
+	m_bridgeSegments->push_back(segment);
+}
+
+// ----------------------------------------------------------------------
+
+PortalProperty::BridgeSegmentList const &PortalProperty::getBridgeSegments() const
+{
+	NOT_NULL(m_bridgeSegments);
+	return *m_bridgeSegments;
 }
 
 // ======================================================================

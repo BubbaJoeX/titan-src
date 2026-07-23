@@ -10,6 +10,7 @@
 
 class Client;
 class DynamicBunkerAssignRoomMessage;
+class DynamicBunkerCreateCustomSocketMessage;
 class DynamicBunkerUnassignRoomMessage;
 class NetworkId;
 class ServerObject;
@@ -60,6 +61,9 @@ public:
 
 	// Handle client Unassign from the floorplan UI.
 	static void handleUnassignRoom(Client &client, DynamicBunkerUnassignRoomMessage const &message);
+
+	// Handle client custom snap point placement from the floorplan UI.
+	static void handleCreateCustomSocket(Client &client, DynamicBunkerCreateCustomSocketMessage const &message);
 
 	// Re-apply graft descriptors stored on the building after load.
 	static void restoreGraftsFromObjVars(ServerObject &building);

@@ -135,6 +135,46 @@ public:
 	bool                          findDynamicRoomGraftForSocket(int cellIndex, int portalIndex, DynamicRoomGraft &outGraft) const;
 	DynamicRoomGraftList const   &getDynamicRoomGrafts() const;
 
+	static int const              cms_customSocketBase;
+
+	struct CustomSocket
+	{
+		int         cellIndex;
+		int         socketIndex;
+		std::string label;
+		Transform   doorTransform_o2p;
+		bool        open;
+	};
+
+	typedef std::vector<CustomSocket> CustomSocketList;
+
+	struct BridgeSegment
+	{
+		int       hostCellIndex;
+		int       hostPortalIndex;
+		int       graftedCellIndex;
+		int       graftedPortalIndex;
+		Transform transform_o2p;
+		float     length;
+		float     width;
+		float     height;
+	};
+
+	typedef std::vector<BridgeSegment> BridgeSegmentList;
+
+	int                           allocateCustomSocketIndex() const;
+	bool                          addCustomSocket(CustomSocket const &socket);
+	bool                          removeCustomSocket(int socketIndex);
+	CustomSocketList const       &getCustomSockets() const;
+	bool                          findCustomSocket(int cellIndex, int portalIndex, CustomSocket &outSocket) const;
+	bool                          isCustomSocketIndex(int portalIndex);
+	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
+	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
+
+	void                          clearBridgeSegments();
+	void                          recordBridgeSegment(BridgeSegment const &segment);
+	BridgeSegmentList const      &getBridgeSegments() const;
+
 	struct PortalSocketInfo
 	{
 		int  cellIndex;
@@ -184,6 +224,8 @@ private:
 	bool                           m_hasPassablePortalToParentCell;
 	GraftedCellMap                *m_graftedCellMap;
 	DynamicRoomGraftList          *m_dynamicRoomGrafts;
+	CustomSocketList              *m_customSockets;
+	BridgeSegmentList             *m_bridgeSegments;
 };
 
 // ======================================================================

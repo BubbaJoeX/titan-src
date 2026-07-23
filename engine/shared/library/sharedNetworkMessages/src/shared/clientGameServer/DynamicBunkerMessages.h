@@ -89,10 +89,28 @@ public:
 		int32 portalIndex;
 		std::string label;
 		bool open;
+		int32 linkedCellIndex;
+		int32 linkedPortalIndex;
+		float mapX;
+		float mapZ;
+		bool custom;
+	};
+
+	struct BridgeEntry
+	{
+		int32 hostCellIndex;
+		int32 hostPortalIndex;
+		int32 graftedCellIndex;
+		int32 graftedPortalIndex;
+		Transform transform_o2p;
+		float length;
+		float width;
+		float height;
 	};
 
 	typedef std::vector<RoomEntry> RoomList;
 	typedef std::vector<SocketEntry> SocketList;
+	typedef std::vector<BridgeEntry> BridgeList;
 
 	DynamicBunkerOpenFloorplanMessage(
 		NetworkId const &buildingId,
@@ -100,7 +118,8 @@ public:
 		int32 selectedCellIndex,
 		int32 selectedPortalIndex,
 		RoomList const &rooms,
-		SocketList const &sockets);
+		SocketList const &sockets,
+		BridgeList const &bridges);
 
 	explicit DynamicBunkerOpenFloorplanMessage(Archive::ReadIterator &source);
 	~DynamicBunkerOpenFloorplanMessage();
@@ -111,6 +130,7 @@ public:
 	int32 getSelectedPortalIndex() const { return m_selectedPortalIndex.get(); }
 	RoomList const &getRooms() const { return m_rooms.get(); }
 	SocketList const &getSockets() const { return m_sockets.get(); }
+	BridgeList const &getBridges() const { return m_bridges.get(); }
 
 private:
 
@@ -120,6 +140,7 @@ private:
 	Archive::AutoVariable<int32> m_selectedPortalIndex;
 	Archive::AutoVariable<RoomList> m_rooms;
 	Archive::AutoVariable<SocketList> m_sockets;
+	Archive::AutoVariable<BridgeList> m_bridges;
 };
 
 // ======================================================================
@@ -225,6 +246,41 @@ private:
 };
 
 // ======================================================================
+// Client -> server: create a custom snap point on a cell wall
+// ======================================================================
+
+class DynamicBunkerCreateCustomSocketMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	DynamicBunkerCreateCustomSocketMessage(
+		NetworkId const &buildingId,
+		NetworkId const &terminalId,
+		int32 cellIndex,
+		Transform const &doorTransform_o2p,
+		std::string const &label);
+
+	explicit DynamicBunkerCreateCustomSocketMessage(Archive::ReadIterator &source);
+	~DynamicBunkerCreateCustomSocketMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+	NetworkId const &getTerminalId() const { return m_terminalId.get(); }
+	int32 getCellIndex() const { return m_cellIndex.get(); }
+	Transform const &getDoorTransform_o2p() const { return m_doorTransform_o2p.get(); }
+	std::string const &getLabel() const { return m_label.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+	Archive::AutoVariable<NetworkId> m_terminalId;
+	Archive::AutoVariable<int32> m_cellIndex;
+	Archive::AutoVariable<Transform> m_doorTransform_o2p;
+	Archive::AutoVariable<std::string> m_label;
+};
+
+// ======================================================================
 
 namespace Archive
 {
@@ -232,6 +288,8 @@ namespace Archive
 	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::RoomEntry const &source);
 	void get(ReadIterator &source, DynamicBunkerOpenFloorplanMessage::SocketEntry &target);
 	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::SocketEntry const &source);
+	void get(ReadIterator &source, DynamicBunkerOpenFloorplanMessage::BridgeEntry &target);
+	void put(ByteStream &target, DynamicBunkerOpenFloorplanMessage::BridgeEntry const &source);
 }
 
 // ======================================================================

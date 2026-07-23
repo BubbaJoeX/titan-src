@@ -21,9 +21,12 @@
 #include "sharedNetworkMessages/DynamicBunkerMessages.h"
 #include "sharedObject/CellProperty.h"
 #include "sharedObject/NetworkIdManager.h"
+#include "sharedObject/Portal.h"
 #include "sharedObject/PortalProperty.h"
 
+#include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 // ======================================================================
@@ -33,6 +36,22 @@ namespace DynamicBunkerNamespace
 	char const *const OV_ROOT = "dynamicBunker";
 	char const *const OV_COUNT = "dynamicBunker.count";
 	char const *const OV_ASSIGNED_ROOM = "dynamicBunker.assignedRoom";
+	char const *const OV_CUSTOM_COUNT = "dynamicBunker.customSocket.count";
+	char const *const OV_BRIDGE_COUNT = "dynamicBunker.bridge.count";
+
+	std::string customSocketKey(int index, char const *field)
+	{
+		char buffer[128];
+		snprintf(buffer, sizeof(buffer), "%s.customSocket.%d.%s", OV_ROOT, index, field);
+		return buffer;
+	}
+
+	std::string bridgeKey(int index, char const *field)
+	{
+		char buffer[128];
+		snprintf(buffer, sizeof(buffer), "%s.bridge.%d.%s", OV_ROOT, index, field);
+		return buffer;
+	}
 
 	std::string graftKey(int index, char const *field)
 	{
@@ -77,6 +96,244 @@ namespace DynamicBunkerNamespace
 			building.removeObjVarItem(graftKey(i, "graftPortal"));
 			building.removeObjVarItem(graftKey(i, "donorCell"));
 			building.removeObjVarItem(graftKey(i, "donorPob"));
+		}
+	}
+
+	void persistCustomSockets(ServerObject &building, PortalProperty const &portalProperty)
+	{
+		int oldCount = 0;
+		IGNORE_RETURN(building.getObjVars().getItem(OV_CUSTOM_COUNT, oldCount));
+
+		PortalProperty::CustomSocketList const &sockets = portalProperty.getCustomSockets();
+		int const newCount = static_cast<int>(sockets.size());
+		building.setObjVarItem(OV_CUSTOM_COUNT, newCount);
+
+		for (size_t i = 0; i < sockets.size(); ++i)
+		{
+			PortalProperty::CustomSocket const &socket = sockets[i];
+			int const index = static_cast<int>(i);
+			building.setObjVarItem(customSocketKey(index, "cell"), socket.cellIndex);
+			building.setObjVarItem(customSocketKey(index, "socket"), socket.socketIndex);
+			building.setObjVarItem(customSocketKey(index, "label"), socket.label);
+			building.setObjVarItem(customSocketKey(index, "open"), socket.open);
+			building.setObjVarItem(customSocketKey(index, "transform"), socket.doorTransform_o2p);
+		}
+
+		for (int i = newCount; i < oldCount; ++i)
+		{
+			building.removeObjVarItem(customSocketKey(i, "cell"));
+			building.removeObjVarItem(customSocketKey(i, "socket"));
+			building.removeObjVarItem(customSocketKey(i, "label"));
+			building.removeObjVarItem(customSocketKey(i, "open"));
+			building.removeObjVarItem(customSocketKey(i, "transform"));
+		}
+	}
+
+	void persistBridgeSegments(ServerObject &building, PortalProperty const &portalProperty)
+	{
+		int oldCount = 0;
+		IGNORE_RETURN(building.getObjVars().getItem(OV_BRIDGE_COUNT, oldCount));
+
+		PortalProperty::BridgeSegmentList const &bridges = portalProperty.getBridgeSegments();
+		int const newCount = static_cast<int>(bridges.size());
+		building.setObjVarItem(OV_BRIDGE_COUNT, newCount);
+
+		for (size_t i = 0; i < bridges.size(); ++i)
+		{
+			PortalProperty::BridgeSegment const &bridge = bridges[i];
+			int const index = static_cast<int>(i);
+			building.setObjVarItem(bridgeKey(index, "hostCell"), bridge.hostCellIndex);
+			building.setObjVarItem(bridgeKey(index, "hostPortal"), bridge.hostPortalIndex);
+			building.setObjVarItem(bridgeKey(index, "graftCell"), bridge.graftedCellIndex);
+			building.setObjVarItem(bridgeKey(index, "graftPortal"), bridge.graftedPortalIndex);
+			building.setObjVarItem(bridgeKey(index, "transform"), bridge.transform_o2p);
+			building.setObjVarItem(bridgeKey(index, "length"), bridge.length);
+			building.setObjVarItem(bridgeKey(index, "width"), bridge.width);
+			building.setObjVarItem(bridgeKey(index, "height"), bridge.height);
+		}
+
+		for (int i = newCount; i < oldCount; ++i)
+		{
+			building.removeObjVarItem(bridgeKey(i, "hostCell"));
+			building.removeObjVarItem(bridgeKey(i, "hostPortal"));
+			building.removeObjVarItem(bridgeKey(i, "graftCell"));
+			building.removeObjVarItem(bridgeKey(i, "graftPortal"));
+			building.removeObjVarItem(bridgeKey(i, "transform"));
+			building.removeObjVarItem(bridgeKey(i, "length"));
+			building.removeObjVarItem(bridgeKey(i, "width"));
+			building.removeObjVarItem(bridgeKey(i, "height"));
+		}
+	}
+
+	bool getPortalBuildingTransform(PortalProperty const &portalProperty, int cellIndex, int portalIndex, Transform &outTransform_o2p)
+	{
+		CellProperty const *const cell = portalProperty.getCell(cellIndex);
+		if (!cell)
+			return false;
+
+		if (PortalProperty::isCustomSocketIndex(portalIndex))
+		{
+			PortalProperty::CustomSocket customSocket;
+			if (!portalProperty.findCustomSocket(cellIndex, portalIndex, customSocket))
+				return false;
+			outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+			return true;
+		}
+
+		Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
+		if (!portal)
+			return false;
+
+		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), portal->getDoorTransform());
+		return true;
+	}
+
+	void recordBridgeIfNeeded(
+		PortalProperty &portalProperty,
+		int hostCellIndex,
+		int hostPortalIndex,
+		int graftedCellIndex,
+		int graftedPortalIndex)
+	{
+		Transform hostTransform;
+		Transform graftTransform;
+		if (!getPortalBuildingTransform(portalProperty, hostCellIndex, hostPortalIndex, hostTransform))
+			return;
+		if (!getPortalBuildingTransform(portalProperty, graftedCellIndex, graftedPortalIndex, graftTransform))
+			return;
+
+		Vector const hostPos = hostTransform.getPosition_p();
+		Vector const graftPos = graftTransform.getPosition_p();
+		Vector const delta = graftPos - hostPos;
+		float const gap = delta.magnitude();
+		if (gap < 0.75f)
+			return;
+
+		Vector const mid = (hostPos + graftPos) * 0.5f;
+		Transform bridgeTransform;
+		bridgeTransform.setPosition_p(mid);
+
+		PortalProperty::BridgeSegment segment;
+		segment.hostCellIndex = hostCellIndex;
+		segment.hostPortalIndex = hostPortalIndex;
+		segment.graftedCellIndex = graftedCellIndex;
+		segment.graftedPortalIndex = graftedPortalIndex;
+		segment.transform_o2p = bridgeTransform;
+		if (gap > 0.01f)
+			segment.transform_o2p.yaw_l(atan2f(delta.x, delta.z));
+		segment.length = std::max(1.0f, gap);
+		segment.width = 2.5f;
+		segment.height = 3.0f;
+		portalProperty.recordBridgeSegment(segment);
+	}
+
+	void buildSocketEntries(
+		PortalProperty const &portalProperty,
+		DynamicBunkerOpenFloorplanMessage::SocketList &socketEntries)
+	{
+		PortalProperty::PortalSocketInfoList sockets;
+		portalProperty.collectPortalSockets(sockets);
+		socketEntries.reserve(sockets.size());
+
+		for (size_t i = 0; i < sockets.size(); ++i)
+		{
+			PortalProperty::PortalSocketInfo const &socket = sockets[i];
+			DynamicBunkerOpenFloorplanMessage::SocketEntry entry;
+			entry.cellIndex = socket.cellIndex;
+			entry.portalIndex = socket.portalIndex;
+			entry.open = socket.open && socket.passable;
+			entry.linkedCellIndex = -1;
+			entry.linkedPortalIndex = -1;
+			entry.custom = PortalProperty::isCustomSocketIndex(socket.portalIndex);
+
+			PortalProperty::DynamicRoomGraft graft;
+			if (portalProperty.findDynamicRoomGraftForSocket(socket.cellIndex, socket.portalIndex, graft))
+			{
+				entry.open = false;
+				entry.linkedCellIndex = graft.graftedCellIndex;
+				entry.linkedPortalIndex = graft.graftedPortalIndex;
+			}
+			else if (!entry.custom)
+			{
+				CellProperty const *const cell = portalProperty.getCell(socket.cellIndex);
+				if (cell)
+				{
+					Portal const *const portal = const_cast<CellProperty *>(cell)->getPortal(socket.portalIndex);
+					if (portal && portal->getNeighbor())
+					{
+						Portal const *const neighborPortal = portal->getNeighbor();
+						CellProperty const *const neighborCell = neighborPortal ? neighborPortal->getParentCell() : 0;
+						if (neighborCell)
+						{
+							entry.linkedCellIndex = neighborCell->getCellIndex();
+							int neighborPortalIndex = -1;
+							int const neighborPortalCount = neighborCell->getPortalCount();
+							for (int pi = 0; pi < neighborPortalCount; ++pi)
+							{
+								if (neighborCell->getPortal(pi) == neighborPortal)
+								{
+									neighborPortalIndex = pi;
+									break;
+								}
+							}
+							entry.linkedPortalIndex = neighborPortalIndex;
+							entry.open = false;
+						}
+					}
+				}
+			}
+
+			Transform portalTransform;
+			if (getPortalBuildingTransform(portalProperty, socket.cellIndex, socket.portalIndex, portalTransform))
+			{
+				entry.mapX = portalTransform.getPosition_p().x;
+				entry.mapZ = portalTransform.getPosition_p().z;
+			}
+
+			char label[160];
+			if (entry.custom)
+			{
+				PortalProperty::CustomSocket customSocket;
+				if (portalProperty.findCustomSocket(socket.cellIndex, socket.portalIndex, customSocket) && !customSocket.label.empty())
+					snprintf(label, sizeof(label), "custom: %s", customSocket.label.c_str());
+				else
+					snprintf(label, sizeof(label), "custom snap %d", socket.portalIndex);
+			}
+			else
+			{
+				snprintf(label, sizeof(label), "cell %d / portal %d", socket.cellIndex, socket.portalIndex);
+			}
+
+			if (entry.linkedCellIndex >= 0)
+			{
+				char linkBuf[96];
+				snprintf(linkBuf, sizeof(linkBuf), " -> cell %d / portal %d", entry.linkedCellIndex, entry.linkedPortalIndex);
+				strncat(label, linkBuf, sizeof(label) - strlen(label) - 1);
+			}
+			entry.label = label;
+			socketEntries.push_back(entry);
+		}
+	}
+
+	void buildBridgeEntries(
+		PortalProperty const &portalProperty,
+		DynamicBunkerOpenFloorplanMessage::BridgeList &bridgeEntries)
+	{
+		PortalProperty::BridgeSegmentList const &bridges = portalProperty.getBridgeSegments();
+		bridgeEntries.reserve(bridges.size());
+		for (size_t i = 0; i < bridges.size(); ++i)
+		{
+			PortalProperty::BridgeSegment const &bridge = bridges[i];
+			DynamicBunkerOpenFloorplanMessage::BridgeEntry entry;
+			entry.hostCellIndex = bridge.hostCellIndex;
+			entry.hostPortalIndex = bridge.hostPortalIndex;
+			entry.graftedCellIndex = bridge.graftedCellIndex;
+			entry.graftedPortalIndex = bridge.graftedPortalIndex;
+			entry.transform_o2p = bridge.transform_o2p;
+			entry.length = bridge.length;
+			entry.width = bridge.width;
+			entry.height = bridge.height;
+			bridgeEntries.push_back(entry);
 		}
 	}
 
@@ -208,6 +465,8 @@ namespace DynamicBunkerNamespace
 			IGNORE_RETURN(cellObject->permanentlyDestroy(DeleteReasons::Replaced));
 
 		building.removeObjVarItem(assignedRoomKey(graft.hostCellIndex, graft.hostPortalIndex));
+		if (PortalProperty::isCustomSocketIndex(graft.hostPortalIndex))
+			IGNORE_RETURN(portalProperty.markCustomSocketOpen(graft.hostCellIndex, graft.hostPortalIndex, true));
 		persistGrafts(building, portalProperty);
 		broadcastUngraft(building, graft, cellId);
 
@@ -299,9 +558,24 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 
 	if (!portalProperty->linkCellPortals(hostCellIndex, hostPortalIndex, graftedCellIndex, donorPortalIndex))
 	{
-		WARNING(true, ("DynamicBunker::addRoomHook - portal link failed"));
-		return false;
+		if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
+		{
+			if (!portalProperty->linkCustomSocketGraft(hostCellIndex, hostPortalIndex, graftedCellIndex, donorPortalIndex))
+			{
+				WARNING(true, ("DynamicBunker::addRoomHook - custom socket portal link failed"));
+				return false;
+			}
+			IGNORE_RETURN(portalProperty->markCustomSocketOpen(hostCellIndex, hostPortalIndex, false));
+		}
+		else
+		{
+			WARNING(true, ("DynamicBunker::addRoomHook - portal link failed"));
+			return false;
+		}
 	}
+
+	recordBridgeIfNeeded(*portalProperty, hostCellIndex, hostPortalIndex, graftedCellIndex, donorPortalIndex);
+	persistBridgeSegments(building, *portalProperty);
 
 	PortalProperty::DynamicRoomGraft graft;
 	graft.graftedCellIndex = graftedCellIndex;
@@ -404,23 +678,11 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 	DynamicBunkerOpenFloorplanMessage::RoomList rooms;
 	DynamicBunkerRoomCatalog::buildCatalog(rooms);
 
-	PortalProperty::PortalSocketInfoList sockets;
-	portalProperty->collectPortalSockets(sockets);
-
 	DynamicBunkerOpenFloorplanMessage::SocketList socketEntries;
-	socketEntries.reserve(sockets.size());
-	for (size_t i = 0; i < sockets.size(); ++i)
-	{
-		PortalProperty::PortalSocketInfo const &socket = sockets[i];
-		DynamicBunkerOpenFloorplanMessage::SocketEntry entry;
-		entry.cellIndex = socket.cellIndex;
-		entry.portalIndex = socket.portalIndex;
-		entry.open = socket.open && socket.passable;
-		char label[96];
-		snprintf(label, sizeof(label), "cell %d / portal %d", socket.cellIndex, socket.portalIndex);
-		entry.label = label;
-		socketEntries.push_back(entry);
-	}
+	buildSocketEntries(*portalProperty, socketEntries);
+
+	DynamicBunkerOpenFloorplanMessage::BridgeList bridgeEntries;
+	buildBridgeEntries(*portalProperty, bridgeEntries);
 
 	DynamicBunkerOpenFloorplanMessage const message(
 		building.getNetworkId(),
@@ -428,7 +690,8 @@ bool DynamicBunker::openFloorplan(Client &client, ServerObject &building, Server
 		selectedCellIndex,
 		selectedPortalIndex,
 		rooms,
-		socketEntries);
+		socketEntries,
+		bridgeEntries);
 	client.send(message, true);
 
 	LOG("dynamic_bunker", ("openFloorplan player=%s building=%s rooms=%d sockets=%d selected=%d/%d",
@@ -582,11 +845,92 @@ void DynamicBunker::handleUnassignRoom(Client &client, DynamicBunkerUnassignRoom
 
 // ----------------------------------------------------------------------
 
+void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreateCustomSocketMessage const &message)
+{
+	ServerObject *const building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::handleCreateCustomSocket - invalid building %s", message.getBuildingId().getValueString().c_str()));
+		return;
+	}
+
+	PortalProperty *const portalProperty = building->getPortalProperty();
+	if (!portalProperty->getCell(message.getCellIndex()))
+	{
+		WARNING(true, ("DynamicBunker::handleCreateCustomSocket - cell %d not loaded", message.getCellIndex()));
+		return;
+	}
+
+	PortalProperty::CustomSocket socket;
+	socket.cellIndex = message.getCellIndex();
+	socket.socketIndex = portalProperty->allocateCustomSocketIndex();
+	socket.label = message.getLabel().empty() ? "custom" : message.getLabel();
+	socket.doorTransform_o2p = message.getDoorTransform_o2p();
+	socket.open = true;
+
+	if (!portalProperty->addCustomSocket(socket))
+	{
+		WARNING(true, ("DynamicBunker::handleCreateCustomSocket - failed to add socket"));
+		return;
+	}
+
+	persistCustomSockets(*building, *portalProperty);
+
+	ServerObject *const terminal = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getTerminalId()));
+	IGNORE_RETURN(openFloorplan(client, *building, terminal ? *terminal : *building, socket.cellIndex, socket.socketIndex));
+
+	LOG("dynamic_bunker", ("handleCreateCustomSocket ok building=%s cell=%d socket=%d",
+		building->getNetworkId().getValueString().c_str(),
+		socket.cellIndex,
+		socket.socketIndex));
+}
+
+// ----------------------------------------------------------------------
+
 void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 {
 	PortalProperty *const portalProperty = building.getPortalProperty();
 	if (!portalProperty)
 		return;
+
+	int customCount = 0;
+	if (building.getObjVars().getItem(OV_CUSTOM_COUNT, customCount) && customCount > 0)
+	{
+		for (int i = 0; i < customCount; ++i)
+		{
+			PortalProperty::CustomSocket socket;
+			if (!building.getObjVars().getItem(customSocketKey(i, "cell"), socket.cellIndex) ||
+				!building.getObjVars().getItem(customSocketKey(i, "socket"), socket.socketIndex) ||
+				!building.getObjVars().getItem(customSocketKey(i, "label"), socket.label) ||
+				!building.getObjVars().getItem(customSocketKey(i, "open"), socket.open) ||
+				!building.getObjVars().getItem(customSocketKey(i, "transform"), socket.doorTransform_o2p))
+			{
+				continue;
+			}
+			IGNORE_RETURN(portalProperty->addCustomSocket(socket));
+		}
+	}
+
+	int bridgeCount = 0;
+	if (building.getObjVars().getItem(OV_BRIDGE_COUNT, bridgeCount) && bridgeCount > 0)
+	{
+		for (int i = 0; i < bridgeCount; ++i)
+		{
+			PortalProperty::BridgeSegment bridge;
+			if (!building.getObjVars().getItem(bridgeKey(i, "hostCell"), bridge.hostCellIndex) ||
+				!building.getObjVars().getItem(bridgeKey(i, "hostPortal"), bridge.hostPortalIndex) ||
+				!building.getObjVars().getItem(bridgeKey(i, "graftCell"), bridge.graftedCellIndex) ||
+				!building.getObjVars().getItem(bridgeKey(i, "graftPortal"), bridge.graftedPortalIndex) ||
+				!building.getObjVars().getItem(bridgeKey(i, "transform"), bridge.transform_o2p) ||
+				!building.getObjVars().getItem(bridgeKey(i, "length"), bridge.length) ||
+				!building.getObjVars().getItem(bridgeKey(i, "width"), bridge.width) ||
+				!building.getObjVars().getItem(bridgeKey(i, "height"), bridge.height))
+			{
+				continue;
+			}
+			portalProperty->recordBridgeSegment(bridge);
+		}
+	}
 
 	int count = 0;
 	if (!building.getObjVars().getItem(OV_COUNT, count) || count <= 0)
