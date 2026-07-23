@@ -1044,6 +1044,19 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 	updatePortalLayoutCrc(building, *portalProperty);
 	broadcastAllCustomSockets(building, *portalProperty);
 
+	PortalProperty::DynamicRoomGraftList const &restoredGrafts = portalProperty->getDynamicRoomGrafts();
+	for (size_t gi = 0; gi < restoredGrafts.size(); ++gi)
+	{
+		PortalProperty::DynamicRoomGraft const &graft = restoredGrafts[gi];
+		CellProperty *const graftedCell = portalProperty->getCell(graft.graftedCellIndex);
+		if (!graftedCell)
+			continue;
+		ServerObject *const cellObject = safe_cast<ServerObject *>(&graftedCell->getOwner());
+		if (!cellObject)
+			continue;
+		broadcastGraft(building, graft, cellObject->getNetworkId(), cellObject->getTransform_o2p());
+	}
+
 	LOG("dynamic_bunker", ("restoreGraftsFromObjVars building=%s count=%d", building.getNetworkId().getValueString().c_str(), count));
 }
 
