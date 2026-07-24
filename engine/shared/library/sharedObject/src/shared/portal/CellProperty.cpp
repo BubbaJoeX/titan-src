@@ -845,7 +845,15 @@ CellProperty *CellProperty::getDestinationCell(const Object *object, int portalI
 			return nullptr;
 		}
 
-		return portalList[static_cast<PortalList::size_type>(portalId)]->getNeighbor()->getParentCell();
+		Portal const * const portal = portalList[static_cast<PortalList::size_type>(portalId)];
+		if (!portal)
+			return nullptr;
+
+		Portal const * const neighbor = portal->getNeighbor();
+		if (!neighbor)
+			return nullptr;
+
+		return neighbor->getParentCell();
 	}
 
 	return nullptr;

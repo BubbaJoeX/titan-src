@@ -1400,6 +1400,8 @@ bool PortalProperty::addCustomSocket(CustomSocket const &socket)
 	}
 	CustomSocket entry = socket;
 	entry.materializedPortalIndex = -1;
+	entry.floorExtensionStartTri = -1;
+	entry.floorExtensionTriCount = 0;
 	if (entry.doorwayWidth < 0.01f)
 		entry.doorwayWidth = 1.0f;
 	if (entry.doorwayHeight < 0.01f)
@@ -1593,7 +1595,11 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 	if (resolvedGraftPortal < 0)
 		return false;
 
-	return linkCellPortals(hostCellIndex, hostPortalIndex, graftCellIndex, resolvedGraftPortal);
+	if (!linkCellPortals(hostCellIndex, hostPortalIndex, graftCellIndex, resolvedGraftPortal))
+		return false;
+
+	IGNORE_RETURN(finalizeCustomSocketPortalWalkthrough(hostCellIndex, customSocketIndex));
+	return true;
 }
 
 // ----------------------------------------------------------------------
@@ -2084,6 +2090,92 @@ namespace PortalPropertyMaterializeNamespace
 
 		return flagBoundaryEdgesDirect(floorMesh, doorTransform, doorwayWidth, portalIndex);
 	}
+
+	void clearCustomSocketFloorExtension(PortalProperty::CustomSocket & socketEntry, FloorMesh * floorMesh)
+	{
+		if (!floorMesh || socketEntry.floorExtensionTriCount <= 0 || socketEntry.floorExtensionStartTri < 0)
+		{
+			socketEntry.floorExtensionStartTri = -1;
+			socketEntry.floorExtensionTriCount = 0;
+			return;
+		}
+
+		int const startTri = socketEntry.floorExtensionStartTri;
+		int const triCount = socketEntry.floorExtensionTriCount;
+		for (int triOffset = triCount - 1; triOffset >= 0; --triOffset)
+		{
+			int const triIndex = startTri + triOffset;
+			if (triIndex >= 0 && triIndex < floorMesh->getTriCount())
+				floorMesh->deleteTri(triIndex);
+		}
+
+		socketEntry.floorExtensionStartTri = -1;
+		socketEntry.floorExtensionTriCount = 0;
+	}
+
+	bool extendFloorThroughDoorway(
+		FloorMesh * floorMesh,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		float depth,
+		int portalIndex,
+		int & outStartTri,
+		int & outTriCount)
+	{
+		if (!floorMesh || depth < 0.01f)
+			return false;
+
+		outStartTri = floorMesh->getTriCount();
+		outTriCount = 0;
+
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const axisK = doorTransform.getLocalFrameK_p();
+		Vector const pos = doorTransform.getPosition_p();
+		float const halfWidth = doorwayWidth * 0.5f;
+
+		Vector const innerLeft = pos - axisI * halfWidth;
+		Vector const innerRight = pos + axisI * halfWidth;
+		Vector const outerLeft = innerLeft + axisK * depth;
+		Vector const outerRight = innerRight + axisK * depth;
+
+		floorMesh->addTriangle(Triangle3d(innerLeft, innerRight, outerRight));
+		floorMesh->addTriangle(Triangle3d(innerLeft, outerRight, outerLeft));
+		outTriCount = 2;
+
+		VectorVector portalVerts;
+		portalVerts.push_back(outerLeft);
+		portalVerts.push_back(outerRight);
+		portalVerts.push_back(outerRight + Vector(0.0f, 0.05f, 0.0f));
+		portalVerts.push_back(outerLeft + Vector(0.0f, 0.05f, 0.0f));
+		IGNORE_RETURN(floorMesh->flagPortalEdges(portalVerts, portalIndex));
+
+		return true;
+	}
+
+	bool flagCustomSocketPortalFloor(
+		FloorMesh * floorMesh,
+		DoorwayBoundaryEdge const & boundaryEdge,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		float doorwayHeight,
+		int portalIndex)
+	{
+		if (!floorMesh)
+			return false;
+
+		floorMesh->clearPortalEdges(portalIndex);
+
+		bool flagged = false;
+		if (boundaryEdge.isValid())
+			flagged = flagSnappedBoundaryEdgesDirect(floorMesh, boundaryEdge, doorTransform, doorwayWidth, portalIndex);
+		if (!flagged && boundaryEdge.isValid())
+			flagged = flagDoorwayBoundaryEdges(floorMesh, boundaryEdge, doorTransform, doorwayWidth, doorwayHeight, portalIndex);
+		if (!flagged)
+			flagged = flagPortalEdgesRobust(floorMesh, doorTransform, doorwayWidth, doorwayHeight, portalIndex);
+		if (!flagged)
+			flagged = flagNearbyBoundaryEdges(floorMesh, doorTransform, doorwayWidth, portalIndex);
+		return flagged;
+	}
 }
 
 using namespace PortalPropertyMaterializeNamespace;
@@ -2186,26 +2278,71 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 
 	socketEntry->materializedPortalIndex = portalIndex;
 
-	Portal * const portal = cell->getPortal(portalIndex);
-	Floor * const floor = cell->getFloor();
-	FloorMesh const * const floorMeshConst = floor ? floor->getFloorMesh() : 0;
-	if (portal && floorMeshConst)
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex)
+{
+	NOT_NULL(m_customSockets);
+
+	CustomSocket * socketEntry = 0;
+	for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
 	{
-		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
-		bool flagged = false;
-		if (boundaryEdge.isValid())
-			flagged = flagSnappedBoundaryEdgesDirect(floorMesh, boundaryEdge, doorTransform, width, portalIndex);
-		if (!flagged && boundaryEdge.isValid())
-			flagged = flagDoorwayBoundaryEdges(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex);
-		if (!flagged)
-			flagged = flagPortalEdgesRobust(floorMesh, doorTransform, width, height, portalIndex);
-		if (!flagged)
-			flagged = flagNearbyBoundaryEdges(floorMesh, doorTransform, width, portalIndex);
-		if (!flagged)
+		if (it->cellIndex == cellIndex && it->socketIndex == customSocketIndex)
 		{
-			WARNING(true, ("PortalProperty::materializeCustomSocketPortal - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
+			socketEntry = &(*it);
+			break;
 		}
 	}
+
+	if (!socketEntry || socketEntry->materializedPortalIndex < 0)
+		return false;
+
+	CellProperty * const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	Portal * const portal = cell->getPortal(socketEntry->materializedPortalIndex);
+	if (!portal || !portal->getNeighbor())
+		return false;
+
+	float const width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
+	float const height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
+
+	Transform doorTransform = socketEntry->doorTransform_o2p;
+	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
+	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
+		stabilizeCustomSocketTransform(*cell, doorTransform);
+	ensurePortalTransformOutward(*cell, doorTransform);
+	socketEntry->doorTransform_o2p = doorTransform;
+
+	Floor * const floor = cell->getFloor();
+	FloorMesh * const floorMesh = floor ? const_cast<FloorMesh *>(floor->getFloorMesh()) : 0;
+	if (floorMesh)
+	{
+		clearCustomSocketFloorExtension(*socketEntry, floorMesh);
+
+		int const portalIndex = socketEntry->materializedPortalIndex;
+		if (!flagCustomSocketPortalFloor(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex))
+		{
+			WARNING(true, ("PortalProperty::finalizeCustomSocketPortalWalkthrough - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
+		}
+
+		int extensionStartTri = -1;
+		int extensionTriCount = 0;
+		if (extendFloorThroughDoorway(floorMesh, doorTransform, width, 1.25f, portalIndex, extensionStartTri, extensionTriCount))
+		{
+			socketEntry->floorExtensionStartTri = extensionStartTri;
+			socketEntry->floorExtensionTriCount = extensionTriCount;
+		}
+	}
+
+	portal->refreshDpvsPortal();
+	Portal * const neighborPortal = portal->getNeighbor();
+	if (neighborPortal)
+		neighborPortal->refreshDpvsPortal();
 
 	return true;
 }
@@ -2262,8 +2399,27 @@ void PortalProperty::dematerializeAllCustomSocketPortals()
 
 		Floor * const floor = cell->getFloor();
 		FloorMesh * const floorMesh = floor ? const_cast<FloorMesh *>(floor->getFloorMesh()) : 0;
+
+		for (CustomSocketList::iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+		{
+			if (it->cellIndex == removal.cellIndex && it->materializedPortalIndex == removal.portalIndex)
+			{
+				if (floorMesh)
+				{
+					clearCustomSocketFloorExtension(*it, floorMesh);
+					floorMesh->clearPortalEdges(removal.portalIndex);
+				}
+				it->materializedPortalIndex = -1;
+				it->floorExtensionStartTri = -1;
+				it->floorExtensionTriCount = 0;
+				break;
+			}
+		}
+
 		if (floorMesh)
-			floorMesh->clearPortalEdges(removal.portalIndex);
+		{
+			// clearPortalEdges handled above when socket matched
+		}
 
 		IGNORE_RETURN(cell->removeRuntimePortal(removal.portalIndex));
 	}

@@ -152,6 +152,8 @@ public:
 		int         materializedPortalIndex;
 		float       doorwayWidth;
 		float       doorwayHeight;
+		int         floorExtensionStartTri;
+		int         floorExtensionTriCount;
 	};
 
 	typedef std::vector<CustomSocket> CustomSocketList;
@@ -181,6 +183,7 @@ public:
 	bool                          getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const;
 	bool                          getPortalNeighbor(int cellIndex, int portalIndex, int &outNeighborCellIndex, int &outNeighborPortalIndex) const;
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
+	bool                          finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex);
 	bool                          materializeCustomSocketPortal(int cellIndex, int customSocketIndex);
 	void                          dematerializeAllCustomSocketPortals();
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);

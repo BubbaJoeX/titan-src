@@ -1198,6 +1198,9 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 				Transform correctedTransform;
 				if (graftCellObject && portalProperty->computeLinkedGraftCellTransform(hostCell, hostPortal, graftedCell, graftPortal, correctedTransform))
 					graftCellObject->setTransform_o2p(correctedTransform);
+
+				if (PortalProperty::isCustomSocketIndex(hostPortal))
+					IGNORE_RETURN(portalProperty->finalizeCustomSocketPortalWalkthrough(hostCell, hostPortal));
 			}
 		}
 	}
