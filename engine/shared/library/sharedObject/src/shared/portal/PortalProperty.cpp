@@ -630,6 +630,8 @@ void PortalProperty::cellLoaded(int cellIndex, Object &cellObject, bool shouldCr
 
 	// let the cell know who its portal object is, and what its portal data is
 	cell->initialize(*this, cellIndex, shouldCreateAppearance);
+
+	refreshDynamicGraftPortalDpvs();
 }
 
 // ----------------------------------------------------------------------
@@ -1373,6 +1375,11 @@ bool PortalProperty::isCustomSocketIndex(int portalIndex)
 	return portalIndex >= cms_customSocketBase;
 }
 
+namespace PortalPropertyMaterializeNamespace
+{
+	void stabilizeCustomSocketTransform(CellProperty const & cell, Transform & doorTransform);
+}
+
 // ----------------------------------------------------------------------
 
 bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const
@@ -1393,7 +1400,9 @@ bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex
 		CustomSocket customSocket;
 		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
 			return false;
-		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+		Transform doorTransform = customSocket.doorTransform_o2p;
+		PortalPropertyMaterializeNamespace::stabilizeCustomSocketTransform(*cell, doorTransform);
+		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), doorTransform);
 		return true;
 	}
 
@@ -1588,9 +1597,38 @@ namespace PortalPropertyMaterializeNamespace
 			return false;
 
 		Vector const edgeMid = (bestA + bestB) * 0.5f;
+
+		Vector edgeDir = bestB - bestA;
+		edgeDir.y = 0.0f;
+		if (edgeDir.normalize() < 0.01f)
+			return false;
+
+		if (edgeDir.dot(axisI) < 0.0f)
+			edgeDir = -edgeDir;
+
+		Vector const cellCenter = computeCellFloorCenter(cell);
+		Vector outward = Vector::unitY.cross(edgeDir);
+		Vector toInterior = cellCenter - edgeMid;
+		toInterior.y = 0.0f;
+		if (outward.dot(toInterior) > 0.0f)
+			outward = -outward;
+		if (outward.normalize() < 0.01f)
+		{
+			doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
+			ensurePortalTransformOutward(cell, doorTransform);
+			return true;
+		}
+
+		doorTransform.setLocalFrameIJK_p(edgeDir, Vector::unitY, outward);
 		doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
-		ensurePortalTransformOutward(cell, doorTransform);
 		return true;
+	}
+
+	void stabilizeCustomSocketTransform(CellProperty const & cell, Transform & doorTransform)
+	{
+		if (snapCustomSocketTransformToFloorBoundary(cell, doorTransform))
+			return;
+		ensurePortalTransformOutward(cell, doorTransform);
 	}
 
 	bool flagBoundaryEdgesDirect(
@@ -1722,16 +1760,14 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	float const halfWidth = width * 0.5f;
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
-	ensurePortalTransformOutward(*cell, doorTransform);
-	IGNORE_RETURN(snapCustomSocketTransformToFloorBoundary(*cell, doorTransform));
-	ensurePortalTransformOutward(*cell, doorTransform);
+	stabilizeCustomSocketTransform(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	Vector const pos = doorTransform.getPosition_p();
 	Vector const axisI = doorTransform.getLocalFrameI_p();
 	Vector const axisJ = doorTransform.getLocalFrameJ_p();
 	Vector const axisK = doorTransform.getLocalFrameK_p();
-	float const wallPlaneOffset = 0.15f;
+	float const wallPlaneOffset = 0.4f;
 	Vector const geomPos = pos + axisK * wallPlaneOffset;
 
 	std::vector<Vector> cellVertices;
@@ -1810,7 +1846,7 @@ void PortalProperty::refreshDynamicGraftPortalDpvs()
 
 		CellProperty * const hostCell = getCell(graft.hostCellIndex);
 		CellProperty * const graftCell = getCell(graft.graftedCellIndex);
-		if (!hostCell || !graftCell || !hostCell->getDpvsCell() || !graftCell->getDpvsCell())
+		if (!hostCell || !graftCell)
 			continue;
 
 		int hostPortalIndex = graft.hostPortalIndex;

@@ -558,6 +558,9 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 		}
 	}
 
+	if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
+		IGNORE_RETURN(portalProperty->materializeCustomSocketPortal(hostCellIndex, hostPortalIndex));
+
 	Transform cellTransform;
 	int resolvedDonorPortalIndex = donorPortalIndex;
 	if (!portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, cellTransform, &resolvedDonorPortalIndex))
@@ -630,6 +633,16 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 		IGNORE_RETURN(portalProperty->clearLoadedCellSlot(graftedCellIndex));
 		IGNORE_RETURN(portalProperty->releaseGraftedCellSlot(graftedCellIndex));
 		return false;
+	}
+
+	if (linked)
+	{
+		Transform correctedTransform;
+		if (portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, correctedTransform, &resolvedDonorPortalIndex))
+		{
+			cellTransform = correctedTransform;
+			cellObject->setTransform_o2p(cellTransform);
+		}
 	}
 
 	recordBridgeIfNeeded(*portalProperty, hostCellIndex, hostPortalIndex, graftedCellIndex, resolvedGraftPortal);
