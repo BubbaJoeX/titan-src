@@ -1629,6 +1629,15 @@ namespace PortalPropertyMaterializeNamespace
 		return box.getCenter();
 	}
 
+	Vector getPortalWalkOutward(Transform const & doorTransform)
+	{
+		Vector outward = doorTransform.getLocalFrameK_p();
+		outward.y = 0.0f;
+		if (outward.normalize() < 0.01f)
+			return Vector(0.0f, 0.0f, 1.0f);
+		return -outward;
+	}
+
 	void ensurePortalTransformInward(CellProperty const & cell, Transform & doorTransform)
 	{
 		Vector const cellCenter = computeCellFloorCenter(cell);
@@ -1699,9 +1708,8 @@ namespace PortalPropertyMaterializeNamespace
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const portalPos = doorTransform.getPosition_p();
 
-		Vector preferredK = doorTransform.getLocalFrameK_p();
-		preferredK.y = 0.0f;
-		bool const hasPreferredK = preferredK.normalize() > 0.01f;
+		Vector preferredOutward = getPortalWalkOutward(doorTransform);
+		bool const hasPreferredOutward = preferredOutward.normalize() > 0.01f;
 
 		DoorwayBoundaryEdge bestEdge = DoorwayBoundaryEdge::invalid();
 		float bestScore = std::numeric_limits<float>::max();
@@ -1725,7 +1733,7 @@ namespace PortalPropertyMaterializeNamespace
 				edgeDir /= edgeLen;
 
 				float const parallelI = fabsf(edgeDir.dot(axisI));
-				float const wallAligned = hasPreferredK ? fabsf(edgeDir.dot(preferredK)) : 1.0f;
+				float const wallAligned = hasPreferredOutward ? fabsf(edgeDir.dot(preferredOutward)) : 1.0f;
 				if (parallelI < 0.85f && wallAligned > 0.15f)
 					continue;
 
@@ -1736,14 +1744,14 @@ namespace PortalPropertyMaterializeNamespace
 				if (dist >= 3.0f)
 					continue;
 
-				if (hasPreferredK)
+				if (hasPreferredOutward)
 				{
-					if (dist > 0.05f && toEdge.dot(preferredK) < 0.15f)
+					if (dist > 0.05f && toEdge.dot(preferredOutward) < 0.15f)
 						continue;
 				}
 
 				float score = dist;
-				if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
+				if (hasPreferredOutward && dist > 0.01f && toEdge.dot(preferredOutward) < 0.0f)
 					score += 50.0f;
 
 				if (score < bestScore)
@@ -1777,14 +1785,14 @@ namespace PortalPropertyMaterializeNamespace
 					if (dist >= 3.0f)
 						continue;
 
-					if (hasPreferredK)
+					if (hasPreferredOutward)
 					{
-						if (dist > 0.05f && toEdge.dot(preferredK) < 0.15f)
+						if (dist > 0.05f && toEdge.dot(preferredOutward) < 0.15f)
 							continue;
 					}
 
 					float score = dist + 0.5f;
-					if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
+					if (hasPreferredOutward && dist > 0.01f && toEdge.dot(preferredOutward) < 0.0f)
 						score += 50.0f;
 
 					if (score < bestScore)
@@ -2104,10 +2112,10 @@ namespace PortalPropertyMaterializeNamespace
 		float const halfWidth = doorwayWidth * 0.5f;
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const axisJ = doorTransform.getLocalFrameJ_p();
-		Vector const axisK = doorTransform.getLocalFrameK_p();
+		Vector const walkOutward = getPortalWalkOutward(doorTransform);
 		Vector const pos = doorTransform.getPosition_p();
 
-		float const offsetsK[] = { 0.0f, 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f, 0.25f, -0.25f, 0.35f, -0.35f, 0.5f, -0.5f };
+		float const offsetsOutward[] = { 0.0f, 0.05f, 0.1f, 0.15f, 0.25f, 0.35f, 0.5f, 0.75f, 1.0f };
 		float const offsetsI[] = { 0.0f, 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f };
 		float const offsetsJ[] = { 0.0f, -0.05f, 0.05f, -0.1f, 0.1f };
 
@@ -2115,9 +2123,9 @@ namespace PortalPropertyMaterializeNamespace
 		{
 			for (size_t oi = 0; oi < sizeof(offsetsI) / sizeof(offsetsI[0]); ++oi)
 			{
-				for (size_t ok = 0; ok < sizeof(offsetsK) / sizeof(offsetsK[0]); ++ok)
+				for (size_t ok = 0; ok < sizeof(offsetsOutward) / sizeof(offsetsOutward[0]); ++ok)
 				{
-					Vector const base = pos + axisJ * offsetsJ[oj] + axisI * offsetsI[oi] + axisK * offsetsK[ok];
+					Vector const base = pos + axisJ * offsetsJ[oj] + axisI * offsetsI[oi] + walkOutward * offsetsOutward[ok];
 					VectorVector nudged;
 					nudged.push_back(base - axisI * halfWidth);
 					nudged.push_back(base + axisI * halfWidth);
@@ -2170,27 +2178,101 @@ namespace PortalPropertyMaterializeNamespace
 		outTriCount = 0;
 
 		Vector const axisI = doorTransform.getLocalFrameI_p();
-		Vector const axisK = doorTransform.getLocalFrameK_p();
+		Vector const walkOutward = getPortalWalkOutward(doorTransform);
 		Vector const pos = doorTransform.getPosition_p();
 		float const halfWidth = doorwayWidth * 0.5f;
 
 		Vector const innerLeft = pos - axisI * halfWidth;
 		Vector const innerRight = pos + axisI * halfWidth;
-		Vector const outerLeft = innerLeft + axisK * depth;
-		Vector const outerRight = innerRight + axisK * depth;
+		Vector const outerLeft = innerLeft + walkOutward * depth;
+		Vector const outerRight = innerRight + walkOutward * depth;
 
 		floorMesh->addTriangle(Triangle3d(innerLeft, innerRight, outerRight));
 		floorMesh->addTriangle(Triangle3d(innerLeft, outerRight, outerLeft));
 		outTriCount = 2;
 
-		VectorVector portalVerts;
-		portalVerts.push_back(outerLeft);
-		portalVerts.push_back(outerRight);
-		portalVerts.push_back(outerRight + Vector(0.0f, 0.05f, 0.0f));
-		portalVerts.push_back(outerLeft + Vector(0.0f, 0.05f, 0.0f));
-		IGNORE_RETURN(floorMesh->flagPortalEdges(portalVerts, portalIndex));
+		VectorVector innerPortalVerts;
+		innerPortalVerts.push_back(innerLeft);
+		innerPortalVerts.push_back(innerRight);
+		innerPortalVerts.push_back(innerRight + Vector(0.0f, 0.05f, 0.0f));
+		innerPortalVerts.push_back(innerLeft + Vector(0.0f, 0.05f, 0.0f));
+		IGNORE_RETURN(floorMesh->flagPortalEdges(innerPortalVerts, portalIndex));
+
+		VectorVector outerPortalVerts;
+		outerPortalVerts.push_back(outerLeft);
+		outerPortalVerts.push_back(outerRight);
+		outerPortalVerts.push_back(outerRight + Vector(0.0f, 0.05f, 0.0f));
+		outerPortalVerts.push_back(outerLeft + Vector(0.0f, 0.05f, 0.0f));
+		IGNORE_RETURN(floorMesh->flagPortalEdges(outerPortalVerts, portalIndex));
 
 		return true;
+	}
+
+	bool boxesOverlap(AxialBox const & a, AxialBox const & b)
+	{
+		Vector const aMin = a.getMin();
+		Vector const aMax = a.getMax();
+		Vector const bMin = b.getMin();
+		Vector const bMax = b.getMax();
+		return aMin.x <= bMax.x && aMax.x >= bMin.x
+			&& aMin.y <= bMax.y && aMax.y >= bMin.y
+			&& aMin.z <= bMax.z && aMax.z >= bMin.z;
+	}
+
+	AxialBox buildDoorwayCutBox(Transform const & doorTransform, float width, float height, float depth)
+	{
+		Vector const pos = doorTransform.getPosition_p();
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const axisJ = doorTransform.getLocalFrameJ_p();
+		Vector const outward = getPortalWalkOutward(doorTransform);
+		float const halfW = width * 0.5f + 0.08f;
+
+		AxialBox box;
+		for (int si = -1; si <= 1; si += 2)
+		{
+			for (int sj = 0; sj <= 1; ++sj)
+			{
+				Vector const inner = pos
+					+ axisI * (halfW * static_cast<float>(si))
+					+ axisJ * (height * static_cast<float>(sj));
+				Vector const outer = inner + outward * depth;
+				box.add(inner);
+				box.add(outer);
+			}
+		}
+		return box;
+	}
+
+	bool flagBoundaryEdgesInDoorwayBox(
+		FloorMesh * floorMesh,
+		AxialBox const & doorwayBox,
+		int portalIndex)
+	{
+		if (!floorMesh)
+			return false;
+
+		bool flagged = false;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			FloorTri & F = floorMesh->getFloorTri(tri);
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int edge = 0; edge < 3; ++edge)
+			{
+				if (F.getNeighborIndex(edge) != -1)
+					continue;
+
+				Vector const a = T.getCorner(edge);
+				Vector const b = T.getCorner(edge + 1);
+				Vector const edgeMid = (a + b) * 0.5f;
+				if (doorwayBox.contains(edgeMid) || doorwayBox.contains(a) || doorwayBox.contains(b))
+				{
+					F.setPortalId(edge, portalIndex);
+					flagged = true;
+				}
+			}
+		}
+
+		return flagged;
 	}
 
 	bool flagCustomSocketPortalFloor(
@@ -2215,45 +2297,12 @@ namespace PortalPropertyMaterializeNamespace
 			flagged = flagPortalEdgesRobust(floorMesh, doorTransform, doorwayWidth, doorwayHeight, portalIndex);
 		if (!flagged)
 			flagged = flagNearbyBoundaryEdges(floorMesh, doorTransform, doorwayWidth, portalIndex);
-		return flagged;
-	}
-
-	bool boxesOverlap(AxialBox const & a, AxialBox const & b)
-	{
-		Vector const aMin = a.getMin();
-		Vector const aMax = a.getMax();
-		Vector const bMin = b.getMin();
-		Vector const bMax = b.getMax();
-		return aMin.x <= bMax.x && aMax.x >= bMin.x
-			&& aMin.y <= bMax.y && aMax.y >= bMin.y
-			&& aMin.z <= bMax.z && aMax.z >= bMin.z;
-	}
-
-	AxialBox buildDoorwayCutBox(Transform const & doorTransform, float width, float height, float depth)
-	{
-		Vector const pos = doorTransform.getPosition_p();
-		Vector const axisI = doorTransform.getLocalFrameI_p();
-		Vector const axisJ = doorTransform.getLocalFrameJ_p();
-		Vector const axisK = doorTransform.getLocalFrameK_p();
-		float const halfW = width * 0.5f + 0.08f;
-		float const halfD = depth * 0.5f + 0.08f;
-
-		AxialBox box;
-		for (int si = -1; si <= 1; si += 2)
+		if (!flagged)
 		{
-			for (int sj = 0; sj <= 1; ++sj)
-			{
-				for (int sk = -1; sk <= 1; sk += 2)
-				{
-					Vector const corner = pos
-						+ axisI * (halfW * static_cast<float>(si))
-						+ axisJ * (height * static_cast<float>(sj))
-						+ axisK * (halfD * static_cast<float>(sk));
-					box.add(corner);
-				}
-			}
+			AxialBox const doorwayBox = buildDoorwayCutBox(doorTransform, doorwayWidth, doorwayHeight, 0.5f);
+			flagged = flagBoundaryEdgesInDoorwayBox(floorMesh, doorwayBox, portalIndex);
 		}
-		return box;
+		return flagged;
 	}
 
 	bool extentIntersectsDoorway(BaseExtent const * extent, AxialBox const & doorwayBox)
@@ -2413,17 +2462,20 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 		clearCustomSocketFloorExtension(*socketEntry, floorMesh);
 
 		int const portalIndex = socketEntry->materializedPortalIndex;
-		if (!flagCustomSocketPortalFloor(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex))
-		{
-			WARNING(true, ("PortalProperty::finalizeCustomSocketPortalWalkthrough - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
-		}
+		bool flagged = flagCustomSocketPortalFloor(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex);
 
 		int extensionStartTri = -1;
 		int extensionTriCount = 0;
-		if (extendFloorThroughDoorway(floorMesh, doorTransform, width, 1.25f, portalIndex, extensionStartTri, extensionTriCount))
+		bool const extended = extendFloorThroughDoorway(floorMesh, doorTransform, width, 1.25f, portalIndex, extensionStartTri, extensionTriCount);
+		if (extended)
 		{
 			socketEntry->floorExtensionStartTri = extensionStartTri;
 			socketEntry->floorExtensionTriCount = extensionTriCount;
+		}
+
+		if (!flagged && !extended)
+		{
+			WARNING(true, ("PortalProperty::finalizeCustomSocketPortalWalkthrough - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
 		}
 	}
 
