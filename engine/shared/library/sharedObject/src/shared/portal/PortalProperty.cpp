@@ -2219,25 +2219,31 @@ namespace PortalPropertyMaterializeNamespace
 			&& aMin.z <= bMax.z && aMax.z >= bMin.z;
 	}
 
-	AxialBox buildDoorwayCutBox(Transform const & doorTransform, float width, float height, float depth)
+	AxialBox buildDoorwayCutBox(Transform const & doorTransform, float width, float height, float outwardDepth)
 	{
 		Vector const pos = doorTransform.getPosition_p();
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const axisJ = doorTransform.getLocalFrameJ_p();
-		Vector const outward = getPortalWalkOutward(doorTransform);
-		float const halfW = width * 0.5f + 0.08f;
+		Vector inward = doorTransform.getLocalFrameK_p();
+		inward.y = 0.0f;
+		if (inward.normalize() < 0.01f)
+			inward = Vector(0.0f, 0.0f, 1.0f);
+		Vector const outward = -inward;
+		float const inwardDepth = 0.5f;
+		float const halfW = width * 0.5f + 0.12f;
+		float const topHeight = height + 0.35f;
 
 		AxialBox box;
 		for (int si = -1; si <= 1; si += 2)
 		{
 			for (int sj = 0; sj <= 1; ++sj)
 			{
-				Vector const inner = pos
+				float const heightOffset = sj == 0 ? 0.0f : topHeight;
+				Vector const base = pos
 					+ axisI * (halfW * static_cast<float>(si))
-					+ axisJ * (height * static_cast<float>(sj));
-				Vector const outer = inner + outward * depth;
-				box.add(inner);
-				box.add(outer);
+					+ axisJ * heightOffset;
+				box.add(base - inward * inwardDepth);
+				box.add(base + outward * outwardDepth);
 			}
 		}
 		return box;

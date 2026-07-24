@@ -657,7 +657,10 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 	}
 
 	if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
+	{
 		persistCustomSockets(building, *portalProperty);
+		broadcastAllCustomSockets(building, *portalProperty);
+	}
 
 	recordBridgeIfNeeded(*portalProperty, hostCellIndex, hostPortalIndex, graftedCellIndex, resolvedGraftPortal);
 	persistBridgeSegments(building, *portalProperty);
