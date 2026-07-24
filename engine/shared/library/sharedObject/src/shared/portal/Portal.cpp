@@ -24,11 +24,14 @@
 #include "sharedObject/AppearanceTemplate.h"
 #include "sharedObject/AppearanceTemplateList.h"
 #include "sharedObject/CellProperty.h"
+#include "sharedCollision/Extent.h"
 #include "sharedObject/ConfigSharedObject.h"
 #include "sharedObject/PortalPropertyTemplate.h"
 #include "sharedUtility/DataTable.h"
 
 #include <vector>
+#include <string>
+#include <cmath>
 
 // ======================================================================
 
@@ -96,6 +99,61 @@ void Portal::preloadDoorStyle(const char* const doorStyle, std::vector<const App
 			preloadAppearanceTemplateList.push_back (appearanceTemplate);
 		}
 	}
+}
+
+// ----------------------------------------------------------------------
+
+char const * Portal::pickDynamicBunkerDoorStyle(Transform const & doorTransform)
+{
+	Vector const axisI = doorTransform.getLocalFrameI_p();
+	if (fabsf(axisI.x) >= fabsf(axisI.z))
+		return "door_bunker_rebel_x_axis";
+	return "poi_all_impl_bunker_int_door";
+}
+
+// ----------------------------------------------------------------------
+
+bool Portal::lookupDoorStyleAppearance(char const * doorStyle, std::string & outAppearancePath)
+{
+	outAppearancePath.clear();
+	if (!ms_doorStyleTable || !doorStyle || !doorStyle[0])
+		return false;
+
+	int const row = ms_doorStyleTable->searchColumnString(0, doorStyle);
+	if (row == -1)
+		return false;
+
+	outAppearancePath = ms_doorStyleTable->getStringValue(2, row);
+	if (outAppearancePath.empty())
+		outAppearancePath = ms_doorStyleTable->getStringValue(1, row);
+	return !outAppearancePath.empty();
+}
+
+// ----------------------------------------------------------------------
+
+bool Portal::lookupDoorStyleDimensions(char const * doorStyle, float & outWidth, float & outHeight)
+{
+	std::string appearancePath;
+	if (!lookupDoorStyleAppearance(doorStyle, appearancePath))
+		return false;
+
+	AppearanceTemplate const * const tmpl = AppearanceTemplateList::fetch(appearancePath.c_str());
+	if (!tmpl)
+		return false;
+
+	Extent const * const extent = tmpl->getExtent();
+	if (!extent)
+	{
+		AppearanceTemplateList::release(tmpl);
+		return false;
+	}
+
+	AxialBox const box = extent->getBoundingBox();
+	Vector const size = box.getMax() - box.getMin();
+	outWidth = std::max(size.x, size.z);
+	outHeight = std::max(0.5f, size.y);
+	AppearanceTemplateList::release(tmpl);
+	return outWidth > 0.01f && outHeight > 0.01f;
 }
 
 // ======================================================================

@@ -1691,22 +1691,35 @@ namespace PortalPropertyMaterializeNamespace
 		Vector const cellCenter = computeCellFloorCenter(cell);
 		Vector const pos = doorTransform.getPosition_p();
 		Vector inward = cellCenter - pos;
-		inward.y = 0.0f;
-		if (inward.normalize() < 0.01f)
-			return;
 
 		Vector axisI = doorTransform.getLocalFrameI_p();
+		Vector axisJ = doorTransform.getLocalFrameJ_p();
 		Vector axisK = doorTransform.getLocalFrameK_p();
-		axisK.y = 0.0f;
-		if (axisK.normalize() < 0.01f)
-			return;
 
-		// IN faces the player: K points from the doorway back into the room interior.
-		if (axisK.dot(inward) < 0.0f)
+		bool const wallAligned = fabsf(axisK.y) < 0.15f;
+		if (wallAligned)
 		{
-			axisI = -axisI;
-			axisK = -axisK;
-			doorTransform.setLocalFrameIJK_p(axisI, Vector(0.0f, 1.0f, 0.0f), axisK);
+			inward.y = 0.0f;
+			axisK.y = 0.0f;
+			if (inward.normalize() < 0.01f || axisK.normalize() < 0.01f)
+				return;
+
+			if (axisK.dot(inward) < 0.0f)
+			{
+				axisI = -axisI;
+				axisK = -axisK;
+				doorTransform.setLocalFrameIJK_p(axisI, Vector(0.0f, 1.0f, 0.0f), axisK);
+			}
+		}
+		else if (inward.normalize() > 0.01f && axisK.normalize() > 0.01f)
+		{
+			if (axisK.dot(inward) < 0.0f)
+			{
+				axisI = -axisI;
+				axisJ = -axisJ;
+				axisK = -axisK;
+				doorTransform.setLocalFrameIJK_p(axisI, axisJ, axisK);
+			}
 		}
 	}
 
@@ -2273,7 +2286,6 @@ namespace PortalPropertyMaterializeNamespace
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const axisJ = doorTransform.getLocalFrameJ_p();
 		Vector inward = doorTransform.getLocalFrameK_p();
-		inward.y = 0.0f;
 		if (inward.normalize() < 0.01f)
 			inward = Vector(0.0f, 0.0f, 1.0f);
 		Vector const outward = -inward;
@@ -2392,16 +2404,24 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	if (!cell)
 		return false;
 
-	float const width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
-	float const height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
-	float const halfWidth = width * 0.5f;
+	float width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
+	float height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
-	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
+	Vector const preAxisK = doorTransform.getLocalFrameK_p();
+	bool const wallPlacedSocket = fabsf(preAxisK.y) < 0.15f;
+	if (wallPlacedSocket)
+		ensurePortalTransformInward(*cell, doorTransform);
+	else if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
-	ensurePortalTransformInward(*cell, doorTransform);
+	else
+		ensurePortalTransformInward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
+
+	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
+	IGNORE_RETURN(Portal::lookupDoorStyleDimensions(doorStyle, width, height));
+	float const halfWidth = width * 0.5f;
 
 	std::vector<Vector> doorLocalVertices;
 	doorLocalVertices.reserve(4);
@@ -2430,12 +2450,12 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellSpaceVertices[0], static_cast<int>(cellSpaceVertices.size()));
 
-	char const * const doorStyle = 0;
+	char const * const doorStyleName = pickRuntimeDoorStyle(doorTransform);
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
 		doorTransform,
-		doorStyle,
-		true,
+		doorStyleName,
+		false,
 		geometryWindingClockwise,
 		true);
 	if (!portalTemplate)
@@ -2499,15 +2519,23 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 	if (!portal || !portal->getNeighbor())
 		return false;
 
-	float const width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
-	float const height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
+	float width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
+	float height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
-	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
+	Vector const preAxisK = doorTransform.getLocalFrameK_p();
+	bool const wallPlacedSocket = fabsf(preAxisK.y) < 0.15f;
+	if (wallPlacedSocket)
+		ensurePortalTransformInward(*cell, doorTransform);
+	else if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
-	ensurePortalTransformInward(*cell, doorTransform);
+	else
+		ensurePortalTransformInward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
+
+	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
+	IGNORE_RETURN(Portal::lookupDoorStyleDimensions(doorStyle, width, height));
 
 	Floor * const floor = cell->getFloor();
 	FloorMesh * const floorMesh = floor ? const_cast<FloorMesh *>(floor->getFloorMesh()) : 0;

@@ -30,6 +30,8 @@ namespace DPVS
 
 #include "sharedObject/PortalProperty.h"
 
+#include <string>
+
 // ======================================================================
 
 class Portal
@@ -48,6 +50,9 @@ public:
 	static void remove();
 	static void setHookFunctions(CreateDpvsPortalHookFunction createDpvsPortalHookFunction, DestroyDpvsPortalHookFunction destroyDpvsPortalHookFunction, ClosedStateChangedHookFunction closedStateChangedHookFunction, bool createDoors);
 	static void preloadDoorStyle(const char *doorStyle, std::vector<const AppearanceTemplate*>& preloadAppearanceTemplateList);
+	static char const *             pickDynamicBunkerDoorStyle(Transform const & doorTransform);
+	static bool                       lookupDoorStyleAppearance(char const * doorStyle, std::string & outAppearancePath);
+	static bool                       lookupDoorStyleDimensions(char const * doorStyle, float & outWidth, float & outHeight);
 
 public:
 
