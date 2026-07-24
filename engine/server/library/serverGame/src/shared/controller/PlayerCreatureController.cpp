@@ -554,7 +554,10 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 		Object const *sourcePob = ContainerInterface::getTopmostContainer(*creature);
 		PortalProperty const *sourcePortalProperty = sourcePob ? sourcePob->getPortalProperty() : 0;
 		CellObject const * const destCell = m.getCell();
-		PortalProperty const *destPortalProperty = destCell ? ContainerInterface::getContainedByObject(*destCell)->getPortalProperty() : 0;
+		Object const * const destPob = destCell ? ContainerInterface::getContainedByObject(*destCell) : 0;
+		PortalProperty const *destPortalProperty = destPob ? destPob->getPortalProperty() : 0;
+		if (destCell && !destPob)
+			return handleInvalidMove("destination cell is not attached to a building");
 		if (sourcePortalProperty != destPortalProperty)
 		{
 			// Moving between pobs.  This is only valid if one of these is nullptr, since pobs only connect to the world
