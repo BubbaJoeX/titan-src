@@ -1805,15 +1805,6 @@ namespace PortalPropertyMaterializeNamespace
 			}
 		}
 
-		Vector const heightOffset(0.0f, doorwayHeight, 0.0f);
-		VectorVector portalVerts;
-		portalVerts.push_back(snappedEdge.a);
-		portalVerts.push_back(snappedEdge.b);
-		portalVerts.push_back(snappedEdge.b + heightOffset);
-		portalVerts.push_back(snappedEdge.a + heightOffset);
-		if (floorMesh->flagPortalEdges(portalVerts, portalIndex))
-			flagged = true;
-
 		return flagged;
 	}
 
