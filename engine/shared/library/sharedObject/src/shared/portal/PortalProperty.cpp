@@ -2253,7 +2253,6 @@ namespace PortalPropertyMaterializeNamespace
 				}
 			}
 		}
-		box.expand(0.08f);
 		return box;
 	}
 
