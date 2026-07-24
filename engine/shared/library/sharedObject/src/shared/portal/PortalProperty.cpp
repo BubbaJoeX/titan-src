@@ -517,6 +517,46 @@ char const *PortalProperty::getExteriorFloorName() const
 
 namespace PortalPropertyNamespace
 {
+	Vector computeCellFloorCenter(CellProperty const & cell)
+	{
+		Floor const * const floor = cell.getFloor();
+		if (!floor)
+			return Vector::zero;
+
+		FloorMesh const * const floorMesh = floor->getFloorMesh();
+		if (!floorMesh)
+			return Vector::zero;
+
+		AxialBox box;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int c = 0; c < 3; ++c)
+				box.add(T.getCorner(c));
+		}
+		return box.getCenter();
+	}
+
+	void ensurePortalTransformPointsOutward(CellProperty const & cell, Transform & portalTransform_o2p)
+	{
+		Vector const cellCenter_cell = computeCellFloorCenter(cell);
+		Transform const cell_o2p = cell.getOwner().getTransform_o2p();
+		Vector const center_p = cell_o2p.rotateTranslate_l2p(cellCenter_cell);
+		Vector const portalPos_p = portalTransform_o2p.getPosition_p();
+		Vector toPortal = portalPos_p - center_p;
+		toPortal.y = 0.0f;
+
+		Vector axisI = portalTransform_o2p.getLocalFrameI_p();
+		Vector axisK = portalTransform_o2p.getLocalFrameK_p();
+		axisK.y = 0.0f;
+		if (toPortal.normalize() > 0.01f && axisK.normalize() > 0.01f && axisK.dot(toPortal) < 0.0f)
+		{
+			axisI = -axisI;
+			axisK = -axisK;
+			portalTransform_o2p.setLocalFrameIJK_p(axisI, Vector(0.0f, 1.0f, 0.0f), axisK);
+		}
+	}
+
 	int findBestDonorTemplatePortal(
 		PortalPropertyTemplateCell const &donorCell,
 		Transform const &desiredPortal_building,
@@ -630,8 +670,6 @@ void PortalProperty::cellLoaded(int cellIndex, Object &cellObject, bool shouldCr
 
 	// let the cell know who its portal object is, and what its portal data is
 	cell->initialize(*this, cellIndex, shouldCreateAppearance);
-
-	refreshDynamicGraftPortalDpvs();
 }
 
 // ----------------------------------------------------------------------
@@ -765,7 +803,7 @@ const char *PortalProperty::getPobName() const
 
 const char *PortalProperty::getPobShortName() const
 {
-	return m_template->getShortName().getString();
+	return m_template ? m_template->getShortName().getString() : "";
 }
 
 // ----------------------------------------------------------------------
@@ -1079,6 +1117,10 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 	Transform hostPortal_building;
 	if (!getPortalSocketTransform_o2p(hostCellIndex, hostPortalIndex, hostPortal_building))
 		return false;
+
+	CellProperty const * const hostCell = getCell(hostCellIndex);
+	if (hostCell)
+		ensurePortalTransformPointsOutward(*hostCell, hostPortal_building);
 
 	PortalPropertyTemplate const *const donorTemplate = PortalPropertyTemplateList::fetch(CrcLowerString(donorPobName));
 	if (!donorTemplate)
@@ -1603,15 +1645,36 @@ namespace PortalPropertyMaterializeNamespace
 		if (edgeDir.normalize() < 0.01f)
 			return false;
 
-		if (edgeDir.dot(axisI) < 0.0f)
+		Vector preferredI = doorTransform.getLocalFrameI_p();
+		preferredI.y = 0.0f;
+		if (preferredI.normalize() > 0.01f)
+		{
+			if (edgeDir.dot(preferredI) < 0.0f)
+				edgeDir = -edgeDir;
+		}
+		else if (edgeDir.dot(axisI) < 0.0f)
+		{
 			edgeDir = -edgeDir;
+		}
 
-		Vector const cellCenter = computeCellFloorCenter(cell);
+		Vector preferredOutward = doorTransform.getLocalFrameK_p();
+		preferredOutward.y = 0.0f;
+		bool const hasPreferredOutward = preferredOutward.normalize() > 0.01f;
+
 		Vector outward = Vector::unitY.cross(edgeDir);
-		Vector toInterior = cellCenter - edgeMid;
-		toInterior.y = 0.0f;
-		if (outward.dot(toInterior) > 0.0f)
-			outward = -outward;
+		if (hasPreferredOutward)
+		{
+			if (outward.dot(preferredOutward) < 0.0f)
+				outward = -outward;
+		}
+		else
+		{
+			Vector const cellCenter = computeCellFloorCenter(cell);
+			Vector toInterior = cellCenter - edgeMid;
+			toInterior.y = 0.0f;
+			if (outward.dot(toInterior) > 0.0f)
+				outward = -outward;
+		}
 		if (outward.normalize() < 0.01f)
 		{
 			doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
@@ -1763,31 +1826,34 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	stabilizeCustomSocketTransform(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
-	Vector const pos = doorTransform.getPosition_p();
-	Vector const axisI = doorTransform.getLocalFrameI_p();
-	Vector const axisJ = doorTransform.getLocalFrameJ_p();
+	float const halfWidth = width * 0.5f;
+
+	Transform doorTransform = socketEntry->doorTransform_o2p;
+	stabilizeCustomSocketTransform(*cell, doorTransform);
+	socketEntry->doorTransform_o2p = doorTransform;
+
+	std::vector<Vector> doorLocalVertices;
+	doorLocalVertices.reserve(4);
+	doorLocalVertices.push_back(Vector(-halfWidth, 0.0f, 0.0f));
+	doorLocalVertices.push_back(Vector(halfWidth, 0.0f, 0.0f));
+	doorLocalVertices.push_back(Vector(halfWidth, height, 0.0f));
+	doorLocalVertices.push_back(Vector(-halfWidth, height, 0.0f));
+
 	Vector const axisK = doorTransform.getLocalFrameK_p();
-	float const wallPlaneOffset = 0.4f;
-	Vector const geomPos = pos + axisK * wallPlaneOffset;
-
-	std::vector<Vector> cellVertices;
-	cellVertices.reserve(4);
-	cellVertices.push_back(geomPos - axisI * halfWidth);
-	cellVertices.push_back(geomPos + axisI * halfWidth);
-	cellVertices.push_back(geomPos + axisI * halfWidth + axisJ * height);
-	cellVertices.push_back(geomPos - axisI * halfWidth + axisJ * height);
-
-	Plane3d const portalPlane(cellVertices[0], cellVertices[1], cellVertices[2]);
+	Plane3d const portalPlane(
+		doorTransform.rotateTranslate_l2p(doorLocalVertices[0]),
+		doorTransform.rotateTranslate_l2p(doorLocalVertices[1]),
+		doorTransform.rotateTranslate_l2p(doorLocalVertices[2]));
 	if (portalPlane.getNormal().dot(axisK) < 0.0f)
-		std::reverse(cellVertices.begin(), cellVertices.end());
+		std::reverse(doorLocalVertices.begin(), doorLocalVertices.end());
 
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
-	geometry->addTriangleFan(&cellVertices[0], static_cast<int>(cellVertices.size()));
+	geometry->addTriangleFan(&doorLocalVertices[0], static_cast<int>(doorLocalVertices.size()));
 
 	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
-		Transform::identity,
+		doorTransform,
 		doorStyle,
 		true);
 	if (!portalTemplate)
