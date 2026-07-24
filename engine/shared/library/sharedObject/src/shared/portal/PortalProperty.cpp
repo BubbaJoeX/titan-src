@@ -2382,7 +2382,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellSpaceVertices[0], static_cast<int>(cellSpaceVertices.size()));
 
-	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
+	char const * const doorStyle = 0;
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
 		doorTransform,
