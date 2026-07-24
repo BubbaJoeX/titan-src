@@ -88,6 +88,9 @@ public:
 
 	DPVS::Object                     *getDpvsObject();
 	void                              removeFromDpvs();
+	void                              refreshDpvsPortal();
+
+	bool                              isRuntimePortal() const;
 
 	void                              setAppearance(Appearance *appearance);
 	Object *                          getDoorObject();

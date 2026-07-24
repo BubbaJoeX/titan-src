@@ -75,6 +75,7 @@ private:
 	bool              m_passable;
 	bool              m_geometryWindingClockwise;
 	bool              m_runtimeDoorAlwaysOpen;
+	bool              m_isRuntimePortal;
 	bool              m_ownsPortalGeometry;
 	IndexedTriangleList const * m_portalGeometry;
 	char             *m_doorStyle;

@@ -479,6 +479,29 @@ void Portal::removeFromDpvs()
 
 // ----------------------------------------------------------------------
 
+void Portal::refreshDpvsPortal()
+{
+	if (!ms_createDpvsPortalHookFunction || !m_neighbor)
+		return;
+
+	Portal * const neighbor = m_neighbor;
+	removeFromDpvs();
+	m_neighbor = neighbor;
+
+	m_dpvsPortal = (*ms_createDpvsPortalHookFunction)(this);
+	if (m_dpvsPortal && m_relativeToObject)
+		m_relativeToObject->addDpvsObject(m_dpvsPortal);
+}
+
+// ----------------------------------------------------------------------
+
+bool Portal::isRuntimePortal() const
+{
+	return m_template.m_isRuntimePortal;
+}
+
+// ----------------------------------------------------------------------
+
 void Portal::setAppearance(Appearance *appearance)
 {
 	delete m_appearance;

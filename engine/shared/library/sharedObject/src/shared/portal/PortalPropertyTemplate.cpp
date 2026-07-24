@@ -257,6 +257,8 @@ PortalPropertyTemplateCellPortal::PortalPropertyTemplateCellPortal(const PortalP
 	m_disabled(false),
 	m_passable(false),
 	m_geometryWindingClockwise(true),
+	m_runtimeDoorAlwaysOpen(false),
+	m_isRuntimePortal(false),
 	m_ownsPortalGeometry(false),
 	m_portalGeometry(nullptr),
 	m_doorStyle(nullptr),
@@ -277,6 +279,7 @@ PortalPropertyTemplateCellPortal::PortalPropertyTemplateCellPortal()
 	m_passable(true),
 	m_geometryWindingClockwise(true),
 	m_runtimeDoorAlwaysOpen(false),
+	m_isRuntimePortal(false),
 	m_ownsPortalGeometry(false),
 	m_portalGeometry(nullptr),
 	m_doorStyle(nullptr),
@@ -307,6 +310,7 @@ PortalPropertyTemplateCellPortal * PortalPropertyTemplateCellPortal::createRunti
 	result->m_disabled = false;
 	result->m_geometryWindingClockwise = true;
 	result->m_runtimeDoorAlwaysOpen = doorAlwaysOpen;
+	result->m_isRuntimePortal = true;
 	if (doorStyleName && doorStyleName[0])
 	{
 		size_t const len = strlen(doorStyleName) + 1;

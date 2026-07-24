@@ -29,6 +29,7 @@
 #include "sharedFoundation/Crc.h"
 #include "sharedMath/AxialBox.h"
 #include "sharedMath/IndexedTriangleList.h"
+#include "sharedMath/Plane3d.h"
 #include "sharedMath/Segment3d.h"
 #include "sharedMath/Triangle3d.h"
 
@@ -977,6 +978,8 @@ bool PortalProperty::linkCellPortals(int cellIndexA, int portalIndexA, int cellI
 	}
 
 	Portal::linkNeighbors(portalA, portalB);
+	portalA->refreshDpvsPortal();
+	portalB->refreshDpvsPortal();
 	return true;
 }
 
@@ -1727,13 +1730,20 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	Vector const pos = doorTransform.getPosition_p();
 	Vector const axisI = doorTransform.getLocalFrameI_p();
 	Vector const axisJ = doorTransform.getLocalFrameJ_p();
+	Vector const axisK = doorTransform.getLocalFrameK_p();
+	float const wallPlaneOffset = 0.15f;
+	Vector const geomPos = pos + axisK * wallPlaneOffset;
 
 	std::vector<Vector> cellVertices;
 	cellVertices.reserve(4);
-	cellVertices.push_back(pos - axisI * halfWidth);
-	cellVertices.push_back(pos + axisI * halfWidth);
-	cellVertices.push_back(pos + axisI * halfWidth + axisJ * height);
-	cellVertices.push_back(pos - axisI * halfWidth + axisJ * height);
+	cellVertices.push_back(geomPos - axisI * halfWidth);
+	cellVertices.push_back(geomPos + axisI * halfWidth);
+	cellVertices.push_back(geomPos + axisI * halfWidth + axisJ * height);
+	cellVertices.push_back(geomPos - axisI * halfWidth + axisJ * height);
+
+	Plane3d const portalPlane(cellVertices[0], cellVertices[1], cellVertices[2]);
+	if (portalPlane.getNormal().dot(axisK) < 0.0f)
+		std::reverse(cellVertices.begin(), cellVertices.end());
 
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellVertices[0], static_cast<int>(cellVertices.size()));
@@ -1786,6 +1796,46 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	}
 
 	return true;
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::refreshDynamicGraftPortalDpvs()
+{
+	NOT_NULL(m_dynamicRoomGrafts);
+
+	for (size_t graftIndex = 0; graftIndex < m_dynamicRoomGrafts->size(); ++graftIndex)
+	{
+		DynamicRoomGraft const & graft = (*m_dynamicRoomGrafts)[graftIndex];
+
+		CellProperty * const hostCell = getCell(graft.hostCellIndex);
+		CellProperty * const graftCell = getCell(graft.graftedCellIndex);
+		if (!hostCell || !graftCell || !hostCell->getDpvsCell() || !graftCell->getDpvsCell())
+			continue;
+
+		int hostPortalIndex = graft.hostPortalIndex;
+		if (isCustomSocketIndex(graft.hostPortalIndex))
+		{
+			CustomSocket customSocket;
+			if (!findCustomSocket(graft.hostCellIndex, graft.hostPortalIndex, customSocket))
+				continue;
+			if (customSocket.materializedPortalIndex < 0)
+				continue;
+			hostPortalIndex = customSocket.materializedPortalIndex;
+		}
+
+		int const graftPortalIndex = PortalProperty::resolveCellPortalIndex(graftCell, graft.graftedPortalIndex);
+		if (hostPortalIndex < 0 || graftPortalIndex < 0)
+			continue;
+
+		Portal * const hostPortal = hostCell->getPortal(hostPortalIndex);
+		Portal * const graftPortal = graftCell->getPortal(graftPortalIndex);
+		if (!hostPortal || !graftPortal)
+			continue;
+
+		hostPortal->refreshDpvsPortal();
+		graftPortal->refreshDpvsPortal();
+	}
 }
 
 // ----------------------------------------------------------------------

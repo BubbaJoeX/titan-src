@@ -181,6 +181,7 @@ public:
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
 	bool                          materializeCustomSocketPortal(int cellIndex, int customSocketIndex);
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
+	void                          refreshDynamicGraftPortalDpvs();
 
 	void                          clearBridgeSegments();
 	void                          recordBridgeSegment(BridgeSegment const &segment);
