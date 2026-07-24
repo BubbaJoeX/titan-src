@@ -1419,6 +1419,29 @@ bool PortalProperty::isCustomSocketIndex(int portalIndex)
 
 namespace PortalPropertyMaterializeNamespace
 {
+	struct DoorwayBoundaryEdge
+	{
+		int triIndex;
+		int edgeIndex;
+		Vector a;
+		Vector b;
+
+		bool isValid() const
+		{
+			return triIndex >= 0;
+		}
+
+		static DoorwayBoundaryEdge invalid()
+		{
+			DoorwayBoundaryEdge edge;
+			edge.triIndex = -1;
+			edge.edgeIndex = -1;
+			edge.a = Vector::zero;
+			edge.b = Vector::zero;
+			return edge;
+		}
+	};
+
 	void stabilizeCustomSocketTransform(CellProperty const & cell, Transform & doorTransform);
 }
 
@@ -1577,7 +1600,7 @@ namespace PortalPropertyMaterializeNamespace
 		return "poi_all_impl_bunker_int_door";
 	}
 
-	bool snapCustomSocketPositionToFloorBoundary(CellProperty const & cell, Transform & doorTransform)
+	bool snapCustomSocketPositionToFloorBoundary(CellProperty const & cell, Transform & doorTransform, DoorwayBoundaryEdge * outEdge)
 	{
 		Floor const * const floor = cell.getFloor();
 		if (!floor)
@@ -1591,15 +1614,12 @@ namespace PortalPropertyMaterializeNamespace
 
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const portalPos = doorTransform.getPosition_p();
-		float const floorY = portalPos.y;
 
 		Vector preferredK = doorTransform.getLocalFrameK_p();
 		preferredK.y = 0.0f;
 		bool const hasPreferredK = preferredK.normalize() > 0.01f;
 
-		bool found = false;
-		Vector bestA;
-		Vector bestB;
+		DoorwayBoundaryEdge bestEdge = DoorwayBoundaryEdge::invalid();
 		float bestScore = std::numeric_limits<float>::max();
 
 		for (int tri = 0; tri < floorMesh.getTriCount(); ++tri)
@@ -1636,19 +1656,83 @@ namespace PortalPropertyMaterializeNamespace
 
 				if (score < bestScore)
 				{
-					found = true;
-					bestA = a;
-					bestB = b;
+					bestEdge.triIndex = tri;
+					bestEdge.edgeIndex = edge;
+					bestEdge.a = a;
+					bestEdge.b = b;
 					bestScore = score;
 				}
 			}
 		}
 
-		if (!found)
+		if (!bestEdge.isValid())
+		{
+			for (int tri = 0; tri < floorMesh.getTriCount(); ++tri)
+			{
+				FloorTri const & F = floorMesh.getFloorTri(tri);
+				Triangle3d const T = floorMesh.getTriangle(tri);
+				for (int edge = 0; edge < 3; ++edge)
+				{
+					if (F.getNeighborIndex(edge) != -1)
+						continue;
+
+					Vector const a = T.getCorner(edge);
+					Vector const b = T.getCorner(edge + 1);
+					Vector const edgeMid = (a + b) * 0.5f;
+					Vector toEdge = edgeMid - portalPos;
+					toEdge.y = 0.0f;
+					float const dist = toEdge.magnitude();
+					if (dist >= 3.0f)
+						continue;
+
+					float score = dist + 0.5f;
+					if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
+						score += 5.0f;
+
+					if (score < bestScore)
+					{
+						bestEdge.triIndex = tri;
+						bestEdge.edgeIndex = edge;
+						bestEdge.a = a;
+						bestEdge.b = b;
+						bestScore = score;
+					}
+				}
+			}
+		}
+
+		if (!bestEdge.isValid())
 			return false;
 
-		Vector const edgeMid = (bestA + bestB) * 0.5f;
-		doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
+		Vector const edgeMid = (bestEdge.a + bestEdge.b) * 0.5f;
+		float const edgeY = (bestEdge.a.y + bestEdge.b.y) * 0.5f;
+		doorTransform.setPosition_p(Vector(edgeMid.x, edgeY, edgeMid.z));
+
+		Vector edgeDir = bestEdge.b - bestEdge.a;
+		edgeDir.y = 0.0f;
+		if (edgeDir.normalize() > 0.01f)
+		{
+			Vector alignedI = edgeDir;
+			if (alignedI.dot(doorTransform.getLocalFrameI_p()) < 0.0f)
+				alignedI = -alignedI;
+
+			Vector axisK = doorTransform.getLocalFrameK_p();
+			axisK.y = 0.0f;
+			if (axisK.normalize() > 0.01f)
+			{
+				axisK = axisK - alignedI * axisK.dot(alignedI);
+				if (axisK.normalize() < 0.01f)
+				{
+					axisK.set(-alignedI.z, 0.0f, alignedI.x);
+					axisK.normalize();
+				}
+				doorTransform.setLocalFrameIJK_p(alignedI, Vector::unitY, axisK);
+			}
+		}
+
+		if (outEdge)
+			*outEdge = bestEdge;
+
 		return true;
 	}
 
@@ -1656,9 +1740,75 @@ namespace PortalPropertyMaterializeNamespace
 	{
 		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const axisK = doorTransform.getLocalFrameK_p();
-		IGNORE_RETURN(snapCustomSocketPositionToFloorBoundary(cell, doorTransform));
+		IGNORE_RETURN(snapCustomSocketPositionToFloorBoundary(cell, doorTransform, 0));
 		doorTransform.setLocalFrameIJK_p(axisI, Vector::unitY, axisK);
 		ensurePortalTransformOutward(cell, doorTransform);
+	}
+
+	bool flagDoorwayBoundaryEdges(
+		FloorMesh * floorMesh,
+		DoorwayBoundaryEdge const & snappedEdge,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		float doorwayHeight,
+		int portalIndex)
+	{
+		if (!floorMesh || !snappedEdge.isValid())
+			return false;
+
+		floorMesh->clearPortalEdges(portalIndex);
+
+		Vector axisI = snappedEdge.b - snappedEdge.a;
+		axisI.y = 0.0f;
+		float const snappedLen = axisI.magnitude();
+		if (snappedLen < 0.01f)
+			return false;
+		axisI /= snappedLen;
+
+		Vector const pos = doorTransform.getPosition_p();
+		float const halfWidth = doorwayWidth * 0.5f;
+		Segment3d const doorwaySpan(pos - axisI * halfWidth, pos + axisI * halfWidth);
+
+		bool flagged = false;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			FloorTri & F = floorMesh->getFloorTri(tri);
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int edge = 0; edge < 3; ++edge)
+			{
+				if (F.getNeighborIndex(edge) != -1)
+					continue;
+
+				Vector const a = T.getCorner(edge);
+				Vector const b = T.getCorner(edge + 1);
+				Vector edgeDir = b - a;
+				edgeDir.y = 0.0f;
+				if (edgeDir.normalize() < 0.01f)
+					continue;
+
+				if (fabsf(edgeDir.dot(axisI)) < 0.85f)
+					continue;
+
+				Vector const aProj = Distance3d::ClosestPointSeg(a, doorwaySpan);
+				Vector const bProj = Distance3d::ClosestPointSeg(b, doorwaySpan);
+				if ((a - aProj).magnitude() < 0.25f && (b - bProj).magnitude() < 0.25f)
+				{
+					F.setPortalId(edge, portalIndex);
+					flagged = true;
+				}
+			}
+		}
+
+		Vector const heightOffset(0.0f, doorwayHeight, 0.0f);
+		VectorVector portalVerts;
+		portalVerts.push_back(snappedEdge.a);
+		portalVerts.push_back(snappedEdge.b);
+		portalVerts.push_back(snappedEdge.b + heightOffset);
+		portalVerts.push_back(snappedEdge.a + heightOffset);
+		if (floorMesh->flagPortalEdges(portalVerts, portalIndex))
+			flagged = true;
+
+		return flagged;
 	}
 
 	bool flagBoundaryEdgesDirect(
@@ -1790,7 +1940,11 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	float const halfWidth = width * 0.5f;
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
-	stabilizeCustomSocketTransform(*cell, doorTransform);
+	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
+	if (snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
+		ensurePortalTransformOutward(*cell, doorTransform);
+	else
+		stabilizeCustomSocketTransform(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	std::vector<Vector> doorLocalVertices;
@@ -1852,7 +2006,12 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	if (portal && floorMeshConst)
 	{
 		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
-		if (!flagPortalEdgesRobust(floorMesh, doorTransform, width, height, portalIndex))
+		bool flagged = false;
+		if (boundaryEdge.isValid())
+			flagged = flagDoorwayBoundaryEdges(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex);
+		if (!flagged)
+			flagged = flagPortalEdgesRobust(floorMesh, doorTransform, width, height, portalIndex);
+		if (!flagged)
 		{
 			WARNING(true, ("PortalProperty::materializeCustomSocketPortal - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
 		}
