@@ -186,6 +186,9 @@ public:
 	bool                          finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex);
 	bool                          materializeCustomSocketPortal(int cellIndex, int customSocketIndex);
 	void                          dematerializeAllCustomSocketPortals();
+	bool                          cutWallMeshForCustomSocketPortal(int cellIndex, int customSocketIndex);
+	void                          refreshCellWallCuts(int cellIndex);
+	void                          refreshAllCustomSocketWallCuts();
 	bool                          markCustomSocketOpen(int cellIndex, int socketIndex, bool open);
 	void                          refreshDynamicGraftPortalDpvs();
 

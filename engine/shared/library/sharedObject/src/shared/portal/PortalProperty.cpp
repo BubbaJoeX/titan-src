@@ -10,7 +10,9 @@
 #include "sharedObject/PortalProperty.h"
 
 #include "sharedCollision/DoorObject.h"
+#include "sharedCollision/DetailExtent.h"
 #include "sharedCollision/Distance3d.h"
+#include "sharedCollision/ExtentList.h"
 #include "sharedCollision/Floor.h"
 #include "sharedCollision/FloorManager.h"
 #include "sharedCollision/FloorLocator.h"
@@ -36,6 +38,7 @@
 #include <algorithm>
 #include <limits>
 #include <cstdio>
+#include <set>
 
 // ======================================================================
 
@@ -1119,7 +1122,7 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 		return false;
 
 	CellProperty const * const hostCell = getCell(hostCellIndex);
-	if (hostCell)
+	if (hostCell && !isCustomSocketIndex(hostPortalIndex))
 		ensurePortalTransformPointsOutward(*hostCell, hostPortal_building);
 
 	PortalPropertyTemplate const *const donorTemplate = PortalPropertyTemplateList::fetch(CrcLowerString(donorPobName));
@@ -1167,7 +1170,7 @@ bool PortalProperty::computeLinkedGraftCellTransform(int hostCellIndex, int host
 		return false;
 
 	CellProperty const * const hostCell = getCell(hostCellIndex);
-	if (hostCell)
+	if (hostCell && !isCustomSocketIndex(hostPortalIndex))
 		ensurePortalTransformPointsOutward(*hostCell, hostPortal_building);
 
 	CellProperty const * const graftCell = getCell(graftCellIndex);
@@ -1626,6 +1629,30 @@ namespace PortalPropertyMaterializeNamespace
 		return box.getCenter();
 	}
 
+	void ensurePortalTransformInward(CellProperty const & cell, Transform & doorTransform)
+	{
+		Vector const cellCenter = computeCellFloorCenter(cell);
+		Vector const pos = doorTransform.getPosition_p();
+		Vector inward = cellCenter - pos;
+		inward.y = 0.0f;
+		if (inward.normalize() < 0.01f)
+			return;
+
+		Vector axisI = doorTransform.getLocalFrameI_p();
+		Vector axisK = doorTransform.getLocalFrameK_p();
+		axisK.y = 0.0f;
+		if (axisK.normalize() < 0.01f)
+			return;
+
+		// IN faces the player: K points from the doorway back into the room interior.
+		if (axisK.dot(inward) < 0.0f)
+		{
+			axisI = -axisI;
+			axisK = -axisK;
+			doorTransform.setLocalFrameIJK_p(axisI, Vector(0.0f, 1.0f, 0.0f), axisK);
+		}
+	}
+
 	void ensurePortalTransformOutward(CellProperty const & cell, Transform & doorTransform)
 	{
 		Vector const cellCenter = computeCellFloorCenter(cell);
@@ -1637,6 +1664,10 @@ namespace PortalPropertyMaterializeNamespace
 
 		Vector axisI = doorTransform.getLocalFrameI_p();
 		Vector axisK = doorTransform.getLocalFrameK_p();
+		axisK.y = 0.0f;
+		if (axisK.normalize() < 0.01f)
+			return;
+
 		if (axisK.dot(outward) < 0.0f)
 		{
 			axisI = -axisI;
@@ -1793,8 +1824,18 @@ namespace PortalPropertyMaterializeNamespace
 			if (alignedK.normalize() < 0.01f)
 				alignedK = Vector(0.0f, 0.0f, 1.0f);
 		}
+
+		Vector const cellCenter = computeCellFloorCenter(cell);
+		Vector inward = cellCenter - snappedPos;
+		inward.y = 0.0f;
+		if (inward.normalize() > 0.01f && alignedK.dot(inward) < 0.0f)
+		{
+			alignedI = -alignedI;
+			alignedK = -alignedK;
+		}
+
 		doorTransform.setLocalFrameIJK_p(alignedI, Vector::unitY, alignedK);
-		ensurePortalTransformOutward(cell, doorTransform);
+		ensurePortalTransformInward(cell, doorTransform);
 
 		if (outEdge)
 			*outEdge = bestEdge;
@@ -1805,7 +1846,7 @@ namespace PortalPropertyMaterializeNamespace
 	void stabilizeCustomSocketTransform(CellProperty const & cell, Transform & doorTransform)
 	{
 		if (!snapCustomSocketPositionToFloorBoundary(cell, doorTransform, 0))
-			ensurePortalTransformOutward(cell, doorTransform);
+			ensurePortalTransformInward(cell, doorTransform);
 	}
 
 	bool flagSnappedBoundaryEdgesDirect(
@@ -2176,6 +2217,52 @@ namespace PortalPropertyMaterializeNamespace
 			flagged = flagNearbyBoundaryEdges(floorMesh, doorTransform, doorwayWidth, portalIndex);
 		return flagged;
 	}
+
+	bool boxesOverlap(AxialBox const & a, AxialBox const & b)
+	{
+		Vector const aMin = a.getMin();
+		Vector const aMax = a.getMax();
+		Vector const bMin = b.getMin();
+		Vector const bMax = b.getMax();
+		return aMin.x <= bMax.x && aMax.x >= bMin.x
+			&& aMin.y <= bMax.y && aMax.y >= bMin.y
+			&& aMin.z <= bMax.z && aMax.z >= bMin.z;
+	}
+
+	AxialBox buildDoorwayCutBox(Transform const & doorTransform, float width, float height, float depth)
+	{
+		Vector const pos = doorTransform.getPosition_p();
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const axisJ = doorTransform.getLocalFrameJ_p();
+		Vector const axisK = doorTransform.getLocalFrameK_p();
+		float const halfW = width * 0.5f + 0.08f;
+		float const halfD = depth * 0.5f + 0.08f;
+
+		AxialBox box;
+		for (int si = -1; si <= 1; si += 2)
+		{
+			for (int sj = 0; sj <= 1; ++sj)
+			{
+				for (int sk = -1; sk <= 1; sk += 2)
+				{
+					Vector const corner = pos
+						+ axisI * (halfW * static_cast<float>(si))
+						+ axisJ * (height * static_cast<float>(sj))
+						+ axisK * (halfD * static_cast<float>(sk));
+					box.add(corner);
+				}
+			}
+		}
+		box.expand(0.08f);
+		return box;
+	}
+
+	bool extentIntersectsDoorway(BaseExtent const * extent, AxialBox const & doorwayBox)
+	{
+		if (!extent)
+			return false;
+		return boxesOverlap(extent->getBoundingBox(), doorwayBox);
+	}
 }
 
 using namespace PortalPropertyMaterializeNamespace;
@@ -2211,7 +2298,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
 	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
-	ensurePortalTransformOutward(*cell, doorTransform);
+	ensurePortalTransformInward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	std::vector<Vector> doorLocalVertices;
@@ -2278,6 +2365,8 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 
 	socketEntry->materializedPortalIndex = portalIndex;
 
+	IGNORE_RETURN(cutWallMeshForCustomSocketPortal(cellIndex, customSocketIndex));
+
 	return true;
 }
 
@@ -2315,7 +2404,7 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
 	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
-	ensurePortalTransformOutward(*cell, doorTransform);
+	ensurePortalTransformInward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	Floor * const floor = cell->getFloor();
@@ -2343,6 +2432,8 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 	Portal * const neighborPortal = portal->getNeighbor();
 	if (neighborPortal)
 		neighborPortal->refreshDpvsPortal();
+
+	IGNORE_RETURN(cutWallMeshForCustomSocketPortal(cellIndex, customSocketIndex));
 
 	return true;
 }
@@ -2416,12 +2507,100 @@ void PortalProperty::dematerializeAllCustomSocketPortals()
 			}
 		}
 
-		if (floorMesh)
-		{
-			// clearPortalEdges handled above when socket matched
-		}
-
 		IGNORE_RETURN(cell->removeRuntimePortal(removal.portalIndex));
+	}
+
+	refreshAllCustomSocketWallCuts();
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::cutWallMeshForCustomSocketPortal(int cellIndex, int customSocketIndex)
+{
+	UNREF(customSocketIndex);
+	refreshCellWallCuts(cellIndex);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::refreshCellWallCuts(int cellIndex)
+{
+	CellProperty * const cell = getCell(cellIndex);
+	if (!cell)
+		return;
+
+	PortalPropertyTemplateCell const & cellTemplate = getCellTemplate(cellIndex);
+	BaseExtent const * const baseExtent = cellTemplate.getCollisionExtent();
+	if (!baseExtent || baseExtent->getType() != ET_Detail)
+	{
+		cell->clearRuntimeCollisionExtent();
+		return;
+	}
+
+	DetailExtent const * const baseDetail = safe_cast<DetailExtent const *>(baseExtent);
+	DetailExtent * result = new DetailExtent();
+	for (int i = 0; i < baseDetail->getExtentCount(); ++i)
+		result->attachExtent(baseDetail->getExtent(i)->clone());
+
+	if (m_customSockets)
+	{
+		for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+		{
+			if (it->cellIndex != cellIndex || it->materializedPortalIndex < 0)
+				continue;
+
+			float const width = it->doorwayWidth > 0.01f ? it->doorwayWidth : 1.0f;
+			float const height = it->doorwayHeight > 0.01f ? it->doorwayHeight : 2.0f;
+			AxialBox const doorwayBox = buildDoorwayCutBox(it->doorTransform_o2p, width, height, 0.75f);
+
+			DetailExtent * const next = new DetailExtent();
+			for (int childIndex = 0; childIndex < result->getExtentCount(); ++childIndex)
+			{
+				BaseExtent const * const child = result->getExtent(childIndex);
+				if (!extentIntersectsDoorway(child, doorwayBox))
+					next->attachExtent(child->clone());
+			}
+			delete result;
+			result = next;
+		}
+	}
+
+	if (result->getExtentCount() <= 0)
+	{
+		delete result;
+		cell->clearRuntimeCollisionExtent();
+	}
+	else
+		cell->setRuntimeCollisionExtent(result);
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::refreshAllCustomSocketWallCuts()
+{
+	std::set<int> cellIndices;
+	if (m_customSockets)
+	{
+		for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+		{
+			if (it->materializedPortalIndex >= 0)
+				cellIndices.insert(it->cellIndex);
+		}
+	}
+
+	for (std::set<int>::const_iterator it = cellIndices.begin(); it != cellIndices.end(); ++it)
+		refreshCellWallCuts(*it);
+
+	int const cellCount = getNumberOfCells();
+	for (int cellIndex = 1; cellIndex < cellCount; ++cellIndex)
+	{
+		if (cellIndices.find(cellIndex) == cellIndices.end())
+		{
+			CellProperty * const cell = getCell(cellIndex);
+			if (cell)
+				cell->clearRuntimeCollisionExtent();
+		}
 	}
 }
 

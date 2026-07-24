@@ -349,6 +349,7 @@ CellProperty::CellProperty(Object &owner)
 	m_portalObjectList(new PortalObjectList),
 	m_visible(false),
 	m_floor(nullptr),
+	m_runtimeCollisionExtent(nullptr),
 	m_cellName(nullptr),
 	m_cellNameCrc(0),
 	m_dpvsCell(nullptr),
@@ -386,6 +387,9 @@ CellProperty::~CellProperty()
 		ms_textureRelease(m_environmentTexture);
 		m_environmentTexture = nullptr;
 	}
+
+	delete m_runtimeCollisionExtent;
+	m_runtimeCollisionExtent = nullptr;
 
 	if (!m_portalObjectList->empty())
 	{
@@ -1021,6 +1025,9 @@ const Floor *CellProperty::getFloor() const
 
 const BaseExtent *CellProperty::getCollisionExtent() const
 {
+	if (m_runtimeCollisionExtent)
+		return m_runtimeCollisionExtent;
+
 	if(m_portalProperty)
 	{
 		return m_portalProperty->getCellTemplate(m_cellIndex).getCollisionExtent();
@@ -1029,6 +1036,22 @@ const BaseExtent *CellProperty::getCollisionExtent() const
 	{
 		return nullptr;
 	}
+}
+
+// ----------------------------------------------------------------------
+
+void CellProperty::setRuntimeCollisionExtent(BaseExtent * extent)
+{
+	delete m_runtimeCollisionExtent;
+	m_runtimeCollisionExtent = extent;
+}
+
+// ----------------------------------------------------------------------
+
+void CellProperty::clearRuntimeCollisionExtent()
+{
+	delete m_runtimeCollisionExtent;
+	m_runtimeCollisionExtent = nullptr;
 }
 
 // ----------------------------------------------------------------------
