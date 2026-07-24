@@ -52,7 +52,8 @@ public:
 		IndexedTriangleList * geometry,
 		Transform const & doorTransform_o2p,
 		char const * doorStyleName,
-		bool doorAlwaysOpen = false);
+		bool doorAlwaysOpen = false,
+		bool geometryWindingClockwise = true);
 
 private:
 

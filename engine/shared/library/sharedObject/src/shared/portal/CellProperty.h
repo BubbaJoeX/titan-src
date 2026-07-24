@@ -125,6 +125,7 @@ public:
 	void                  clearAllPortalNeighbors();
 	int                   appendRuntimePortal(PortalPropertyTemplateCellPortal const & portalTemplate);
 	bool                  replaceRuntimePortal(int portalIndex, PortalPropertyTemplateCellPortal const & portalTemplate);
+	bool                  removeRuntimePortal(int portalIndex);
 
 	Object               *getAppearanceObject();
 	const Object         *getAppearanceObject() const;

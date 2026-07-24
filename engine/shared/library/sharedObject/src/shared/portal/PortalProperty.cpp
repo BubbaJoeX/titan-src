@@ -1193,6 +1193,14 @@ bool PortalProperty::removeDynamicRoomGraft(int graftedCellIndex)
 
 // ----------------------------------------------------------------------
 
+void PortalProperty::clearDynamicRoomGrafts()
+{
+	NOT_NULL(m_dynamicRoomGrafts);
+	m_dynamicRoomGrafts->clear();
+}
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::findDynamicRoomGraftForSocket(int cellIndex, int portalIndex, DynamicRoomGraft &outGraft) const
 {
 	NOT_NULL(m_dynamicRoomGrafts);
@@ -1650,9 +1658,15 @@ namespace PortalPropertyMaterializeNamespace
 				if (dist >= 3.0f)
 					continue;
 
+				if (hasPreferredK)
+				{
+					if (dist > 0.05f && toEdge.dot(preferredK) < 0.15f)
+						continue;
+				}
+
 				float score = dist;
 				if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
-					score += 5.0f;
+					score += 50.0f;
 
 				if (score < bestScore)
 				{
@@ -1685,9 +1699,15 @@ namespace PortalPropertyMaterializeNamespace
 					if (dist >= 3.0f)
 						continue;
 
+					if (hasPreferredK)
+					{
+						if (dist > 0.05f && toEdge.dot(preferredK) < 0.15f)
+							continue;
+					}
+
 					float score = dist + 0.5f;
 					if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
-						score += 5.0f;
+						score += 50.0f;
 
 					if (score < bestScore)
 					{
@@ -1707,28 +1727,6 @@ namespace PortalPropertyMaterializeNamespace
 		Vector const edgeMid = (bestEdge.a + bestEdge.b) * 0.5f;
 		float const edgeY = (bestEdge.a.y + bestEdge.b.y) * 0.5f;
 		doorTransform.setPosition_p(Vector(edgeMid.x, edgeY, edgeMid.z));
-
-		Vector edgeDir = bestEdge.b - bestEdge.a;
-		edgeDir.y = 0.0f;
-		if (edgeDir.normalize() > 0.01f)
-		{
-			Vector alignedI = edgeDir;
-			if (alignedI.dot(doorTransform.getLocalFrameI_p()) < 0.0f)
-				alignedI = -alignedI;
-
-			Vector axisK = doorTransform.getLocalFrameK_p();
-			axisK.y = 0.0f;
-			if (axisK.normalize() > 0.01f)
-			{
-				axisK = axisK - alignedI * axisK.dot(alignedI);
-				if (axisK.normalize() < 0.01f)
-				{
-					axisK.set(-alignedI.z, 0.0f, alignedI.x);
-					axisK.normalize();
-				}
-				doorTransform.setLocalFrameIJK_p(alignedI, Vector::unitY, axisK);
-			}
-		}
 
 		if (outEdge)
 			*outEdge = bestEdge;
@@ -1758,18 +1756,26 @@ namespace PortalPropertyMaterializeNamespace
 
 		floorMesh->clearPortalEdges(portalIndex);
 
-		Vector axisI = snappedEdge.b - snappedEdge.a;
+		Vector axisI = doorTransform.getLocalFrameI_p();
 		axisI.y = 0.0f;
-		float const snappedLen = axisI.magnitude();
-		if (snappedLen < 0.01f)
+		if (axisI.normalize() < 0.01f)
 			return false;
-		axisI /= snappedLen;
 
+		Vector const axisJ = doorTransform.getLocalFrameJ_p();
 		Vector const pos = doorTransform.getPosition_p();
 		float const halfWidth = doorwayWidth * 0.5f;
 		Segment3d const doorwaySpan(pos - axisI * halfWidth, pos + axisI * halfWidth);
 
 		bool flagged = false;
+
+		VectorVector portalVerts;
+		portalVerts.push_back(pos - axisI * halfWidth);
+		portalVerts.push_back(pos + axisI * halfWidth);
+		portalVerts.push_back(pos + axisI * halfWidth + axisJ * doorwayHeight);
+		portalVerts.push_back(pos - axisI * halfWidth + axisJ * doorwayHeight);
+		if (floorMesh->flagPortalEdges(portalVerts, portalIndex))
+			flagged = true;
+
 		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
 		{
 			FloorTri & F = floorMesh->getFloorTri(tri);
@@ -1941,9 +1947,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
-	if (snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
-		ensurePortalTransformOutward(*cell, doorTransform);
-	else
+	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
@@ -1959,8 +1963,13 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 		doorTransform.rotateTranslate_l2p(doorLocalVertices[0]),
 		doorTransform.rotateTranslate_l2p(doorLocalVertices[1]),
 		doorTransform.rotateTranslate_l2p(doorLocalVertices[2]));
-	if (portalPlane.getNormal().dot(axisK) < 0.0f)
+	// Template portal meshes face into the cell; DPVS sees through that front face.
+	bool geometryWindingClockwise = true;
+	if (portalPlane.getNormal().dot(axisK) > 0.0f)
+	{
 		std::reverse(doorLocalVertices.begin(), doorLocalVertices.end());
+		geometryWindingClockwise = false;
+	}
 
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&doorLocalVertices[0], static_cast<int>(doorLocalVertices.size()));
@@ -1970,7 +1979,8 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 		geometry,
 		doorTransform,
 		doorStyle,
-		true);
+		true,
+		geometryWindingClockwise);
 	if (!portalTemplate)
 	{
 		delete geometry;
@@ -2018,6 +2028,65 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	}
 
 	return true;
+}
+
+// ----------------------------------------------------------------------
+
+void PortalProperty::dematerializeAllCustomSocketPortals()
+{
+	if (!m_customSockets || m_customSockets->empty())
+		return;
+
+	struct PortalRemoval
+	{
+		int cellIndex;
+		int portalIndex;
+	};
+
+	std::vector<PortalRemoval> removals;
+	removals.reserve(m_customSockets->size());
+
+	for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->materializedPortalIndex >= 0)
+		{
+			PortalRemoval removal;
+			removal.cellIndex = it->cellIndex;
+			removal.portalIndex = it->materializedPortalIndex;
+			removals.push_back(removal);
+		}
+	}
+
+	for (size_t i = 0; i < removals.size(); ++i)
+	{
+		for (size_t j = i + 1; j < removals.size(); ++j)
+		{
+			if (removals[j].cellIndex < removals[i].cellIndex ||
+				(removals[j].cellIndex == removals[i].cellIndex && removals[j].portalIndex > removals[i].portalIndex))
+			{
+				PortalRemoval const temp = removals[i];
+				removals[i] = removals[j];
+				removals[j] = temp;
+			}
+		}
+	}
+
+	for (size_t i = 0; i < removals.size(); ++i)
+	{
+		PortalRemoval const & removal = removals[i];
+		IGNORE_RETURN(unlinkCellPortal(removal.cellIndex, removal.portalIndex));
+
+		CellProperty * const cell = getCell(removal.cellIndex);
+		if (!cell)
+			continue;
+
+		Floor * const floor = cell->getFloor();
+		FloorMesh * const floorMesh = floor ? const_cast<FloorMesh *>(floor->getFloorMesh()) : 0;
+		if (floorMesh)
+			floorMesh->clearPortalEdges(removal.portalIndex);
+
+		IGNORE_RETURN(cell->removeRuntimePortal(removal.portalIndex));
+	}
 }
 
 // ----------------------------------------------------------------------

@@ -20,6 +20,8 @@ char const * const DynamicBunkerUnassignRoomMessage::MessageType = "DynamicBunke
 char const * const DynamicBunkerUngraftMessage::MessageType = "DynamicBunkerUngraftMessage";
 char const * const DynamicBunkerCreateCustomSocketMessage::MessageType = "DynamicBunkerCreateCustomSocketMessage";
 char const * const DynamicBunkerCustomSocketSyncMessage::MessageType = "DynamicBunkerCustomSocketSyncMessage";
+char const * const DynamicBunkerRevertBuildingMessage::MessageType = "DynamicBunkerRevertBuildingMessage";
+char const * const DynamicBunkerBuildingRevertedMessage::MessageType = "DynamicBunkerBuildingRevertedMessage";
 
 // ----------------------------------------------------------------------
 
@@ -466,6 +468,54 @@ DynamicBunkerCustomSocketSyncMessage::DynamicBunkerCustomSocketSyncMessage(Archi
 }
 
 DynamicBunkerCustomSocketSyncMessage::~DynamicBunkerCustomSocketSyncMessage()
+{
+}
+
+// ======================================================================
+
+DynamicBunkerRevertBuildingMessage::DynamicBunkerRevertBuildingMessage(
+	NetworkId const &buildingId,
+	NetworkId const &terminalId)
+: GameNetworkMessage(MessageType),
+	m_buildingId(buildingId),
+	m_terminalId(terminalId)
+{
+	addVariable(m_buildingId);
+	addVariable(m_terminalId);
+}
+
+DynamicBunkerRevertBuildingMessage::DynamicBunkerRevertBuildingMessage(Archive::ReadIterator &source)
+: GameNetworkMessage(MessageType),
+	m_buildingId(),
+	m_terminalId()
+{
+	addVariable(m_buildingId);
+	addVariable(m_terminalId);
+	unpack(source);
+}
+
+DynamicBunkerRevertBuildingMessage::~DynamicBunkerRevertBuildingMessage()
+{
+}
+
+// ======================================================================
+
+DynamicBunkerBuildingRevertedMessage::DynamicBunkerBuildingRevertedMessage(NetworkId const &buildingId)
+: GameNetworkMessage(MessageType),
+	m_buildingId(buildingId)
+{
+	addVariable(m_buildingId);
+}
+
+DynamicBunkerBuildingRevertedMessage::DynamicBunkerBuildingRevertedMessage(Archive::ReadIterator &source)
+: GameNetworkMessage(MessageType),
+	m_buildingId()
+{
+	addVariable(m_buildingId);
+	unpack(source);
+}
+
+DynamicBunkerBuildingRevertedMessage::~DynamicBunkerBuildingRevertedMessage()
 {
 }
 

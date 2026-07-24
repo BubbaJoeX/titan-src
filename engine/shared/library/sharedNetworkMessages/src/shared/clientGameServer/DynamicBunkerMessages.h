@@ -346,6 +346,53 @@ private:
 };
 
 // ======================================================================
+// Client -> server: revert building to original POB cells only
+// ======================================================================
+
+class DynamicBunkerRevertBuildingMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	DynamicBunkerRevertBuildingMessage(
+		NetworkId const &buildingId,
+		NetworkId const &terminalId);
+
+	explicit DynamicBunkerRevertBuildingMessage(Archive::ReadIterator &source);
+	~DynamicBunkerRevertBuildingMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+	NetworkId const &getTerminalId() const { return m_terminalId.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+	Archive::AutoVariable<NetworkId> m_terminalId;
+};
+
+// ======================================================================
+// Server -> client: building dynamic layout was cleared
+// ======================================================================
+
+class DynamicBunkerBuildingRevertedMessage : public GameNetworkMessage
+{
+public:
+
+	static char const * const MessageType;
+
+	explicit DynamicBunkerBuildingRevertedMessage(NetworkId const &buildingId);
+	explicit DynamicBunkerBuildingRevertedMessage(Archive::ReadIterator &source);
+	~DynamicBunkerBuildingRevertedMessage();
+
+	NetworkId const &getBuildingId() const { return m_buildingId.get(); }
+
+private:
+
+	Archive::AutoVariable<NetworkId> m_buildingId;
+};
+
+// ======================================================================
 
 namespace Archive
 {

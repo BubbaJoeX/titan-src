@@ -1206,6 +1206,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("DynamicBunkerRevertBuildingMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                DynamicBunkerRevertBuildingMessage const revertMsg(ri);
+                DynamicBunker::handleRevertBuilding(*this, revertMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("CityTerrainPaintRequestMessage") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 CityTerrainPaintRequestMessage const paintMsg(ri);

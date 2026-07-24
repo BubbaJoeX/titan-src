@@ -402,6 +402,12 @@ namespace DynamicBunkerNamespace
 		building.sendToClientsInUpdateRange(message, true, false);
 	}
 
+	void broadcastBuildingReverted(ServerObject &building)
+	{
+		DynamicBunkerBuildingRevertedMessage const message(building.getNetworkId());
+		building.sendToClientsInUpdateRange(message, true, false);
+	}
+
 	void ejectCellContentsToHost(PortalProperty &portalProperty, int fromCellIndex, int toCellIndex)
 	{
 		CellProperty *const fromCell = portalProperty.getCell(fromCellIndex);
@@ -686,6 +692,42 @@ bool DynamicBunker::removeRoomHook(ServerObject &building, int hostCellIndex, in
 	}
 
 	return removeGraftRecursive(building, *portalProperty, graft.graftedCellIndex);
+}
+
+// ----------------------------------------------------------------------
+
+bool DynamicBunker::revertBuildingToRawPob(ServerObject &building)
+{
+	PortalProperty *const portalProperty = building.getPortalProperty();
+	if (!portalProperty)
+		return false;
+
+	int safety = 256;
+	while (!portalProperty->getDynamicRoomGrafts().empty() && safety-- > 0)
+	{
+		PortalProperty::DynamicRoomGraft const graft = portalProperty->getDynamicRoomGrafts().front();
+		if (!removeGraftRecursive(building, *portalProperty, graft.graftedCellIndex))
+		{
+			IGNORE_RETURN(portalProperty->removeDynamicRoomGraft(graft.graftedCellIndex));
+			IGNORE_RETURN(portalProperty->releaseGraftedCellSlot(graft.graftedCellIndex));
+			IGNORE_RETURN(portalProperty->clearLoadedCellSlot(graft.graftedCellIndex));
+		}
+	}
+
+	portalProperty->dematerializeAllCustomSocketPortals();
+	portalProperty->clearCustomSockets();
+	portalProperty->clearBridgeSegments();
+	portalProperty->clearDynamicRoomGrafts();
+
+	persistGrafts(building, *portalProperty);
+	persistCustomSockets(building, *portalProperty);
+	persistBridgeSegments(building, *portalProperty);
+
+	updatePortalLayoutCrc(building, *portalProperty);
+	broadcastBuildingReverted(building);
+
+	LOG("dynamic_bunker", ("revertBuildingToRawPob building=%s", building.getNetworkId().getValueString().c_str()));
+	return true;
 }
 
 // ----------------------------------------------------------------------
@@ -982,6 +1024,38 @@ void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreate
 		building->getNetworkId().getValueString().c_str(),
 		socket.cellIndex,
 		socket.socketIndex));
+}
+
+// ----------------------------------------------------------------------
+
+void DynamicBunker::handleRevertBuilding(Client &client, DynamicBunkerRevertBuildingMessage const &message)
+{
+	ServerObject *building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
+	if (!building || !building->getPortalProperty())
+	{
+		ServerObject *const character = client.getCharacterObject();
+		if (character)
+		{
+			Object *const topmost = ContainerInterface::getTopmostContainer(*character);
+			ServerObject *const fallback = topmost ? safe_cast<ServerObject *>(topmost) : 0;
+			if (fallback && fallback->getPortalProperty())
+				building = fallback;
+		}
+	}
+
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::handleRevertBuilding - invalid building %s", message.getBuildingId().getValueString().c_str()));
+		return;
+	}
+
+	if (!revertBuildingToRawPob(*building))
+	{
+		WARNING(true, ("DynamicBunker::handleRevertBuilding - failed for building %s", building->getNetworkId().getValueString().c_str()));
+		return;
+	}
+
+	LOG("dynamic_bunker", ("handleRevertBuilding ok building=%s", building->getNetworkId().getValueString().c_str()));
 }
 
 // ----------------------------------------------------------------------

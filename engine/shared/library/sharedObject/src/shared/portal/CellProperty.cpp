@@ -1264,6 +1264,28 @@ bool CellProperty::replaceRuntimePortal(int portalIndex, PortalPropertyTemplateC
 
 // ----------------------------------------------------------------------
 
+bool CellProperty::removeRuntimePortal(int portalIndex)
+{
+	if (!m_portalObjectList || m_portalObjectList->empty())
+		return false;
+
+	PortalList * const portalList = m_portalObjectList->front().portalList;
+	if (!portalList || portalIndex < 0 || portalIndex >= static_cast<int>(portalList->size()))
+		return false;
+
+	Portal * const portal = (*portalList)[static_cast<PortalList::size_type>(portalIndex)];
+	if (!portal || !portal->isRuntimePortal())
+		return false;
+
+	portal->clearNeighbor();
+	portal->removeFromDpvs();
+	delete portal;
+	portalList->erase(portalList->begin() + portalIndex);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 int CellProperty::getNumberOfPortalObjects() const
 {
 	return static_cast<int>(m_portalObjectList->size());

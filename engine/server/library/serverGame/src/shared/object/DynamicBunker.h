@@ -11,6 +11,7 @@
 class Client;
 class DynamicBunkerAssignRoomMessage;
 class DynamicBunkerCreateCustomSocketMessage;
+class DynamicBunkerRevertBuildingMessage;
 class DynamicBunkerUnassignRoomMessage;
 class NetworkId;
 class ServerObject;
@@ -64,6 +65,12 @@ public:
 
 	// Handle client custom snap point placement from the floorplan UI.
 	static void handleCreateCustomSocket(Client &client, DynamicBunkerCreateCustomSocketMessage const &message);
+
+	// Handle client request to strip all grafts/custom snaps and restore raw POB cells.
+	static void handleRevertBuilding(Client &client, DynamicBunkerRevertBuildingMessage const &message);
+
+	// Remove all dynamic grafts, custom snaps, and bridge data from a building.
+	static bool revertBuildingToRawPob(ServerObject &building);
 
 	// Re-apply graft descriptors stored on the building after load.
 	static void restoreGraftsFromObjVars(ServerObject &building);
