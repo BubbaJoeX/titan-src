@@ -1622,6 +1622,24 @@ bool PortalProperty::getPortalNeighbor(int cellIndex, int portalIndex, int &outN
 
 // ----------------------------------------------------------------------
 
+IndexedTriangleList const * PortalProperty::getCellPortalGeometry(int cellIndex, int portalIndex) const
+{
+	CellProperty const * const cell = getCell(cellIndex);
+	if (!cell)
+		return 0;
+
+	if (portalIndex < 0 || portalIndex >= cell->getPortalCount())
+		return 0;
+
+	Portal const * const portal = const_cast<CellProperty *>(cell)->getPortal(portalIndex);
+	if (!portal)
+		return 0;
+
+	return &portal->getGeometry();
+}
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex)
 {
 	CustomSocket customSocket;
