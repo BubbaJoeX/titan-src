@@ -704,15 +704,47 @@ int PortalProperty::getBaseTemplateCellCount() const
 
 // ----------------------------------------------------------------------
 
+namespace PortalPropertyCellNamespace
+{
+	bool isCellOwnerValid(CellProperty * cell)
+	{
+		if (!cell)
+			return false;
+
+#if defined(PLATFORM_WIN32)
+		__try
+		{
+			Object &cellOwner = cell->getOwner();
+			return cellOwner.isInitialized() && cellOwner.getCellProperty() == cell;
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			return false;
+		}
+#else
+		Object &cellOwner = cell->getOwner();
+		return cellOwner.isInitialized() && cellOwner.getCellProperty() == cell;
+#endif
+	}
+
+	bool isCellOwnerValid(CellProperty const * cell)
+	{
+		return isCellOwnerValid(const_cast<CellProperty *>(cell));
+	}
+}
+
+// ----------------------------------------------------------------------
+
 CellProperty *PortalProperty::getCell(int index)
 {
-	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, index, getNumberOfCells());
-	CellProperty *const cell = (*m_cellList)[static_cast<CellList::size_type>(index)];
+	if (!m_cellList || index < 1 || index >= static_cast<int>(m_cellList->size()))
+		return 0;
+
+	CellProperty *cell = (*m_cellList)[static_cast<CellList::size_type>(index)];
 	if (!cell)
 		return 0;
 
-	Object &cellOwner = cell->getOwner();
-	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
+	if (!PortalPropertyCellNamespace::isCellOwnerValid(cell))
 	{
 		(*m_cellList)[static_cast<CellList::size_type>(index)] = 0;
 		return 0;
@@ -725,13 +757,14 @@ CellProperty *PortalProperty::getCell(int index)
 
 const CellProperty *PortalProperty::getCell(int index) const
 {
-	VALIDATE_RANGE_INCLUSIVE_EXCLUSIVE(0, index, getNumberOfCells());
+	if (!m_cellList || index < 1 || index >= static_cast<int>(m_cellList->size()))
+		return 0;
+
 	CellProperty const *const cell = (*m_cellList)[static_cast<CellList::size_type>(index)];
 	if (!cell)
 		return 0;
 
-	Object const &cellOwner = cell->getOwner();
-	if (!cellOwner.isInitialized() || cellOwner.getCellProperty() != cell)
+	if (!PortalPropertyCellNamespace::isCellOwnerValid(cell))
 		return 0;
 
 	return cell;
