@@ -306,9 +306,9 @@ PortalPropertyTemplateCellPortal * PortalPropertyTemplateCellPortal::createRunti
 	PortalPropertyTemplateCellPortal * const result = new PortalPropertyTemplateCellPortal();
 	result->m_portalGeometry = geometry;
 	result->m_ownsPortalGeometry = true;
-	result->m_hasDoorHardpoint = !geometryInCellSpace;
-	if (result->m_hasDoorHardpoint)
-		result->m_doorHardpoint = doorTransform_o2p;
+	UNREF(geometryInCellSpace);
+	result->m_hasDoorHardpoint = true;
+	result->m_doorHardpoint = doorTransform_o2p;
 	result->m_passable = true;
 	result->m_disabled = false;
 	result->m_geometryWindingClockwise = geometryWindingClockwise;

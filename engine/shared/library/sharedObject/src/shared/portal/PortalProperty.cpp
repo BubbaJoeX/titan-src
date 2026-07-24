@@ -1474,16 +1474,6 @@ bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex
 		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
 			return false;
 
-		if (customSocket.materializedPortalIndex >= 0)
-		{
-			Portal * const portal = const_cast<CellProperty *>(cell)->getPortal(customSocket.materializedPortalIndex);
-			if (portal)
-			{
-				outTransform_o2p.multiply(cellOwner.getTransform_o2p(), portal->getDoorTransform());
-				return true;
-			}
-		}
-
 		outTransform_o2p.multiply(cellOwner.getTransform_o2p(), customSocket.doorTransform_o2p);
 		return true;
 	}
@@ -2032,7 +2022,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
-		Transform::identity,
+		doorTransform,
 		doorStyle,
 		true,
 		geometryWindingClockwise,
