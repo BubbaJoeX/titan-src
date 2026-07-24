@@ -1473,7 +1473,18 @@ bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex
 		CustomSocket customSocket;
 		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
 			return false;
-		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
+
+		if (customSocket.materializedPortalIndex >= 0)
+		{
+			Portal * const portal = const_cast<CellProperty *>(cell)->getPortal(customSocket.materializedPortalIndex);
+			if (portal)
+			{
+				outTransform_o2p.multiply(cellOwner.getTransform_o2p(), portal->getDoorTransform());
+				return true;
+			}
+		}
+
+		outTransform_o2p.multiply(cellOwner.getTransform_o2p(), customSocket.doorTransform_o2p);
 		return true;
 	}
 
@@ -1724,9 +1735,8 @@ namespace PortalPropertyMaterializeNamespace
 		if (!bestEdge.isValid())
 			return false;
 
-		Vector const edgeMid = (bestEdge.a + bestEdge.b) * 0.5f;
 		float const edgeY = (bestEdge.a.y + bestEdge.b.y) * 0.5f;
-		doorTransform.setPosition_p(Vector(edgeMid.x, edgeY, edgeMid.z));
+		doorTransform.setPosition_p(Vector(portalPos.x, edgeY, portalPos.z));
 
 		if (outEdge)
 			*outEdge = bestEdge;
@@ -1741,6 +1751,55 @@ namespace PortalPropertyMaterializeNamespace
 		IGNORE_RETURN(snapCustomSocketPositionToFloorBoundary(cell, doorTransform, 0));
 		doorTransform.setLocalFrameIJK_p(axisI, Vector::unitY, axisK);
 		ensurePortalTransformOutward(cell, doorTransform);
+	}
+
+	bool flagNearbyBoundaryEdges(
+		FloorMesh * floorMesh,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		int portalIndex)
+	{
+		if (!floorMesh)
+			return false;
+
+		Vector const pos = doorTransform.getPosition_p();
+		Vector axisI = doorTransform.getLocalFrameI_p();
+		axisI.y = 0.0f;
+		if (axisI.normalize() < 0.01f)
+			return false;
+
+		float const halfWidth = doorwayWidth * 0.5f;
+		Segment3d const doorwaySpan(pos - axisI * halfWidth, pos + axisI * halfWidth);
+
+		bool flagged = false;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			FloorTri & F = floorMesh->getFloorTri(tri);
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int edge = 0; edge < 3; ++edge)
+			{
+				if (F.getNeighborIndex(edge) != -1)
+					continue;
+
+				Vector const a = T.getCorner(edge);
+				Vector const b = T.getCorner(edge + 1);
+				Vector const edgeMid = (a + b) * 0.5f;
+				Vector toEdge = edgeMid - pos;
+				toEdge.y = 0.0f;
+				if (toEdge.magnitude() > 2.0f)
+					continue;
+
+				Vector const aProj = Distance3d::ClosestPointSeg(a, doorwaySpan);
+				Vector const bProj = Distance3d::ClosestPointSeg(b, doorwaySpan);
+				if ((a - aProj).magnitude() < 0.75f && (b - bProj).magnitude() < 0.75f)
+				{
+					F.setPortalId(edge, portalIndex);
+					flagged = true;
+				}
+			}
+		}
+
+		return flagged;
 	}
 
 	bool flagDoorwayBoundaryEdges(
@@ -1940,6 +1999,7 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	DoorwayBoundaryEdge boundaryEdge = DoorwayBoundaryEdge::invalid();
 	if (!snapCustomSocketPositionToFloorBoundary(*cell, doorTransform, &boundaryEdge))
 		stabilizeCustomSocketTransform(*cell, doorTransform);
+	ensurePortalTransformOutward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	std::vector<Vector> doorLocalVertices;
@@ -1950,28 +2010,33 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	doorLocalVertices.push_back(Vector(-halfWidth, height, 0.0f));
 
 	Vector const axisK = doorTransform.getLocalFrameK_p();
+	std::vector<Vector> cellSpaceVertices;
+	cellSpaceVertices.reserve(4);
+	for (size_t vi = 0; vi < doorLocalVertices.size(); ++vi)
+		cellSpaceVertices.push_back(doorTransform.rotateTranslate_l2p(doorLocalVertices[vi]));
+
 	Plane3d const portalPlane(
-		doorTransform.rotateTranslate_l2p(doorLocalVertices[0]),
-		doorTransform.rotateTranslate_l2p(doorLocalVertices[1]),
-		doorTransform.rotateTranslate_l2p(doorLocalVertices[2]));
-	// Template portal meshes face into the cell; DPVS sees through that front face.
+		cellSpaceVertices[0],
+		cellSpaceVertices[1],
+		cellSpaceVertices[2]);
 	bool geometryWindingClockwise = true;
 	if (portalPlane.getNormal().dot(axisK) > 0.0f)
 	{
-		std::reverse(doorLocalVertices.begin(), doorLocalVertices.end());
+		std::reverse(cellSpaceVertices.begin(), cellSpaceVertices.end());
 		geometryWindingClockwise = false;
 	}
 
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
-	geometry->addTriangleFan(&doorLocalVertices[0], static_cast<int>(doorLocalVertices.size()));
+	geometry->addTriangleFan(&cellSpaceVertices[0], static_cast<int>(cellSpaceVertices.size()));
 
 	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
-		doorTransform,
+		Transform::identity,
 		doorStyle,
 		true,
-		geometryWindingClockwise);
+		geometryWindingClockwise,
+		true);
 	if (!portalTemplate)
 	{
 		delete geometry;
@@ -2012,6 +2077,8 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 			flagged = flagDoorwayBoundaryEdges(floorMesh, boundaryEdge, doorTransform, width, height, portalIndex);
 		if (!flagged)
 			flagged = flagPortalEdgesRobust(floorMesh, doorTransform, width, height, portalIndex);
+		if (!flagged)
+			flagged = flagNearbyBoundaryEdges(floorMesh, doorTransform, width, portalIndex);
 		if (!flagged)
 		{
 			WARNING(true, ("PortalProperty::materializeCustomSocketPortal - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));

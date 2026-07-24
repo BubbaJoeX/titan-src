@@ -53,7 +53,8 @@ public:
 		Transform const & doorTransform_o2p,
 		char const * doorStyleName,
 		bool doorAlwaysOpen = false,
-		bool geometryWindingClockwise = true);
+		bool geometryWindingClockwise = true,
+		bool geometryInCellSpace = false);
 
 private:
 
