@@ -1038,7 +1038,12 @@ void DynamicBunker::handleCreateCustomSocket(Client &client, DynamicBunkerCreate
 
 	persistCustomSockets(*building, *portalProperty);
 	updatePortalLayoutCrc(*building, *portalProperty);
-	broadcastCustomSocket(*building, socket);
+
+	PortalProperty::CustomSocket syncedSocket;
+	if (portalProperty->findCustomSocket(socket.cellIndex, socket.socketIndex, syncedSocket))
+		broadcastCustomSocket(*building, syncedSocket);
+	else
+		broadcastCustomSocket(*building, socket);
 
 	LOG("dynamic_bunker", ("handleCreateCustomSocket ok building=%s cell=%d socket=%d",
 		building->getNetworkId().getValueString().c_str(),

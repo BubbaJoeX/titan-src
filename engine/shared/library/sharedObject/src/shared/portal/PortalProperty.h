@@ -183,6 +183,7 @@ public:
 	bool                          getPortalSocketTransform_o2p(int cellIndex, int portalIndex, Transform &outTransform_o2p) const;
 	bool                          getPortalNeighbor(int cellIndex, int portalIndex, int &outNeighborCellIndex, int &outNeighborPortalIndex) const;
 	bool                          linkCustomSocketGraft(int hostCellIndex, int customSocketIndex, int graftCellIndex, int graftPortalIndex);
+	bool                          prepareCustomSocketPortalOpening(int cellIndex, int customSocketIndex);
 	bool                          finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex);
 	bool                          materializeCustomSocketPortal(int cellIndex, int customSocketIndex);
 	void                          dematerializeAllCustomSocketPortals();

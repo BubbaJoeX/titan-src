@@ -2289,7 +2289,7 @@ namespace PortalPropertyMaterializeNamespace
 		if (inward.normalize() < 0.01f)
 			inward = Vector(0.0f, 0.0f, 1.0f);
 		Vector const outward = -inward;
-		float const inwardDepth = 0.20f;
+		float const inwardDepth = 0.50f;
 		float const halfW = width * 0.5f + 0.03f;
 		float const topHeight = height + 0.05f;
 
@@ -2486,15 +2486,17 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	}
 
 	socketEntry->materializedPortalIndex = portalIndex;
+	socketEntry->doorwayWidth = width;
+	socketEntry->doorwayHeight = height;
 
-	IGNORE_RETURN(cutWallMeshForCustomSocketPortal(cellIndex, customSocketIndex));
+	IGNORE_RETURN(prepareCustomSocketPortalOpening(cellIndex, customSocketIndex));
 
 	return true;
 }
 
 // ----------------------------------------------------------------------
 
-bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex)
+bool PortalProperty::prepareCustomSocketPortalOpening(int cellIndex, int customSocketIndex)
 {
 	NOT_NULL(m_customSockets);
 
@@ -2516,7 +2518,7 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 		return false;
 
 	Portal * const portal = cell->getPortal(socketEntry->materializedPortalIndex);
-	if (!portal || !portal->getNeighbor())
+	if (!portal)
 		return false;
 
 	float width = socketEntry->doorwayWidth > 0.01f ? socketEntry->doorwayWidth : 1.0f;
@@ -2536,6 +2538,8 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 
 	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
 	IGNORE_RETURN(Portal::lookupDoorStyleDimensions(doorStyle, width, height));
+	socketEntry->doorwayWidth = width;
+	socketEntry->doorwayHeight = height;
 
 	Floor * const floor = cell->getFloor();
 	FloorMesh * const floorMesh = floor ? const_cast<FloorMesh *>(floor->getFloorMesh()) : 0;
@@ -2557,16 +2561,47 @@ bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int cu
 
 		if (!flagged && !extended)
 		{
-			WARNING(true, ("PortalProperty::finalizeCustomSocketPortalWalkthrough - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
+			WARNING(true, ("PortalProperty::prepareCustomSocketPortalOpening - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
 		}
 	}
 
 	portal->refreshDpvsPortal();
+	IGNORE_RETURN(cutWallMeshForCustomSocketPortal(cellIndex, customSocketIndex));
+
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool PortalProperty::finalizeCustomSocketPortalWalkthrough(int cellIndex, int customSocketIndex)
+{
+	if (!prepareCustomSocketPortalOpening(cellIndex, customSocketIndex))
+		return false;
+
+	CellProperty * const cell = getCell(cellIndex);
+	if (!cell)
+		return false;
+
+	CustomSocket const * socketEntry = 0;
+	for (CustomSocketList::const_iterator it = m_customSockets->begin(); it != m_customSockets->end(); ++it)
+	{
+		if (it->cellIndex == cellIndex && it->socketIndex == customSocketIndex)
+		{
+			socketEntry = &(*it);
+			break;
+		}
+	}
+
+	if (!socketEntry || socketEntry->materializedPortalIndex < 0)
+		return false;
+
+	Portal * const portal = cell->getPortal(socketEntry->materializedPortalIndex);
+	if (!portal)
+		return false;
+
 	Portal * const neighborPortal = portal->getNeighbor();
 	if (neighborPortal)
 		neighborPortal->refreshDpvsPortal();
-
-	IGNORE_RETURN(cutWallMeshForCustomSocketPortal(cellIndex, customSocketIndex));
 
 	return true;
 }
@@ -2685,7 +2720,7 @@ void PortalProperty::refreshCellWallCuts(int cellIndex)
 
 			float const width = it->doorwayWidth > 0.01f ? it->doorwayWidth : 1.0f;
 			float const height = it->doorwayHeight > 0.01f ? it->doorwayHeight : 2.0f;
-			AxialBox const doorwayBox = buildDoorwayCutBox(it->doorTransform_o2p, width, height, 0.40f);
+			AxialBox const doorwayBox = buildDoorwayCutBox(it->doorTransform_o2p, width, height, 0.60f);
 
 			DetailExtent * const next = new DetailExtent();
 			for (int childIndex = 0; childIndex < result->getExtentCount(); ++childIndex)
