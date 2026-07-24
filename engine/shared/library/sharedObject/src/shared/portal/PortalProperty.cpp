@@ -1826,12 +1826,6 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	stabilizeCustomSocketTransform(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
-	float const halfWidth = width * 0.5f;
-
-	Transform doorTransform = socketEntry->doorTransform_o2p;
-	stabilizeCustomSocketTransform(*cell, doorTransform);
-	socketEntry->doorTransform_o2p = doorTransform;
-
 	std::vector<Vector> doorLocalVertices;
 	doorLocalVertices.reserve(4);
 	doorLocalVertices.push_back(Vector(-halfWidth, 0.0f, 0.0f));
