@@ -121,6 +121,27 @@ Portal::Portal(const PortalPropertyTemplateCellPortal &portalTemplate, CellPrope
 
 Portal::~Portal()
 {
+	if (m_door)
+	{
+		DoorObject * const neighborDoor = m_door->getNeighbor();
+		if (neighborDoor)
+			neighborDoor->setNeighbor(0);
+		m_door->setNeighbor(0);
+		m_door->setPortal(0);
+
+		DoorObject * const door = m_door;
+		m_door = 0;
+		for (int i = 0; i < door->getNumberOfDrawnDoors(); ++i)
+		{
+			Object * const drawnDoor = door->getDrawnDoor(i);
+			if (drawnDoor)
+				drawnDoor->kill();
+		}
+		if (door->getBarrier())
+			door->getBarrier()->kill();
+		door->kill();
+	}
+
 	if (m_dpvsPortal)
 	{
 		m_relativeToObject->removeDpvsObject(m_dpvsPortal);
@@ -132,7 +153,6 @@ Portal::~Portal()
 	m_relativeToObject = nullptr;
 	m_neighbor = nullptr;
 	m_parentCell = nullptr;
-	m_door = nullptr;
 	delete m_appearance;
 }
 

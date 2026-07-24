@@ -10,6 +10,7 @@
 #include "sharedObject/PortalProperty.h"
 
 #include "sharedCollision/DoorObject.h"
+#include "sharedCollision/Distance3d.h"
 #include "sharedCollision/Floor.h"
 #include "sharedCollision/FloorManager.h"
 #include "sharedCollision/FloorLocator.h"
@@ -26,7 +27,9 @@
 #include "sharedObject/PortalPropertyTemplate.h"
 #include "sharedObject/PortalPropertyTemplateList.h"
 #include "sharedFoundation/Crc.h"
+#include "sharedMath/AxialBox.h"
 #include "sharedMath/IndexedTriangleList.h"
+#include "sharedMath/Segment3d.h"
 #include "sharedMath/Triangle3d.h"
 
 #include <algorithm>
@@ -1292,8 +1295,9 @@ bool PortalProperty::addCustomSocket(CustomSocket const &socket)
 	{
 		if (it->socketIndex == socket.socketIndex)
 		{
+			int const preservedPortalIndex = it->materializedPortalIndex;
 			*it = socket;
-			it->materializedPortalIndex = -1;
+			it->materializedPortalIndex = preservedPortalIndex;
 			if (it->doorwayWidth < 0.01f)
 				it->doorwayWidth = 1.0f;
 			if (it->doorwayHeight < 0.01f)
@@ -1454,15 +1458,10 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 	if (!hostCell || !graftCell)
 		return false;
 
-	if (customSocket.materializedPortalIndex < 0
-		|| customSocket.materializedPortalIndex >= hostCell->getPortalCount()
-		|| !hostCell->getPortal(customSocket.materializedPortalIndex))
-	{
-		if (!materializeCustomSocketPortal(hostCellIndex, customSocketIndex))
-			return false;
-		if (!findCustomSocket(hostCellIndex, customSocketIndex, customSocket))
-			return false;
-	}
+	if (!materializeCustomSocketPortal(hostCellIndex, customSocketIndex))
+		return false;
+	if (!findCustomSocket(hostCellIndex, customSocketIndex, customSocket))
+		return false;
 
 	int const hostPortalIndex = customSocket.materializedPortalIndex;
 	if (hostPortalIndex < 0)
@@ -1479,6 +1478,45 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 
 namespace PortalPropertyMaterializeNamespace
 {
+	Vector computeCellFloorCenter(CellProperty const & cell)
+	{
+		Floor const * const floor = cell.getFloor();
+		if (!floor)
+			return Vector::zero;
+
+		FloorMesh const * const floorMesh = floor->getFloorMesh();
+		if (!floorMesh)
+			return Vector::zero;
+
+		AxialBox box;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int c = 0; c < 3; ++c)
+				box.add(T.getCorner(c));
+		}
+		return box.getCenter();
+	}
+
+	void ensurePortalTransformOutward(CellProperty const & cell, Transform & doorTransform)
+	{
+		Vector const cellCenter = computeCellFloorCenter(cell);
+		Vector const pos = doorTransform.getPosition_p();
+		Vector outward = pos - cellCenter;
+		outward.y = 0.0f;
+		if (outward.normalize() < 0.01f)
+			return;
+
+		Vector axisI = doorTransform.getLocalFrameI_p();
+		Vector axisK = doorTransform.getLocalFrameK_p();
+		if (axisK.dot(outward) < 0.0f)
+		{
+			axisI = -axisI;
+			axisK = -axisK;
+			doorTransform.setLocalFrameIJK_p(axisI, Vector(0.0f, 1.0f, 0.0f), axisK);
+		}
+	}
+
 	char const * pickRuntimeDoorStyle(Transform const & doorTransform)
 	{
 		Vector const axisI = doorTransform.getLocalFrameI_p();
@@ -1499,11 +1537,7 @@ namespace PortalPropertyMaterializeNamespace
 
 		FloorMesh const & floorMesh = *floorMeshConst;
 
-		Vector portalNormal = doorTransform.getLocalFrameK_p();
-		portalNormal.y = 0.0f;
-		if (portalNormal.normalize() < 0.01f)
-			return false;
-
+		Vector const axisI = doorTransform.getLocalFrameI_p();
 		Vector const portalPos = doorTransform.getPosition_p();
 		float const floorY = portalPos.y;
 
@@ -1530,7 +1564,7 @@ namespace PortalPropertyMaterializeNamespace
 					continue;
 				edgeDir /= edgeLen;
 
-				if (fabsf(edgeDir.dot(portalNormal)) > 0.35f)
+				if (fabsf(edgeDir.dot(axisI)) < 0.85f)
 					continue;
 
 				Vector const edgeMid = (a + b) * 0.5f;
@@ -1550,26 +1584,65 @@ namespace PortalPropertyMaterializeNamespace
 		if (!found)
 			return false;
 
-		Vector edgeDir = bestB - bestA;
-		edgeDir.y = 0.0f;
-		if (edgeDir.normalize() < 0.01f)
-			return false;
-
-		Vector axisI = edgeDir;
-		if (axisI.dot(doorTransform.getLocalFrameI_p()) < 0.0f)
-			axisI = -axisI;
-
-		Vector const up(0.0f, 1.0f, 0.0f);
-		Vector axisK = up.cross(axisI);
-		if (axisK.normalize() < 0.01f)
-			return false;
-		if (axisK.dot(portalNormal) < 0.0f)
-			axisK = -axisK;
-
 		Vector const edgeMid = (bestA + bestB) * 0.5f;
-		doorTransform.setLocalFrameIJK_p(axisI, up, axisK);
 		doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
+		ensurePortalTransformOutward(cell, doorTransform);
 		return true;
+	}
+
+	bool flagBoundaryEdgesDirect(
+		FloorMesh * floorMesh,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		int portalIndex)
+	{
+		if (!floorMesh)
+			return false;
+
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const pos = doorTransform.getPosition_p();
+		float const halfWidth = doorwayWidth * 0.5f;
+		Vector const portalBottomA = pos - axisI * halfWidth;
+		Vector const portalBottomB = pos + axisI * halfWidth;
+
+		bool flagged = false;
+		for (int tri = 0; tri < floorMesh->getTriCount(); ++tri)
+		{
+			FloorTri & F = floorMesh->getFloorTri(tri);
+			Triangle3d const T = floorMesh->getTriangle(tri);
+			for (int edge = 0; edge < 3; ++edge)
+			{
+				if (F.getNeighborIndex(edge) != -1)
+					continue;
+
+				Vector const a = T.getCorner(edge);
+				Vector const b = T.getCorner(edge + 1);
+				Vector edgeDir = b - a;
+				edgeDir.y = 0.0f;
+				if (edgeDir.normalize() < 0.01f)
+					continue;
+
+				if (fabsf(fabsf(edgeDir.dot(axisI)) - 1.0f) > 0.2f)
+					continue;
+
+				Vector const edgeMid = (a + b) * 0.5f;
+				Vector toEdge = edgeMid - pos;
+				toEdge.y = 0.0f;
+				if (toEdge.magnitude() > 1.5f)
+					continue;
+
+				Segment3d const portalSeg(portalBottomA, portalBottomB);
+				Vector const aProj = Distance3d::ClosestPointSeg(a, portalSeg);
+				Vector const bProj = Distance3d::ClosestPointSeg(b, portalSeg);
+				if ((a - aProj).magnitude() < 0.15f && (b - bProj).magnitude() < 0.15f)
+				{
+					F.setPortalId(edge, portalIndex);
+					flagged = true;
+				}
+			}
+		}
+
+		return flagged;
 	}
 
 	bool flagPortalEdgesRobust(
@@ -1612,7 +1685,7 @@ namespace PortalPropertyMaterializeNamespace
 			}
 		}
 
-		return false;
+		return flagBoundaryEdgesDirect(floorMesh, doorTransform, doorwayWidth, portalIndex);
 	}
 }
 
@@ -1646,7 +1719,9 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	float const halfWidth = width * 0.5f;
 
 	Transform doorTransform = socketEntry->doorTransform_o2p;
+	ensurePortalTransformOutward(*cell, doorTransform);
 	IGNORE_RETURN(snapCustomSocketTransformToFloorBoundary(*cell, doorTransform));
+	ensurePortalTransformOutward(*cell, doorTransform);
 	socketEntry->doorTransform_o2p = doorTransform;
 
 	Vector const pos = doorTransform.getPosition_p();
