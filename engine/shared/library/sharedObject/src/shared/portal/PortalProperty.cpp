@@ -14,6 +14,7 @@
 #include "sharedCollision/FloorManager.h"
 #include "sharedCollision/FloorLocator.h"
 #include "sharedCollision/FloorMesh.h"
+#include "sharedCollision/FloorTri.h"
 #include "sharedDebug/DataLint.h"
 #include "sharedFile/Iff.h"
 #include "sharedObject/Appearance.h"
@@ -26,6 +27,7 @@
 #include "sharedObject/PortalPropertyTemplateList.h"
 #include "sharedFoundation/Crc.h"
 #include "sharedMath/IndexedTriangleList.h"
+#include "sharedMath/Triangle3d.h"
 
 #include <algorithm>
 #include <limits>
@@ -1475,6 +1477,149 @@ bool PortalProperty::linkCustomSocketGraft(int hostCellIndex, int customSocketIn
 
 // ----------------------------------------------------------------------
 
+namespace PortalPropertyMaterializeNamespace
+{
+	char const * pickRuntimeDoorStyle(Transform const & doorTransform)
+	{
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		if (fabsf(axisI.x) >= fabsf(axisI.z))
+			return "door_bunker_rebel_x_axis";
+		return "poi_all_impl_bunker_int_door";
+	}
+
+	bool snapCustomSocketTransformToFloorBoundary(CellProperty const & cell, Transform & doorTransform)
+	{
+		Floor const * const floor = cell.getFloor();
+		if (!floor)
+			return false;
+
+		FloorMesh const * const floorMeshConst = floor->getFloorMesh();
+		if (!floorMeshConst)
+			return false;
+
+		FloorMesh const & floorMesh = *floorMeshConst;
+
+		Vector portalNormal = doorTransform.getLocalFrameK_p();
+		portalNormal.y = 0.0f;
+		if (portalNormal.normalize() < 0.01f)
+			return false;
+
+		Vector const portalPos = doorTransform.getPosition_p();
+		float const floorY = portalPos.y;
+
+		bool found = false;
+		Vector bestA;
+		Vector bestB;
+		float bestDist = std::numeric_limits<float>::max();
+
+		for (int tri = 0; tri < floorMesh.getTriCount(); ++tri)
+		{
+			FloorTri const & F = floorMesh.getFloorTri(tri);
+			Triangle3d const T = floorMesh.getTriangle(tri);
+			for (int edge = 0; edge < 3; ++edge)
+			{
+				if (F.getNeighborIndex(edge) != -1)
+					continue;
+
+				Vector const a = T.getCorner(edge);
+				Vector const b = T.getCorner(edge + 1);
+				Vector edgeDir = b - a;
+				edgeDir.y = 0.0f;
+				float const edgeLen = edgeDir.magnitude();
+				if (edgeLen < 0.25f)
+					continue;
+				edgeDir /= edgeLen;
+
+				if (fabsf(edgeDir.dot(portalNormal)) > 0.35f)
+					continue;
+
+				Vector const edgeMid = (a + b) * 0.5f;
+				Vector toEdge = edgeMid - portalPos;
+				toEdge.y = 0.0f;
+				float const dist = toEdge.magnitude();
+				if (dist < bestDist && dist < 3.0f)
+				{
+					found = true;
+					bestA = a;
+					bestB = b;
+					bestDist = dist;
+				}
+			}
+		}
+
+		if (!found)
+			return false;
+
+		Vector edgeDir = bestB - bestA;
+		edgeDir.y = 0.0f;
+		if (edgeDir.normalize() < 0.01f)
+			return false;
+
+		Vector axisI = edgeDir;
+		if (axisI.dot(doorTransform.getLocalFrameI_p()) < 0.0f)
+			axisI = -axisI;
+
+		Vector const up(0.0f, 1.0f, 0.0f);
+		Vector axisK = up.cross(axisI);
+		if (axisK.normalize() < 0.01f)
+			return false;
+		if (axisK.dot(portalNormal) < 0.0f)
+			axisK = -axisK;
+
+		Vector const edgeMid = (bestA + bestB) * 0.5f;
+		doorTransform.setLocalFrameIJK_p(axisI, up, axisK);
+		doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
+		return true;
+	}
+
+	bool flagPortalEdgesRobust(
+		FloorMesh * floorMesh,
+		Transform const & doorTransform,
+		float doorwayWidth,
+		float doorwayHeight,
+		int portalIndex)
+	{
+		if (!floorMesh)
+			return false;
+
+		floorMesh->clearPortalEdges(portalIndex);
+
+		float const halfWidth = doorwayWidth * 0.5f;
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const axisJ = doorTransform.getLocalFrameJ_p();
+		Vector const axisK = doorTransform.getLocalFrameK_p();
+		Vector const pos = doorTransform.getPosition_p();
+
+		float const offsetsK[] = { 0.0f, 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f, 0.25f, -0.25f, 0.35f, -0.35f, 0.5f, -0.5f };
+		float const offsetsI[] = { 0.0f, 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f };
+		float const offsetsJ[] = { 0.0f, -0.05f, 0.05f, -0.1f, 0.1f };
+
+		for (size_t oj = 0; oj < sizeof(offsetsJ) / sizeof(offsetsJ[0]); ++oj)
+		{
+			for (size_t oi = 0; oi < sizeof(offsetsI) / sizeof(offsetsI[0]); ++oi)
+			{
+				for (size_t ok = 0; ok < sizeof(offsetsK) / sizeof(offsetsK[0]); ++ok)
+				{
+					Vector const base = pos + axisJ * offsetsJ[oj] + axisI * offsetsI[oi] + axisK * offsetsK[ok];
+					VectorVector nudged;
+					nudged.push_back(base - axisI * halfWidth);
+					nudged.push_back(base + axisI * halfWidth);
+					nudged.push_back(base + axisI * halfWidth + axisJ * doorwayHeight);
+					nudged.push_back(base - axisI * halfWidth + axisJ * doorwayHeight);
+					if (floorMesh->flagPortalEdges(nudged, portalIndex))
+						return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
+using namespace PortalPropertyMaterializeNamespace;
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSocketIndex)
 {
 	NOT_NULL(m_customSockets);
@@ -1500,7 +1645,10 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	float const height = socketEntry->doorwayHeight > 0.01f ? socketEntry->doorwayHeight : 2.0f;
 	float const halfWidth = width * 0.5f;
 
-	Transform const & doorTransform = socketEntry->doorTransform_o2p;
+	Transform doorTransform = socketEntry->doorTransform_o2p;
+	IGNORE_RETURN(snapCustomSocketTransformToFloorBoundary(*cell, doorTransform));
+	socketEntry->doorTransform_o2p = doorTransform;
+
 	Vector const pos = doorTransform.getPosition_p();
 	Vector const axisI = doorTransform.getLocalFrameI_p();
 	Vector const axisJ = doorTransform.getLocalFrameJ_p();
@@ -1515,10 +1663,12 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellVertices[0], static_cast<int>(cellVertices.size()));
 
+	char const * const doorStyle = pickRuntimeDoorStyle(doorTransform);
 	PortalPropertyTemplateCellPortal * const portalTemplate = PortalPropertyTemplateCellPortal::createRuntime(
 		geometry,
 		Transform::identity,
-		0);
+		doorStyle,
+		true);
 	if (!portalTemplate)
 	{
 		delete geometry;
@@ -1554,21 +1704,9 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	if (portal && floorMeshConst)
 	{
 		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
-		floorMesh->clearPortalEdges(portalIndex);
-		VectorVector portalVerts = portal->getGeometry().getVertices();
-		bool flagged = portalVerts.size() >= 3 && floorMesh->flagPortalEdges(portalVerts, portalIndex);
-		if (!flagged && portalVerts.size() >= 3)
+		if (!flagPortalEdgesRobust(floorMesh, doorTransform, width, height, portalIndex))
 		{
-			Vector const axisK = doorTransform.getLocalFrameK_p();
-			float const offsets[] = { 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f, 0.25f, -0.25f };
-			for (size_t oi = 0; !flagged && oi < sizeof(offsets) / sizeof(offsets[0]); ++oi)
-			{
-				VectorVector nudged = portalVerts;
-				Vector const delta = axisK * offsets[oi];
-				for (size_t vi = 0; vi < nudged.size(); ++vi)
-					nudged[vi] += delta;
-				flagged = floorMesh->flagPortalEdges(nudged, portalIndex);
-			}
+			WARNING(true, ("PortalProperty::materializeCustomSocketPortal - failed to flag floor edges for portal %d in cell %d", portalIndex, cellIndex));
 		}
 	}
 

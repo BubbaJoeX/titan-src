@@ -296,6 +296,8 @@ void Portal::createDoor ()
 		info.m_closeEndEffect   = ms_doorStyleTable->getStringValue(17,row);
 		info.m_portalGeometry   = m_template.m_portalGeometry;
 		info.m_alwaysOpen       = false;
+		if (m_template.m_runtimeDoorAlwaysOpen)
+			info.m_alwaysOpen = true;
 	}
 
 	// No door mesh: show a forcefield when this portal's cell is private (access denied).
