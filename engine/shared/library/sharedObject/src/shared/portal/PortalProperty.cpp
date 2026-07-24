@@ -1501,17 +1501,16 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	float const halfWidth = width * 0.5f;
 
 	Transform const & doorTransform = socketEntry->doorTransform_o2p;
-	Vector const localVertices[4] = {
-		Vector(-halfWidth, 0.0f, 0.0f),
-		Vector( halfWidth, 0.0f, 0.0f),
-		Vector( halfWidth, height, 0.0f),
-		Vector(-halfWidth, height, 0.0f)
-	};
+	Vector const pos = doorTransform.getPosition_p();
+	Vector const axisI = doorTransform.getLocalFrameI_p();
+	Vector const axisJ = doorTransform.getLocalFrameJ_p();
 
 	std::vector<Vector> cellVertices;
 	cellVertices.reserve(4);
-	for (size_t vi = 0; vi < 4; ++vi)
-		cellVertices.push_back(doorTransform.rotateTranslate_l2p(localVertices[vi]));
+	cellVertices.push_back(pos - axisI * halfWidth);
+	cellVertices.push_back(pos + axisI * halfWidth);
+	cellVertices.push_back(pos + axisI * halfWidth + axisJ * height);
+	cellVertices.push_back(pos - axisI * halfWidth + axisJ * height);
 
 	IndexedTriangleList * const geometry = new IndexedTriangleList;
 	geometry->addTriangleFan(&cellVertices[0], static_cast<int>(cellVertices.size()));
@@ -1556,9 +1555,21 @@ bool PortalProperty::materializeCustomSocketPortal(int cellIndex, int customSock
 	{
 		FloorMesh * const floorMesh = const_cast<FloorMesh *>(floorMeshConst);
 		floorMesh->clearPortalEdges(portalIndex);
-		VectorVector const portalVerts = portal->getGeometry().getVertices();
-		if (portalVerts.size() >= 3)
-			IGNORE_RETURN(floorMesh->flagPortalEdges(portalVerts, portalIndex));
+		VectorVector portalVerts = portal->getGeometry().getVertices();
+		bool flagged = portalVerts.size() >= 3 && floorMesh->flagPortalEdges(portalVerts, portalIndex);
+		if (!flagged && portalVerts.size() >= 3)
+		{
+			Vector const axisK = doorTransform.getLocalFrameK_p();
+			float const offsets[] = { 0.05f, -0.05f, 0.1f, -0.1f, 0.15f, -0.15f, 0.25f, -0.25f };
+			for (size_t oi = 0; !flagged && oi < sizeof(offsets) / sizeof(offsets[0]); ++oi)
+			{
+				VectorVector nudged = portalVerts;
+				Vector const delta = axisK * offsets[oi];
+				for (size_t vi = 0; vi < nudged.size(); ++vi)
+					nudged[vi] += delta;
+				flagged = floorMesh->flagPortalEdges(nudged, portalIndex);
+			}
+		}
 	}
 
 	return true;
