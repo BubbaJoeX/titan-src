@@ -1442,9 +1442,7 @@ bool PortalProperty::getPortalSocketTransform_o2p(int cellIndex, int portalIndex
 		CustomSocket customSocket;
 		if (!findCustomSocket(cellIndex, portalIndex, customSocket))
 			return false;
-		Transform doorTransform = customSocket.doorTransform_o2p;
-		PortalPropertyMaterializeNamespace::stabilizeCustomSocketTransform(*cell, doorTransform);
-		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), doorTransform);
+		outTransform_o2p.multiply(cell->getOwner().getTransform_o2p(), customSocket.doorTransform_o2p);
 		return true;
 	}
 
@@ -1579,7 +1577,7 @@ namespace PortalPropertyMaterializeNamespace
 		return "poi_all_impl_bunker_int_door";
 	}
 
-	bool snapCustomSocketTransformToFloorBoundary(CellProperty const & cell, Transform & doorTransform)
+	bool snapCustomSocketPositionToFloorBoundary(CellProperty const & cell, Transform & doorTransform)
 	{
 		Floor const * const floor = cell.getFloor();
 		if (!floor)
@@ -1595,10 +1593,14 @@ namespace PortalPropertyMaterializeNamespace
 		Vector const portalPos = doorTransform.getPosition_p();
 		float const floorY = portalPos.y;
 
+		Vector preferredK = doorTransform.getLocalFrameK_p();
+		preferredK.y = 0.0f;
+		bool const hasPreferredK = preferredK.normalize() > 0.01f;
+
 		bool found = false;
 		Vector bestA;
 		Vector bestB;
-		float bestDist = std::numeric_limits<float>::max();
+		float bestScore = std::numeric_limits<float>::max();
 
 		for (int tri = 0; tri < floorMesh.getTriCount(); ++tri)
 		{
@@ -1625,12 +1627,19 @@ namespace PortalPropertyMaterializeNamespace
 				Vector toEdge = edgeMid - portalPos;
 				toEdge.y = 0.0f;
 				float const dist = toEdge.magnitude();
-				if (dist < bestDist && dist < 3.0f)
+				if (dist >= 3.0f)
+					continue;
+
+				float score = dist;
+				if (hasPreferredK && dist > 0.01f && toEdge.dot(preferredK) < 0.0f)
+					score += 5.0f;
+
+				if (score < bestScore)
 				{
 					found = true;
 					bestA = a;
 					bestB = b;
-					bestDist = dist;
+					bestScore = score;
 				}
 			}
 		}
@@ -1639,58 +1648,16 @@ namespace PortalPropertyMaterializeNamespace
 			return false;
 
 		Vector const edgeMid = (bestA + bestB) * 0.5f;
-
-		Vector edgeDir = bestB - bestA;
-		edgeDir.y = 0.0f;
-		if (edgeDir.normalize() < 0.01f)
-			return false;
-
-		Vector preferredI = doorTransform.getLocalFrameI_p();
-		preferredI.y = 0.0f;
-		if (preferredI.normalize() > 0.01f)
-		{
-			if (edgeDir.dot(preferredI) < 0.0f)
-				edgeDir = -edgeDir;
-		}
-		else if (edgeDir.dot(axisI) < 0.0f)
-		{
-			edgeDir = -edgeDir;
-		}
-
-		Vector preferredOutward = doorTransform.getLocalFrameK_p();
-		preferredOutward.y = 0.0f;
-		bool const hasPreferredOutward = preferredOutward.normalize() > 0.01f;
-
-		Vector outward = Vector::unitY.cross(edgeDir);
-		if (hasPreferredOutward)
-		{
-			if (outward.dot(preferredOutward) < 0.0f)
-				outward = -outward;
-		}
-		else
-		{
-			Vector const cellCenter = computeCellFloorCenter(cell);
-			Vector toInterior = cellCenter - edgeMid;
-			toInterior.y = 0.0f;
-			if (outward.dot(toInterior) > 0.0f)
-				outward = -outward;
-		}
-		if (outward.normalize() < 0.01f)
-		{
-			doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
-			ensurePortalTransformOutward(cell, doorTransform);
-			return true;
-		}
-
-		doorTransform.setLocalFrameIJK_p(edgeDir, Vector::unitY, outward);
 		doorTransform.setPosition_p(Vector(edgeMid.x, floorY, edgeMid.z));
 		return true;
 	}
 
 	void stabilizeCustomSocketTransform(CellProperty const & cell, Transform & doorTransform)
 	{
-		if (snapCustomSocketTransformToFloorBoundary(cell, doorTransform))
-			return;
+		Vector const axisI = doorTransform.getLocalFrameI_p();
+		Vector const axisK = doorTransform.getLocalFrameK_p();
+		IGNORE_RETURN(snapCustomSocketPositionToFloorBoundary(cell, doorTransform));
+		doorTransform.setLocalFrameIJK_p(axisI, Vector::unitY, axisK);
 		ensurePortalTransformOutward(cell, doorTransform);
 	}
 
