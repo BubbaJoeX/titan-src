@@ -540,6 +540,19 @@ namespace PortalPropertyNamespace
 		return box.getCenter();
 	}
 
+	void ensureTransformRightHanded(Transform & transform_o2p)
+	{
+		Vector const I = transform_o2p.getLocalFrameI_p();
+		Vector const J = transform_o2p.getLocalFrameJ_p();
+		Vector const K = transform_o2p.getLocalFrameK_p();
+		if (I.cross(J).dot(K) >= 0.0f)
+			return;
+
+		Vector const pos = transform_o2p.getPosition_p();
+		transform_o2p.setLocalFrameIJK_p(-I, J, K);
+		transform_o2p.setPosition_p(pos);
+	}
+
 	void ensurePortalTransformPointsOutward(CellProperty const & cell, Transform & portalTransform_o2p)
 	{
 		Vector const cellCenter_cell = computeCellFloorCenter(cell);
@@ -1151,6 +1164,7 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 			invDonorPortal.invert(donorPortal_cell);
 
 			outCellTransform_o2p.multiply(desiredPortal_building, invDonorPortal);
+			ensureTransformRightHanded(outCellTransform_o2p);
 			if (outResolvedDonorPortalIndex)
 				*outResolvedDonorPortalIndex = resolvedDonorPortal;
 			ok = true;
@@ -1196,6 +1210,7 @@ bool PortalProperty::computeLinkedGraftCellTransform(int hostCellIndex, int host
 	invGraftPortal.invert(graftPortal_cell);
 
 	outCellTransform_o2p.multiply(desiredPortal_building, invGraftPortal);
+	ensureTransformRightHanded(outCellTransform_o2p);
 	return true;
 }
 
@@ -2229,9 +2244,9 @@ namespace PortalPropertyMaterializeNamespace
 		if (inward.normalize() < 0.01f)
 			inward = Vector(0.0f, 0.0f, 1.0f);
 		Vector const outward = -inward;
-		float const inwardDepth = 0.5f;
-		float const halfW = width * 0.5f + 0.12f;
-		float const topHeight = height + 0.35f;
+		float const inwardDepth = 0.20f;
+		float const halfW = width * 0.5f + 0.03f;
+		float const topHeight = height + 0.05f;
 
 		AxialBox box;
 		for (int si = -1; si <= 1; si += 2)
@@ -2609,7 +2624,7 @@ void PortalProperty::refreshCellWallCuts(int cellIndex)
 
 			float const width = it->doorwayWidth > 0.01f ? it->doorwayWidth : 1.0f;
 			float const height = it->doorwayHeight > 0.01f ? it->doorwayHeight : 2.0f;
-			AxialBox const doorwayBox = buildDoorwayCutBox(it->doorTransform_o2p, width, height, 0.75f);
+			AxialBox const doorwayBox = buildDoorwayCutBox(it->doorTransform_o2p, width, height, 0.40f);
 
 			DetailExtent * const next = new DetailExtent();
 			for (int childIndex = 0; childIndex < result->getExtentCount(); ++childIndex)
