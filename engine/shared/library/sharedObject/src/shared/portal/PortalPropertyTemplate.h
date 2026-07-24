@@ -41,6 +41,7 @@ public:
 	~PortalPropertyTemplateCellPortal();
 
 	Transform const    getDoorTransform(bool useDoorHardpoint=true) const;
+	char const       * getDoorStyleName() const { return m_doorStyle; }
 
 	bool               isPassable() const;
 

@@ -53,6 +53,7 @@ public:
 	static char const *             pickDynamicBunkerDoorStyle(Transform const & doorTransform);
 	static bool                       lookupDoorStyleAppearance(char const * doorStyle, std::string & outAppearancePath);
 	static bool                       lookupDoorStyleDimensions(char const * doorStyle, float & outWidth, float & outHeight);
+	static char const *               lookupDonorPortalDoorStyle(char const * donorPob, int donorCellIndex, int donorPortalIndex);
 
 public:
 

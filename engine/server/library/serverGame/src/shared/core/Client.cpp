@@ -1215,6 +1215,15 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("DynamicBunkerAdjustGraftMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                DynamicBunkerAdjustGraftMessage const adjustMsg(ri);
+                DynamicBunker::handleAdjustGraft(*this, adjustMsg);
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("CityTerrainPaintRequestMessage") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 CityTerrainPaintRequestMessage const paintMsg(ri);

@@ -27,6 +27,8 @@
 #include "sharedCollision/Extent.h"
 #include "sharedObject/ConfigSharedObject.h"
 #include "sharedObject/PortalPropertyTemplate.h"
+#include "sharedObject/PortalPropertyTemplateList.h"
+#include "sharedFoundation/CrcLowerString.h"
 #include "sharedUtility/DataTable.h"
 
 #include <vector>
@@ -154,6 +156,39 @@ bool Portal::lookupDoorStyleDimensions(char const * doorStyle, float & outWidth,
 	outHeight = std::max(0.5f, size.y);
 	AppearanceTemplateList::release(tmpl);
 	return outWidth > 0.01f && outHeight > 0.01f;
+}
+
+// ----------------------------------------------------------------------
+
+char const * Portal::lookupDonorPortalDoorStyle(char const * donorPob, int donorCellIndex, int donorPortalIndex)
+{
+	if (!donorPob || !donorPob[0])
+		return 0;
+
+	PortalPropertyTemplate const * const tmpl = PortalPropertyTemplateList::fetch(CrcLowerString(donorPob));
+	if (!tmpl)
+		return 0;
+
+	if (donorCellIndex < 1)
+		donorCellIndex = 1;
+	if (donorPortalIndex < 0)
+		donorPortalIndex = 0;
+
+	char const * result = 0;
+	if (donorCellIndex < tmpl->getNumberOfCells())
+	{
+		PortalPropertyTemplateCell const & donorCell = tmpl->getCell(donorCellIndex);
+		PortalPropertyTemplateCell::PortalPropertyTemplateCellPortalList const * const portalList = donorCell.getPortalList();
+		if (portalList && donorPortalIndex < static_cast<int>(portalList->size()))
+		{
+			char const * const doorStyle = (*portalList)[static_cast<size_t>(donorPortalIndex)]->getDoorStyleName();
+			if (doorStyle && doorStyle[0])
+				result = doorStyle;
+		}
+	}
+
+	tmpl->release();
+	return result;
 }
 
 // ======================================================================

@@ -408,6 +408,15 @@ namespace DynamicBunkerNamespace
 		building.sendToClientsInUpdateRange(message, true, false);
 	}
 
+	void broadcastGraftTransform(ServerObject &building, int graftedCellIndex, Transform const &cellTransform)
+	{
+		DynamicBunkerGraftTransformMessage const message(
+			building.getNetworkId(),
+			graftedCellIndex,
+			cellTransform);
+		building.sendToClientsInUpdateRange(message, true, false);
+	}
+
 	void ejectCellContentsToHost(PortalProperty &portalProperty, int fromCellIndex, int toCellIndex)
 	{
 		CellProperty *const fromCell = portalProperty.getCell(fromCellIndex);
@@ -1067,6 +1076,43 @@ void DynamicBunker::handleRevertBuilding(Client &client, DynamicBunkerRevertBuil
 	}
 
 	LOG("dynamic_bunker", ("handleRevertBuilding ok building=%s", building->getNetworkId().getValueString().c_str()));
+}
+
+// ----------------------------------------------------------------------
+
+void DynamicBunker::handleAdjustGraft(Client &client, DynamicBunkerAdjustGraftMessage const &message)
+{
+	UNREF(client);
+
+	ServerObject *const building = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(message.getBuildingId()));
+	if (!building || !building->getPortalProperty())
+	{
+		WARNING(true, ("DynamicBunker::handleAdjustGraft - invalid building %s", message.getBuildingId().getValueString().c_str()));
+		return;
+	}
+
+	PortalProperty *const portalProperty = building->getPortalProperty();
+	int const graftedCellIndex = message.getGraftedCellIndex();
+	if (!portalProperty->isGraftedCell(graftedCellIndex))
+	{
+		WARNING(true, ("DynamicBunker::handleAdjustGraft - cell %d is not a graft slot", graftedCellIndex));
+		return;
+	}
+
+	CellProperty *const cell = portalProperty->getCell(graftedCellIndex);
+	if (!cell)
+		return;
+
+	ServerObject *const cellObject = safe_cast<ServerObject *>(&cell->getOwner());
+	if (!cellObject)
+		return;
+
+	Transform cellTransform = message.getCellTransform_o2p();
+	cellObject->setTransform_o2p(cellTransform);
+	broadcastGraftTransform(*building, graftedCellIndex, cellTransform);
+
+	LOG("dynamic_bunker", ("handleAdjustGraft ok building=%s graftCell=%d",
+		building->getNetworkId().getValueString().c_str(), graftedCellIndex));
 }
 
 // ----------------------------------------------------------------------

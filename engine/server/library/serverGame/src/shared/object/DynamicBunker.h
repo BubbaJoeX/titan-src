@@ -9,6 +9,7 @@
 #define INCLUDED_DynamicBunker_H
 
 class Client;
+class DynamicBunkerAdjustGraftMessage;
 class DynamicBunkerAssignRoomMessage;
 class DynamicBunkerCreateCustomSocketMessage;
 class DynamicBunkerRevertBuildingMessage;
@@ -68,6 +69,9 @@ public:
 
 	// Handle client request to strip all grafts/custom snaps and restore raw POB cells.
 	static void handleRevertBuilding(Client &client, DynamicBunkerRevertBuildingMessage const &message);
+
+	// Handle client manual graft room transform adjustment.
+	static void handleAdjustGraft(Client &client, DynamicBunkerAdjustGraftMessage const &message);
 
 	// Remove all dynamic grafts, custom snaps, and bridge data from a building.
 	static bool revertBuildingToRawPob(ServerObject &building);
