@@ -1160,6 +1160,44 @@ bool PortalProperty::computeGraftCellTransform(int hostCellIndex, int hostPortal
 
 // ----------------------------------------------------------------------
 
+bool PortalProperty::computeLinkedGraftCellTransform(int hostCellIndex, int hostPortalIndex, int graftCellIndex, int graftPortalIndex, Transform &outCellTransform_o2p) const
+{
+	Transform hostPortal_building;
+	if (!getPortalSocketTransform_o2p(hostCellIndex, hostPortalIndex, hostPortal_building))
+		return false;
+
+	CellProperty const * const hostCell = getCell(hostCellIndex);
+	if (hostCell)
+		ensurePortalTransformPointsOutward(*hostCell, hostPortal_building);
+
+	CellProperty const * const graftCell = getCell(graftCellIndex);
+	if (!graftCell)
+		return false;
+
+	int const resolvedGraftPortal = PortalProperty::resolveCellPortalIndex(graftCell, graftPortalIndex);
+	if (resolvedGraftPortal < 0)
+		return false;
+
+	Portal const * const graftPortal = const_cast<CellProperty *>(graftCell)->getPortal(resolvedGraftPortal);
+	if (!graftPortal)
+		return false;
+
+	Transform flip;
+	flip.yaw_l(PI);
+
+	Transform desiredPortal_building;
+	desiredPortal_building.multiply(hostPortal_building, flip);
+
+	Transform const graftPortal_cell = graftPortal->getDoorTransform();
+	Transform invGraftPortal;
+	invGraftPortal.invert(graftPortal_cell);
+
+	outCellTransform_o2p.multiply(desiredPortal_building, invGraftPortal);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
 bool PortalProperty::recordDynamicRoomGraft(DynamicRoomGraft const &graft)
 {
 	NOT_NULL(m_dynamicRoomGrafts);
@@ -1741,10 +1779,14 @@ namespace PortalPropertyMaterializeNamespace
 		Vector alignedI = edgeDir;
 		if (doorTransform.getLocalFrameI_p().dot(alignedI) < 0.0f)
 			alignedI = -alignedI;
-		Vector alignedK = doorTransform.getLocalFrameK_p();
-		alignedK.y = 0.0f;
+		Vector alignedK = Vector::unitY.cross(alignedI);
 		if (alignedK.normalize() < 0.01f)
-			alignedK = Vector(0.0f, 0.0f, 1.0f);
+		{
+			alignedK = doorTransform.getLocalFrameK_p();
+			alignedK.y = 0.0f;
+			if (alignedK.normalize() < 0.01f)
+				alignedK = Vector(0.0f, 0.0f, 1.0f);
+		}
 		doorTransform.setLocalFrameIJK_p(alignedI, Vector::unitY, alignedK);
 		ensurePortalTransformOutward(cell, doorTransform);
 

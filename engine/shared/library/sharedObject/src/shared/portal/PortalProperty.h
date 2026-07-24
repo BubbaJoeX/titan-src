@@ -132,6 +132,7 @@ public:
 	bool                          clearLoadedCellSlot(int cellIndex);
 	bool                          releaseGraftedCellSlot(int graftedCellIndex);
 	bool                          computeGraftCellTransform(int hostCellIndex, int hostPortalIndex, char const *donorPobName, int donorCellIndex, int donorPortalIndex, Transform &outCellTransform_o2p, int *outResolvedDonorPortalIndex = 0) const;
+	bool                          computeLinkedGraftCellTransform(int hostCellIndex, int hostPortalIndex, int graftCellIndex, int graftPortalIndex, Transform &outCellTransform_o2p) const;
 	bool                          recordDynamicRoomGraft(DynamicRoomGraft const &graft);
 	bool                          removeDynamicRoomGraft(int graftedCellIndex);
 	void                          clearDynamicRoomGrafts();

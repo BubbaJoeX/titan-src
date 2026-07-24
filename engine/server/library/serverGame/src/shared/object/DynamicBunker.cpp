@@ -644,12 +644,20 @@ bool DynamicBunker::addRoomHook(ServerObject &building, int hostCellIndex, int h
 	if (linked)
 	{
 		Transform correctedTransform;
-		if (portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, correctedTransform, &resolvedDonorPortalIndex))
+		if (portalProperty->computeLinkedGraftCellTransform(hostCellIndex, hostPortalIndex, graftedCellIndex, resolvedGraftPortal, correctedTransform))
+		{
+			cellTransform = correctedTransform;
+			cellObject->setTransform_o2p(cellTransform);
+		}
+		else if (portalProperty->computeGraftCellTransform(hostCellIndex, hostPortalIndex, donorPobName, donorCellIndex, donorPortalIndex, correctedTransform, &resolvedDonorPortalIndex))
 		{
 			cellTransform = correctedTransform;
 			cellObject->setTransform_o2p(cellTransform);
 		}
 	}
+
+	if (PortalProperty::isCustomSocketIndex(hostPortalIndex))
+		persistCustomSockets(building, *portalProperty);
 
 	recordBridgeIfNeeded(*portalProperty, hostCellIndex, hostPortalIndex, graftedCellIndex, resolvedGraftPortal);
 	persistBridgeSegments(building, *portalProperty);
@@ -1094,9 +1102,10 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 		for (size_t si = 0; si < restoredSockets.size(); ++si)
 		{
 			PortalProperty::CustomSocket const &restored = restoredSockets[si];
-			if (restored.open && portalProperty->getCell(restored.cellIndex))
+			if (portalProperty->getCell(restored.cellIndex))
 				IGNORE_RETURN(portalProperty->materializeCustomSocketPortal(restored.cellIndex, restored.socketIndex));
 		}
+		persistCustomSockets(building, *portalProperty);
 	}
 
 	int bridgeCount = 0;
@@ -1165,9 +1174,11 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 		// Cells should already exist from DB; link portals once both sides are loaded.
 		if (portalProperty->getCell(hostCell) && portalProperty->getCell(graftedCell))
 		{
+			bool linked = false;
 			if (PortalProperty::isCustomSocketIndex(hostPortal))
 			{
-				if (!portalProperty->linkCustomSocketGraft(hostCell, hostPortal, graftedCell, graftPortal))
+				linked = portalProperty->linkCustomSocketGraft(hostCell, hostPortal, graftedCell, graftPortal);
+				if (!linked)
 				{
 					WARNING(true, ("DynamicBunker::restoreGraftsFromObjVars - custom socket link failed for graft %d host=%d/%d graft=%d/%d",
 						i, hostCell, hostPortal, graftedCell, graftPortal));
@@ -1175,7 +1186,18 @@ void DynamicBunker::restoreGraftsFromObjVars(ServerObject &building)
 			}
 			else
 			{
-				IGNORE_RETURN(portalProperty->linkCellPortals(hostCell, hostPortal, graftedCell, graftPortal));
+				linked = portalProperty->linkCellPortals(hostCell, hostPortal, graftedCell, graftPortal);
+			}
+
+			if (linked)
+			{
+				CellProperty *const graftCellProperty = portalProperty->getCell(graftedCell);
+				ServerObject *const graftCellObject = graftCellProperty
+					? safe_cast<ServerObject *>(&graftCellProperty->getOwner())
+					: 0;
+				Transform correctedTransform;
+				if (graftCellObject && portalProperty->computeLinkedGraftCellTransform(hostCell, hostPortal, graftedCell, graftPortal, correctedTransform))
+					graftCellObject->setTransform_o2p(correctedTransform);
 			}
 		}
 	}
