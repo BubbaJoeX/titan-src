@@ -316,7 +316,11 @@ void ShipClientUpdateTracker::update(float elapsedTime) // static
 
 void ShipClientUpdateTracker::queueForUpdate(Client &client, ShipObject const &ship) // static
 {
-	if (ship.getClient() != &client || ship.hasCondition(static_cast<int>(TangibleObject::C_docking)))
+	ShipController const * const shipController = (ship.getController()) ? ship.getController()->asShipController() : nullptr;
+	PlayerShipController const * const playerShipController = shipController ? shipController->asPlayerShipController() : nullptr;
+	bool const serverAutopilotDriving = playerShipController && playerShipController->isAutopilotActive();
+
+	if (ship.getClient() != &client || ship.hasCondition(static_cast<int>(TangibleObject::C_docking)) || serverAutopilotDriving)
 	{
 		ClientShipUpdateInfo &updateInfo = s_clientShipUpdateInfoMap[&client];
 		std::pair<std::set<NetworkId>::iterator, bool> result = updateInfo.queuedShipIds.insert(ship.getNetworkId());

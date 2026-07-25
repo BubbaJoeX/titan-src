@@ -56,6 +56,17 @@ namespace PlayerShipControllerNamespace
 	/** Meters per second vertical climb/descent during atmospheric autopilot (ascend/descend phases). */
 	float const s_autopilotElevatorSpeed = 60.0f;
 
+	void queueShipUpdatesForObservers(ShipObject & ship)
+	{
+		std::set<Client *> const & observers = ship.getObservers();
+		for (std::set<Client *>::const_iterator i = observers.begin(); i != observers.end(); ++i)
+		{
+			Client * const client = *i;
+			if (client)
+				ShipClientUpdateTracker::queueForUpdate(*client, ship);
+		}
+	}
+
 	int syncStampLongDeltaTime(uint32 stamp1, uint32 stamp2)
 	{
 		uint32 const delta = stamp1 - stamp2;
@@ -643,6 +654,11 @@ float PlayerShipController::realAlter(float const elapsedTime)
 			}
 		}
 		owner->setTransform_o2p(shipTransform);
+
+		// Server autopilot drives transform while receiveTransform() ignores client packets — push
+		// ShipUpdateTransform to all observers (including the pilot) each alter tick.
+		if (m_autopilotActive)
+			queueShipUpdatesForObservers(*owner);
 
 		// Request new enemies for any turrets
 
