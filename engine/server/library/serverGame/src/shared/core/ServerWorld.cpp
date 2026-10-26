@@ -173,6 +173,21 @@ Object const *getContainingPobForObjectInWorld(Object const &object)
 	return 0;
 }
 
+// Titan: sphere-tree extents of an object in a pob are kept in the topmost pob's space.  o2p is that space
+// when the object sits directly in one of its cells, but not inside a pob nested in one of them (a vessel parked
+// in a hangar cell): that object's o2p is relative to the nested pob's cell, so go through world space.
+Vector getPositionInContainingPobSpace(Object const &object, Vector const &position_o)
+{
+	Object const * const parent = object.getAttachedTo();
+	if (parent && parent->getCellProperty())
+	{
+		Object const * const pob = getContainingPobForObjectInWorld(object);
+		if (pob && ContainerInterface::getContainedByObject(*parent) != pob)
+			return pob->getTransform_o2w().rotateTranslate_p2l(object.getTransform_o2w().rotateTranslate_l2p(position_o));
+	}
+	return object.getTransform_o2p().rotateTranslate_l2p(position_o);
+}
+
 void compare_results_int(std::set<TriggerVolume *> &results, const std::set<TriggerVolume *> &results2, ServerObject* object)
 {
 	if (results.empty() && results2.empty())    // nothing to say........
@@ -445,7 +460,7 @@ public:
 	{
 		NOT_NULL(object);
 		Sphere const &localSphere = object->getLocalSphere();
-		return Sphere(object->getTransform_o2p().rotateTranslate_l2p(localSphere.getCenter()), localSphere.getRadius());
+		return Sphere(getPositionInContainingPobSpace(*object, localSphere.getCenter()), localSphere.getRadius());
 	}
 
 	static Object const *getCurrentPob(ServerObject const *object)
@@ -465,7 +480,7 @@ public:
 		NOT_NULL(volume);
 		ServerObject const &volumeOwner = volume->getOwner();
 		Sphere const &localSphere = volumeOwner.getLocalSphere();
-		return Sphere(volumeOwner.getTransform_o2p().rotateTranslate_l2p(localSphere.getCenter()), volume->getRadius());
+		return Sphere(getPositionInContainingPobSpace(volumeOwner, localSphere.getCenter()), volume->getRadius());
 	}
 
 	static Object const *getCurrentPob(TriggerVolume const *t)

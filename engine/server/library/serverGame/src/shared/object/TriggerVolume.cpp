@@ -560,17 +560,17 @@ void TriggerVolume::objectDestroyed(ServerObject &object)
 
 void TriggerVolume::contentsChanged(std::vector<ServerObject *> const &newSortedContents)
 {
-	static std::vector<ServerObject *> lostObjects;
-	static std::vector<ServerObject *> gainedObjects;
-
-	IGNORE_RETURN(std::set_difference(
-		m_contents.begin(), m_contents.end(),
-		newSortedContents.begin(), newSortedContents.end(),
-		std::back_insert_iterator<std::vector<ServerObject *> >(lostObjects)));
-	IGNORE_RETURN(std::set_difference(
-		newSortedContents.begin(), newSortedContents.end(),
-		m_contents.begin(), m_contents.end(),
-		std::back_insert_iterator<std::vector<ServerObject *> >(gainedObjects)));
+	// m_contents is an unordered set, so std::set_difference (which needs both ranges sorted) gave wrong enter / exit
+	// lists: objects that left were never told, objects that arrived were never registered, and both sides kept
+	// dangling pointers. Compare by lookup instead. Local lists: the enter / exit callbacks can re-enter here.
+	std::vector<ServerObject *> lostObjects;
+	std::vector<ServerObject *> gainedObjects;
+	for (ContentsSet::const_iterator i = m_contents.begin(); i != m_contents.end(); ++i)
+		if (!std::binary_search(newSortedContents.begin(), newSortedContents.end(), *i))
+			lostObjects.push_back(*i);
+	for (std::vector<ServerObject *>::const_iterator j = newSortedContents.begin(); j != newSortedContents.end(); ++j)
+		if (m_contents.find(*j) == m_contents.end())
+			gainedObjects.push_back(*j);
 
 	m_contents.clear();
 	m_contents.insert(newSortedContents.begin(), newSortedContents.end());
@@ -585,9 +585,6 @@ void TriggerVolume::contentsChanged(std::vector<ServerObject *> const &newSorted
 		virtualOnEnter(**j);
 		(*j)->onAddedToTriggerVolume(*this);
 	}
-
-	lostObjects.clear();
-	gainedObjects.clear();
 }
 
 // ======================================================================

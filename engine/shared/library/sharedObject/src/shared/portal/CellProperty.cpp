@@ -168,6 +168,14 @@ bool CellPropertyNamespace::Notification::positionChanged(Object &object, bool c
 		if(nextCell == currentCell) break;	
 		if(nextCell == lastCell) break;
 
+		// Titan: a vessel's floor hatch (cells named hatch*) lies under a deck people also walk over; while the hatch
+		// is shut (the cell doesn't admit the object) its portals are not crossed and the walker stays on the deck.
+		{
+			char const * const nextName = nextCell->getCellName();
+			if (nextName != 0 && strncmp(nextName, "hatch", 5) == 0 && !nextCell->getAccessAllowed())
+				break;
+		}
+
 		lastCell = currentCell;
 		currentCell = nextCell;
 
@@ -664,6 +672,16 @@ const Object *CellProperty::getAppearanceObject() const
 
 // ----------------------------------------------------------------------
 
+namespace CellPropertyNamespace
+{
+	// Titan: true when innerCell belongs to a pob whose owner sits directly in outerCell
+	bool isNestedPobCellOf(CellProperty const &innerCell, CellProperty const &outerCell)
+	{
+		PortalProperty const * const portalProperty = innerCell.getPortalProperty();
+		return portalProperty && portalProperty->getOwner().getParentCell() == &outerCell;
+	}
+}
+
 bool CellProperty::areAdjacent(const CellProperty *cellProperty1, const CellProperty *cellProperty2)
 {
 	bool result = false;
@@ -679,10 +697,14 @@ bool CellProperty::areAdjacent(const CellProperty *cellProperty1, const CellProp
 		}
 		else if (   (cellProperty1 != getWorldCellProperty())
 		         && (cellProperty2 != getWorldCellProperty())
-				 && (cellProperty1->getPortalProperty() != cellProperty2->getPortalProperty()))
+				 && (cellProperty1->getPortalProperty() != cellProperty2->getPortalProperty())
+				 && !isNestedPobCellOf(*cellProperty1, *cellProperty2)
+				 && !isNestedPobCellOf(*cellProperty2, *cellProperty1))
 		{
 			// Both cell properties are not the world cell property and
 			// they do not share the same portal property
+			// (Titan: unless one belongs to a pob parked in the other, e.g. a vessel in a hangar cell, which
+			// connects to that cell through its exterior portals exactly like a pob in the world cell)
 
 			result = false;
 		}
@@ -832,9 +854,11 @@ CellProperty *CellProperty::getDestinationCell(const Object *object, int portalI
 		const Object     &portalObject = i->portalProperty->getOwner();
 		const PortalList &portalList   = *i->portalList;
 
-		if(this == CellProperty::getWorldCellProperty())
+		if(this == CellProperty::getWorldCellProperty() || i->attached)
 		{
 			// We only want to check the list of portals for this cell object
+			// Titan: an interior cell also holds the attached exterior portals of a pob parked in it (a vessel in a
+			// hangar); match those by the floor owner, exactly like the world cell does.
 			if(&portalObject != object) continue;
 		}
 		else

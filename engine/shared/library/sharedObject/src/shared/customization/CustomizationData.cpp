@@ -105,10 +105,16 @@ namespace CustomizationDataNamespace
 		bool invalid;
 	};
 
+	// A persisted variable id lives in the low 7 bits of its id byte (the high bit flags a 2-byte value).
+	// Version 4 data escapes 0x7f: the next byte holds id - 0x7f, so ids up to 0x7f + 255 persist.
+	int const cs_extendedIdEscape       = 0x7f;
+	int const cs_maxPersistedVariableId = cs_extendedIdEscape + 255;
+
 	std::string canonicalizeDirectColorPath(std::string const &variableName);
 	bool  getDirectColorVariableLocation(std::string const &variableName, int &bank, int &slot, int &channel);
 	bool  isReservedDirectColorVariable(std::string const &variableName);
-	void  declarePersistedDirectColorSlots(CustomizationData &customizationData, CustomizationData::ByteVector const &data);
+	bool  readPersistedVariableHeader(CustomizationData::ByteVector const &data, bool extendedIds, int &currentIndex, int &variableId, int &variableSize);
+	void  declarePersistedDirectColorSlots(CustomizationData &customizationData, CustomizationData::ByteVector const &data, bool extendedIds = false);
 }
 
 using namespace CustomizationDataNamespace;
@@ -180,7 +186,30 @@ bool CustomizationDataNamespace::isReservedDirectColorVariable(std::string const
 
 // ----------------------------------------------------------------------
 
-void CustomizationDataNamespace::declarePersistedDirectColorSlots(CustomizationData &customizationData, CustomizationData::ByteVector const &data)
+bool CustomizationDataNamespace::readPersistedVariableHeader(CustomizationData::ByteVector const &data, bool extendedIds, int &currentIndex, int &variableId, int &variableSize)
+{
+	int const dataSize = static_cast<int>(data.size());
+	if (currentIndex >= dataSize)
+		return false;
+
+	// High bit: variable is persisted as 2-byte (signed) or 1-byte (unsigned); lower 7 bits: variable id.
+	byte const combinedVariableId = data[static_cast<CustomizationData::ByteVector::size_type>(currentIndex++)];
+	variableSize = ((combinedVariableId & 0x80) != 0) ? 2 : 1;
+	variableId   = combinedVariableId & 0x7f;
+
+	if (extendedIds && (variableId == cs_extendedIdEscape))
+	{
+		if (currentIndex >= dataSize)
+			return false;
+		variableId = cs_extendedIdEscape + static_cast<int>(data[static_cast<CustomizationData::ByteVector::size_type>(currentIndex++)]);
+	}
+
+	return currentIndex + variableSize <= dataSize;
+}
+
+// ----------------------------------------------------------------------
+
+void CustomizationDataNamespace::declarePersistedDirectColorSlots(CustomizationData &customizationData, CustomizationData::ByteVector const &data, bool extendedIds)
 {
 	int const dataSize = static_cast<int>(data.size());
 	if (dataSize < 2)
@@ -193,13 +222,9 @@ void CustomizationDataNamespace::declarePersistedDirectColorSlots(CustomizationD
 
 	for (int i = 0; i < variableCount; ++i)
 	{
-		if (currentIndex >= dataSize)
-			return;
-
-		byte const combinedVariableId = data[static_cast<CustomizationData::ByteVector::size_type>(currentIndex++)];
-		int const variableSize = ((combinedVariableId & 0x80) != 0) ? 2 : 1;
-		int const variableId = combinedVariableId & 0x7f;
-		if (currentIndex + variableSize > dataSize)
+		int variableId   = 0;
+		int variableSize = 0;
+		if (!readPersistedVariableHeader(data, extendedIds, currentIndex, variableId, variableSize))
 			return;
 
 		int bank = 0;
@@ -818,6 +843,11 @@ void CustomizationData::loadLocalDataFromString(const std::string &stringData)
 				loadLocalDataFromString_3(stringData);
 				break;
 
+			case 4:
+				// Version 4 differs from version 2 only in its binary form (extended variable ids).
+				loadLocalDataFromString_2(stringData);
+				break;
+
 			default:
 			{
 				Object const &object = getOwnerObject();
@@ -1335,8 +1365,11 @@ void CustomizationData::saveToByteVector(ByteVector &data, bool persistRemoteDat
 	iterateOverConstVariables(collectPersistedVariablesCallback, &variables, persistRemoteData);
 
 	//-- Write header data.
-	// Version 2 is the authoritative legacy palette-index format.
+	// Version 2 is the authoritative legacy palette-index format; back-patched to version 4 below if a
+	// variable id needs the extended id escape.
+	ByteVector::size_type const versionByteIndex = data.size();
 	data.push_back(2);
+	bool wroteExtendedId = false;
 
 	// Write # variables.
 	int const variableCount = static_cast<int>(variables.size());
@@ -1358,23 +1391,31 @@ void CustomizationData::saveToByteVector(ByteVector &data, bool persistRemoteDat
 		bool const mapSuccessful = CustomizationIdManager::mapStringToId(variableName.c_str(), variableId);
 		
 		FATAL(!mapSuccessful, ("object id [%s] failed to map customization variable name [%s] to a customization variable id. Somebody forgot to run the customization id update process. Will not try to save incomplete data.", getOwnerObject().getNetworkId().getValueString().c_str(), variableName.c_str()));
-		DEBUG_FATAL((variableId < 0) || (variableId >= 128), ("logic error: CustomizationIdManager returned an out-of-range value [%d] for customization data format 0.", variableId));
+		DEBUG_FATAL((variableId < 0) || (variableId > cs_maxPersistedVariableId), ("logic error: CustomizationIdManager returned an out-of-range value [%d] for customization data format 0.", variableId));
 
 		// Find out if variable is stored as 1 byte unsigned or 2 byte signed.
 		int const persistedDataSize = variable->getPersistedDataByteCount();
 		VALIDATE_RANGE_INCLUSIVE_INCLUSIVE(1, persistedDataSize, 2);
 
 		//-- Write variable declaration.
-		byte combinedId = static_cast<byte>(variableId);
+		bool const extendedId = (variableId >= cs_extendedIdEscape);
+		byte combinedId = static_cast<byte>(extendedId ? cs_extendedIdEscape : variableId);
 		if (persistedDataSize == 2)
 			combinedId |= 0x80;
 		
 		data.push_back(combinedId);
+		if (extendedId)
+		{
+			data.push_back(static_cast<byte>(variableId - cs_extendedIdEscape));
+			wroteExtendedId = true;
+		}
 
 		//-- Write variable data.
 		variable->saveToByteVector(data);
 	}
 
+	if (wroteExtendedId)
+		data[versionByteIndex] = 4;
 }
 
 // ----------------------------------------------------------------------
@@ -1408,6 +1449,10 @@ bool CustomizationData::restoreFromByteVector(ByteVector const &data)
 			returnValue = restoreFromByteVector_3(data);
 			break;
 
+		case 4:
+			returnValue = restoreFromByteVector_4(data);
+			break;
+
 		default:
 		{
 			WARNING(true, ("object id [%s], template [%s] tried to restore customization data from unsupported version [%d].", object.getNetworkId().getValueString().c_str(), object.getObjectTemplateName(), static_cast<int>(version)));
@@ -1424,7 +1469,7 @@ bool CustomizationData::restoreFromByteVector(ByteVector const &data)
 
 // ----------------------------------------------------------------------
 
-bool CustomizationData::restoreFromByteVector_1(ByteVector const &data)
+bool CustomizationData::restoreFromByteVector_1(ByteVector const &data, bool extendedIds)
 {
 	Object const &object = getOwnerObject();
 
@@ -1447,7 +1492,7 @@ bool CustomizationData::restoreFromByteVector_1(ByteVector const &data)
 
 	// Version-2 direct-color overrides were persisted as ordinary ranged-int
 	// variables. Declare only complete, valid slot triplets before applying data.
-	declarePersistedDirectColorSlots(*this, data);
+	declarePersistedDirectColorSlots(*this, data, extendedIds);
 
 	bool result = true;
 
@@ -1457,15 +1502,10 @@ bool CustomizationData::restoreFromByteVector_1(ByteVector const &data)
 	
 	for (int i = 0; i < variableCount; ++i)
 	{
-		// Get combined variable id.
-		byte const combinedVariableId = data[static_cast<ByteVector::size_type>(currentIndex)];
-		++currentIndex;
-
-		// Extract high-bit to determine if variable is interpreted as 2-byte (signed) or 1-byte (unsigned),
-		// extract lower 7 bits for variable id.
-		int const variableSize = ((combinedVariableId & 0x80) != 0) ? 2 : 1;
-		int const variableId   = combinedVariableId & 0x7f;
-		if (currentIndex + variableSize > dataSize)
+		// Get variable id and persisted size.
+		int variableId   = 0;
+		int variableSize = 0;
+		if (!readPersistedVariableHeader(data, extendedIds, currentIndex, variableId, variableSize))
 		{
 			WARNING(true, ("object id [%s], template [%s] customization data truncated while reading variable id [%d].", object.getNetworkId().getValueString().c_str(), object.getObjectTemplateName(), variableId));
 			return false;
@@ -1523,6 +1563,14 @@ bool CustomizationData::restoreFromByteVector_2(ByteVector const &data)
 	// (we use utf8 to store the string in an objvar but the version 1
 	//  string had "characters" that were incompatible with utf8)
 	return restoreFromByteVector_1(data);
+}
+
+// ----------------------------------------------------------------------
+
+bool CustomizationData::restoreFromByteVector_4(ByteVector const &data)
+{
+	// Version 4 is version 2 plus the extended variable id escape (ids above 0x7e).
+	return restoreFromByteVector_1(data, true);
 }
 
 // ----------------------------------------------------------------------

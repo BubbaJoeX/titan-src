@@ -52,6 +52,10 @@ namespace CellObjectLightVarsNamespace
 		for (int depth = 0; walk && depth < 64; ++depth)
 		{
 			ServerObject *const so = walk->asServerObject();
+			// Titan: stop at the cell of an outer pob, so a pob parked inside another pob's cell (a vessel in a
+			// hangar) lights its own cells instead of routing the RPCs through the outer building.
+			if (portalRoot && so && so->asCellObject())
+				break;
 			if (so && so->getPortalProperty())
 				portalRoot = so;
 

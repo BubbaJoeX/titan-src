@@ -100,6 +100,9 @@ namespace ScriptMethodsPilotNamespace
 	jboolean   JNICALL spaceSquadIsSquadIdValid(JNIEnv *env, jobject self, jint squadId);
 	void       JNICALL setShipAggroDistance(JNIEnv *env, jobject self, jlong shipId, jfloat aggroDistance);
 	jboolean   JNICALL shipSetAutopilotTarget(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt);
+	jboolean   JNICALL shipSetAutopilotLandingY(JNIEnv *env, jobject self, jlong shipId, jfloat landingY);
+	void       JNICALL setShipNoFlyZone(JNIEnv *env, jobject self, jlong ownerId, jfloat x, jfloat z, jfloat radius, jfloat ceilingY);
+	void       JNICALL clearShipNoFlyZone(JNIEnv *env, jobject self, jlong ownerId);
 	jboolean   JNICALL shipSetAutopilotTargetHold(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt, jboolean holdCruise);
 	jboolean   JNICALL shipSetAutopilotTargetFighter(JNIEnv *env, jobject self, jlong shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt);
 	jboolean   JNICALL shipFighterAutopilotBeginDescent(JNIEnv *env, jobject self, jlong shipId);
@@ -107,6 +110,10 @@ namespace ScriptMethodsPilotNamespace
 	jboolean   JNICALL shipClearAutopilot(JNIEnv *env, jobject self, jlong shipId);
 	jboolean   JNICALL shipIsAutopilotActive(JNIEnv *env, jobject self, jlong shipId);
 	jint       JNICALL shipGetAutopilotPhase(JNIEnv *env, jobject self, jlong shipId);
+	jboolean   JNICALL shipSetFlightPath(JNIEnv *env, jobject self, jlong shipId, jfloatArray times, jfloatArray xs, jfloatArray ys, jfloatArray zs, jfloatArray yaws, jfloatArray pitches, jfloatArray rolls);
+	jboolean   JNICALL shipClearFlightPath(JNIEnv *env, jobject self, jlong shipId);
+	jfloat     JNICALL shipGetFlightPathElapsed(JNIEnv *env, jobject self, jlong shipId);
+	jfloat     JNICALL shipGetFlightPathDuration(JNIEnv *env, jobject self, jlong shipId);
 	jboolean   JNICALL shipIsWeaponTurret(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex);
 	jboolean   JNICALL shipSetTurretWeaponTarget(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex, jlong targetId);
 	jlong      JNICALL shipGetTurretWeaponTarget(JNIEnv *env, jobject self, jlong shipId, jint weaponIndex);
@@ -176,6 +183,9 @@ const JNINativeMethod NATIVES[] = {
 	JF("_spaceSquadIsSquadIdValid", "(I)Z", spaceSquadIsSquadIdValid),
 	JF("_setShipAggroDistance", "(JF)V", setShipAggroDistance),
 	JF("_shipSetAutopilotTarget", "(JFFFF)Z", shipSetAutopilotTarget),
+	JF("_shipSetAutopilotLandingY", "(JF)Z", shipSetAutopilotLandingY),
+	JF("_setShipNoFlyZone", "(JFFFF)V", setShipNoFlyZone),
+	JF("_clearShipNoFlyZone", "(J)V", clearShipNoFlyZone),
 	JF("_shipSetAutopilotTargetHold", "(JFFFFZ)Z", shipSetAutopilotTargetHold),
 	JF("_shipSetAutopilotTargetFighter", "(JFFFF)Z", shipSetAutopilotTargetFighter),
 	JF("_shipFighterAutopilotBeginDescent", "(J)Z", shipFighterAutopilotBeginDescent),
@@ -183,6 +193,10 @@ const JNINativeMethod NATIVES[] = {
 	JF("_shipClearAutopilot", "(J)Z", shipClearAutopilot),
 	JF("_shipIsAutopilotActive", "(J)Z", shipIsAutopilotActive),
 	JF("_shipGetAutopilotPhase", "(J)I", shipGetAutopilotPhase),
+	JF("_shipSetFlightPath", "(J[F[F[F[F[F[F[F)Z", shipSetFlightPath),
+	JF("_shipClearFlightPath", "(J)Z", shipClearFlightPath),
+	JF("_shipGetFlightPathElapsed", "(J)F", shipGetFlightPathElapsed),
+	JF("_shipGetFlightPathDuration", "(J)F", shipGetFlightPathDuration),
 	JF("_shipIsWeaponTurret", "(JI)Z", shipIsWeaponTurret),
 	JF("_shipSetTurretWeaponTarget", "(JIJ)Z", shipSetTurretWeaponTarget),
 	JF("_shipGetTurretWeaponTarget", "(JI)J", shipGetTurretWeaponTarget),
@@ -1720,6 +1734,46 @@ jboolean JNICALL ScriptMethodsPilotNamespace::shipSetAutopilotTarget(JNIEnv *env
 
 // ----------------------------------------------------------------------
 
+/**
+ * Titan: a no-fly zone for pilots on this game server (atmospheric flight): a vertical cylinder at world (x, z) of
+ * `radius`, up to world height `ceilingY`, kept under `ownerId` (replacing its earlier one). Gods and ships the server
+ * flies (autopilot, scripted paths) are exempt.
+ */
+void JNICALL ScriptMethodsPilotNamespace::setShipNoFlyZone(JNIEnv * /*env*/, jobject /*self*/, jlong ownerId, jfloat x, jfloat z, jfloat radius, jfloat ceilingY)
+{
+	PlayerShipController::setNoFlyZone(NetworkId(static_cast<NetworkId::NetworkIdType>(ownerId)), x, z, radius, ceilingY);
+}
+
+// ----------------------------------------------------------------------
+
+void JNICALL ScriptMethodsPilotNamespace::clearShipNoFlyZone(JNIEnv * /*env*/, jobject /*self*/, jlong ownerId)
+{
+	PlayerShipController::clearNoFlyZone(NetworkId(static_cast<NetworkId::NetworkIdType>(ownerId)));
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Titan: make the active autopilot descend to this world height at its target instead of terrain + its landing
+ * altitude (a hover over a starport's landing well, where the terrain is cut away). Call after setting the target.
+ */
+jboolean JNICALL ScriptMethodsPilotNamespace::shipSetAutopilotLandingY(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jfloat landingY)
+{
+	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipSetAutopilotLandingY(): ship did not resolve to a ShipObject");
+	if (!shipObject)
+		return JNI_FALSE;
+
+	ShipController * const sc = shipObject->getController() ? shipObject->getController()->asShipController() : nullptr;
+	PlayerShipController * const psc = sc ? sc->asPlayerShipController() : nullptr;
+	if (!psc || !psc->isAutopilotActive())
+		return JNI_FALSE;
+
+	psc->setAutopilotLandingY(landingY);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
 jboolean JNICALL ScriptMethodsPilotNamespace::shipSetAutopilotTargetHold(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jfloat targetX, jfloat targetZ, jfloat takeoffAlt, jfloat landingAlt, jboolean holdCruise)
 {
 	ShipObject * const shipObject = JavaLibrary::getShipThrow(env, jobject_shipId, "shipSetAutopilotTargetHold(): ship did not resolve to a ShipObject");
@@ -1853,6 +1907,89 @@ jint JNICALL ScriptMethodsPilotNamespace::shipGetAutopilotPhase(JNIEnv *env, job
 		return 0;
 
 	return static_cast<jint>(psc->getAutopilotPhase());
+}
+
+// ----------------------------------------------------------------------
+
+namespace ScriptMethodsPilotNamespace
+{
+	PlayerShipController * getPlayerShipController(JNIEnv *env, jlong const shipId, char const * const errorText)
+	{
+		ShipObject * const shipObject = JavaLibrary::getShipThrow(env, shipId, errorText);
+		if (!shipObject)
+			return nullptr;
+
+		ShipController * const sc = shipObject->getController() ? shipObject->getController()->asShipController() : nullptr;
+		return sc ? sc->asPlayerShipController() : nullptr;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+/**
+ * Keys are parent-space positions plus heading (0 = +z, 90 = +x), pitch (nose up) and roll (right wing down) in
+ * degrees, at ascending times in seconds from now. The ship follows them exactly and then holds the last key.
+ */
+jboolean JNICALL ScriptMethodsPilotNamespace::shipSetFlightPath(JNIEnv *env, jobject /*self*/, jlong jobject_shipId, jfloatArray times, jfloatArray xs, jfloatArray ys, jfloatArray zs, jfloatArray yaws, jfloatArray pitches, jfloatArray rolls)
+{
+	PlayerShipController * const psc = getPlayerShipController(env, jobject_shipId, "shipSetFlightPath(): ship did not resolve to a ShipObject");
+	if (!psc || !times || !xs || !ys || !zs || !yaws || !pitches || !rolls)
+		return JNI_FALSE;
+
+	jsize const count = env->GetArrayLength(times);
+	if (count < 1 || env->GetArrayLength(xs) != count || env->GetArrayLength(ys) != count || env->GetArrayLength(zs) != count
+		|| env->GetArrayLength(yaws) != count || env->GetArrayLength(pitches) != count || env->GetArrayLength(rolls) != count)
+	{
+		JavaLibrary::throwInternalScriptError("shipSetFlightPath(): every key array must have the same, non-zero length");
+		return JNI_FALSE;
+	}
+
+	std::vector<jfloat> values(static_cast<size_t>(count) * 7);
+	jfloatArray const arrays[] = { times, xs, ys, zs, yaws, pitches, rolls };
+	for (int a = 0; a < 7; ++a)
+		env->GetFloatArrayRegion(arrays[a], 0, count, &values[static_cast<size_t>(a * count)]);
+
+	std::vector<PlayerShipController::FlightPathKey> keys(static_cast<size_t>(count));
+	for (jsize i = 0; i < count; ++i)
+	{
+		PlayerShipController::FlightPathKey & key = keys[static_cast<size_t>(i)];
+		key.time = values[static_cast<size_t>(i)];
+		key.position = Vector(values[static_cast<size_t>(count + i)], values[static_cast<size_t>(2 * count + i)], values[static_cast<size_t>(3 * count + i)]);
+		key.yaw = convertDegreesToRadians(values[static_cast<size_t>(4 * count + i)]);
+		key.pitch = -convertDegreesToRadians(values[static_cast<size_t>(5 * count + i)]);
+		key.roll = -convertDegreesToRadians(values[static_cast<size_t>(6 * count + i)]);
+	}
+
+	psc->setFlightPath(keys);
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsPilotNamespace::shipClearFlightPath(JNIEnv *env, jobject /*self*/, jlong jobject_shipId)
+{
+	PlayerShipController * const psc = getPlayerShipController(env, jobject_shipId, "shipClearFlightPath(): ship did not resolve to a ShipObject");
+	if (!psc)
+		return JNI_FALSE;
+
+	psc->clearFlightPath();
+	return JNI_TRUE;
+}
+
+// ----------------------------------------------------------------------
+
+jfloat JNICALL ScriptMethodsPilotNamespace::shipGetFlightPathElapsed(JNIEnv *env, jobject /*self*/, jlong jobject_shipId)
+{
+	PlayerShipController const * const psc = getPlayerShipController(env, jobject_shipId, "shipGetFlightPathElapsed(): ship did not resolve to a ShipObject");
+	return psc ? psc->getFlightPathElapsed() : -1.0f;
+}
+
+// ----------------------------------------------------------------------
+
+jfloat JNICALL ScriptMethodsPilotNamespace::shipGetFlightPathDuration(JNIEnv *env, jobject /*self*/, jlong jobject_shipId)
+{
+	PlayerShipController const * const psc = getPlayerShipController(env, jobject_shipId, "shipGetFlightPathDuration(): ship did not resolve to a ShipObject");
+	return psc ? psc->getFlightPathDuration() : -1.0f;
 }
 
 // ----------------------------------------------------------------------

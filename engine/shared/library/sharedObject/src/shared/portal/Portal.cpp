@@ -458,6 +458,9 @@ bool Portal::isDisabled() const
 
 // ----------------------------------------------------------------------
 // Determine if players are allowed to pass through this portal or not.
+// A portal into a cell named "hatch..." (a vessel's floor hatch: its ramp cell lies under a deck people also walk
+// over) is crossed only while that cell admits the player; otherwise the walker stays in their cell, on its floor
+// over the closed hatch.
 
 bool Portal::isPassable() const
 {
@@ -467,7 +470,14 @@ bool Portal::isPassable() const
 
 		if (cell != 0)
 		{
-			return cell->getAccessAllowed();
+			if (!cell->getAccessAllowed())
+				return false;
+
+			Portal const * const neighbor = getNeighbor();
+			CellProperty const * const neighborCell = (neighbor != 0) ? neighbor->getParentCell() : 0;
+			char const * const neighborName = (neighborCell != 0) ? neighborCell->getCellName() : 0;
+			if (neighborName != 0 && strncmp(neighborName, "hatch", 5) == 0)
+				return neighborCell->getAccessAllowed();
 		}
 
 		return true;

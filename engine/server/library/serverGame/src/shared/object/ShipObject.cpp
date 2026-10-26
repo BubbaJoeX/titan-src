@@ -21,6 +21,7 @@
 #include "serverGame/NebulaManagerServer.h"
 #include "serverGame/ObserveTracker.h"
 #include "serverGame/PlayerShipController.h"
+#include "serverGame/PortalTriggerVolume.h"
 #include "serverGame/ProjectileManager.h"
 #include "serverGame/PvpUpdateObserver.h"
 #include "serverGame/ResourceTypeObject.h"
@@ -509,6 +510,16 @@ void ShipObject::onAddedToWorld()
 
 	NON_NULL(safe_cast<ShipController *>(getController()))->onAddedToWorld();
 	TangibleObject::onAddedToWorld();
+
+	// A boardable (POB) ship on a ground planet loads its interior for players nearby, as a building's portal
+	// trigger volume does; otherwise its cells and their contents only reach a client the moment it steps aboard.
+	// The same goes for one parked in another pob's cell (a hangar), on any ground planet.
+	if ((ServerWorld::isAtmosphericFlightScene() || (!ServerWorld::isSpaceScene() && !isInWorldCell())) && getPortalProperty() && !getTriggerVolume(PortalTriggerVolume::getName()))
+	{
+		Sphere const &extent = getSphereExtent();
+		float const radius = extent.getRadius() + getTransform_o2w().getPosition_p().magnitudeBetween(extent.getCenter()) + 40.0f;
+		addTriggerVolume(new PortalTriggerVolume(*this, radius));
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -571,7 +582,8 @@ bool ShipObject::isVisibleOnClient(Client const &client) const
 
 	// In ground scenes, ships in the world are only visible to clients they contain, and gods
 	// In ship scenes (space or atmospheric flight), ships are visible to all
-	if (client.isGod() || !isInWorld() || ServerWorld::isShipScene())
+	// Titan: so is a ship parked in another pob's cell (a vessel in a hangar)
+	if (client.isGod() || !isInWorld() || ServerWorld::isShipScene() || !isInWorldCell())
 		return true;
 
 	for (ServerObject const *o = client.getCharacterObject(); o; o = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(*o)))

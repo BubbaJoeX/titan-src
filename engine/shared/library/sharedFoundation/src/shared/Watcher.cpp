@@ -145,6 +145,14 @@ void WatchedByList::remove(BaseWatcher &watcher)
 		{}
 
 	DEBUG_FATAL(i == end, ("did not find watcher on list"));
+	if (i == end)
+	{
+		// release builds used to write one past the end here and drop another watcher's entry
+		static int s_reported = 0;
+		WARNING(s_reported++ < 20, ("WatchedByList::remove: watcher %p (data %p) is not on list %p (%d entries)", &watcher,
+			static_cast<BaseWatcher const &>(watcher).m_data, m_list, static_cast<int>(m_list->size())));
+		return;
+	}
 
 	// move the last element down to this slot
 	*i = *(end-1);

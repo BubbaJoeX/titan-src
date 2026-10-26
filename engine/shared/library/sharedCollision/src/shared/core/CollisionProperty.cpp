@@ -358,6 +358,12 @@ void CollisionProperty::initFromTemplate( SharedObjectTemplate const * objTempla
 				// this is done for the server to lessen the load...
 				m_spatialDatabaseStorageType = SpatialDatabase::Q_Static;
 			}
+			else if (!objTemplate->getPortalLayoutFilename().empty())
+			{
+				// a ship people walk into (POB): creatures on the ground resolve their moves against statics only,
+				// so it goes in the static database and its hull's collision extent stops them like a building's
+				m_spatialDatabaseStorageType = SpatialDatabase::Q_Static;
+			}
 			else if (GameObjectTypes::isTypeOf(gameObjectType, SharedObjectTemplate::GOT_ship_mining_asteroid_static))
 			{
 				m_spatialDatabaseStorageType = SpatialDatabase::Q_Static;
@@ -1183,6 +1189,15 @@ bool CollisionProperty::canCollideWith( CollisionProperty const * otherCollision
 		{
 			return true;
 		}
+	}
+
+	// Creatures on the ground walk round a vessel's hull (the collision extent of its appearance: box composites on
+	// the landed boardable vessels), never through it; player-built ships would otherwise pass as player-controlled
+	// mobiles. Inside any cell (the vessel's ramp and decks) the hull's solid boxes don't apply.
+	if(otherCollision->isShip() && !isShip())
+	{
+		CellProperty const * const cell = getOwner().getParentCell();
+		return !cell || cell == CellProperty::getWorldCellProperty();
 	}
 
 	if(isMobile() && otherCollision->isMobile())

@@ -17,6 +17,8 @@
 #include "sharedFoundation/Timer.h"
 #include "sharedMath/Vector.h"
 
+#include <vector>
+
 // ======================================================================
 
 class ShipUpdateTransformMessage;
@@ -28,6 +30,9 @@ class PlayerShipController : public ShipController
 public:
 
 	static void install();
+	/** Titan: a vertical cylinder no pilot may fly into (atmospheric flight; gods and server-flown ships exempt), by owner. */
+	static void setNoFlyZone(NetworkId const & owner, float x, float z, float radius, float ceilingY);
+	static void clearNoFlyZone(NetworkId const & owner);
 
 public:
 
@@ -60,6 +65,8 @@ public:
 	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude, bool holdCruise, bool fighterMode);
 	/** While autopilot is active, move horizontal goal without resetting climb/cruise phase (atmospheric follow). */
 	void updateAutopilotTargetXZ(float x, float z);
+	/** Titan: descend to this world height at the target instead of terrain + landing altitude (call after setAutopilotTarget). */
+	void setAutopilotLandingY(float y);
 	void clearAutopilot();
 	/** Non-POB fighter autopilot: begin elevator descent to 20m AGL at current horizontal target (script calls after stationary ticks). */
 	bool fighterAutopilotBeginDescent();
@@ -74,6 +81,27 @@ public:
 		AP_DESCENDING = 3,
 		AP_ARRIVED    = 4
 	};
+
+	/** One key of a scripted flight path: parent-space position and heading/pitch/roll (radians, pitch > 0 = nose down, as Transform::pitch_l). */
+	struct FlightPathKey
+	{
+		float  time;
+		Vector position;
+		float  yaw;
+		float  pitch;
+		float  roll;
+	};
+
+	/**
+	 * Scripted flight path (Titan vessels: shuttle approach, touchdown and climb-out). The ship follows the keys
+	 * exactly (Hermite through the keys, at rest at both ends) and then holds the last key until cleared. While a
+	 * path is set the atmospheric terrain floor is not applied, so a path may end on the ground (landed on its gear).
+	 */
+	void  setFlightPath(std::vector<FlightPathKey> const & keys);
+	void  clearFlightPath();
+	bool  isFlightPathActive() const;
+	float getFlightPathElapsed() const;
+	float getFlightPathDuration() const;
 
 protected:
 	virtual void handleMessage(int message, float value, const MessageQueue::Data* data, uint32 flags);
@@ -97,6 +125,8 @@ private:
 	uint32 getCurSyncStamp() const;
 	bool checkValidMove(Transform const &transform, Vector const &velocity, float speed, uint32 syncStamp);
 	void logMoveFail(char const *reasonFmt, ...) const;
+
+	void alterFlightPath(ShipObject & owner, float elapsedTime);
 
 private:
 
@@ -122,6 +152,14 @@ private:
 	float m_autopilotDesiredY;
 	bool  m_autopilotHoldCruise;
 	bool  m_autopilotFighterMode;
+	bool  m_autopilotHasLandingY;
+	float m_autopilotLandingY;
+	bool  m_serverDrivenDocking;     // Titan: C_docking set by us while the server flies the ship
+	unsigned long m_noFlyWarnedAtMs;     // Titan: last restricted-airspace warning to the pilot
+
+	std::vector<FlightPathKey> m_flightPath;
+	float m_flightPathElapsed;
+	float m_flightPathHoldTime;
 };
 
 // ======================================================================

@@ -446,8 +446,10 @@ void BuildingObject::expelObject(ServerObject &who)
 			if (!parentCell->isWorldCell())
 				destinationCellObject = safe_cast<ServerObject*>(&parentCell->getOwner());
 
+			// Titan: o2p, so the ejection point is in the parent cell's space when the building sits in a cell
+			// (teleport takes a cell-space transform with a cell); o2p equals o2w in the world cell.
 			Transform destinationTransform(Transform::IF_none);
-			destinationTransform.multiply(getTransform_o2w(), portalProperty->getEjectionLocationTransform());
+			destinationTransform.multiply(getTransform_o2p(), portalProperty->getEjectionLocationTransform());
 			controller->teleport(destinationTransform, destinationCellObject);
 		}
 	}

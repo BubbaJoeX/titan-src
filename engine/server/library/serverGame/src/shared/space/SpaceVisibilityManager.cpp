@@ -239,7 +239,9 @@ void SpaceVisibilityManager::moveObject(const ServerObject & object)
 {
 	PROFILER_AUTO_BLOCK_DEFINE("SpaceVisibilityManager::moveObject");
 
-	TrackedObject *vis = ms_trackedObjects[object.getNetworkId()];
+	// find(), not operator[]: an untracked object must not leave a nullptr entry behind
+	TrackedObjectsType::iterator const found = ms_trackedObjects.find(object.getNetworkId());
+	TrackedObject *vis = found != ms_trackedObjects.end() ? found->second : nullptr;
 	DEBUG_FATAL(!vis,("Programmer Bug:  Called SpaceVisibilityManager::moveObject(%s), but the object had not been added to SpaceVisibilityManager",object.getNetworkId().getValueString().c_str()));
 	if (!vis) //lint !e774 //always false (in debug build only)
 		return;
@@ -254,7 +256,8 @@ void SpaceVisibilityManager::removeObject(ServerObject & object)
 	PROFILER_AUTO_BLOCK_DEFINE("SpaceVisibilityManager::removeObject");
 	DEBUG_REPORT_LOG(ConfigServerGame::getDebugSpaceVisibilityManager(),("SpaceVisibilityManager::removeObject(%s);\n",object.getNetworkId().getValueString().c_str()));
 
-	TrackedObject *vis = ms_trackedObjects[object.getNetworkId()];
+	TrackedObjectsType::iterator const found = ms_trackedObjects.find(object.getNetworkId());
+	TrackedObject *vis = found != ms_trackedObjects.end() ? found->second : nullptr;
 	DEBUG_FATAL(!vis,("Programmer Bug:  Called SpaceVisibilityManager::removeObject(%s), but the object had not been added to SpaceVisibilityManager",object.getNetworkId().getValueString().c_str()));
 	if (!vis)   //lint !e774 //always false (in debug build only)
 		return;

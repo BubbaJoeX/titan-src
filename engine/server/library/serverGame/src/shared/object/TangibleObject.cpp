@@ -1543,6 +1543,56 @@ void TangibleObject::updateDynamicHardpointsFromObjvars()
 			IGNORE_RETURN(snprintf(tail, sizeof(tail), "%f\t%f\t%f\t%f", ox, oy, oz, scale));
 			pack += tail;
 		}
+		else if (kind == "part")
+		{
+			// Moving part (ramp, landing gear): rest pose as modelled at state 0, moved by `amount` along or
+			// about the hardpoint axis at state 1; the client eases between states over `seconds` after `delay`.
+			std::string path;
+			if (!slotList.getItem("path", path) || path.empty())
+				continue;
+			std::string mode("rot");
+			float ax = 1.f;
+			float ay = 0.f;
+			float az = 0.f;
+			float amount = 0.f;
+			float seconds = 1.f;
+			float delay = 0.f;
+			float state = 0.f;
+			IGNORE_RETURN(slotList.getItem("mode", mode));
+			IGNORE_RETURN(slotList.getItem("ax", ax));
+			IGNORE_RETURN(slotList.getItem("ay", ay));
+			IGNORE_RETURN(slotList.getItem("az", az));
+			IGNORE_RETURN(slotList.getItem("amount", amount));
+			IGNORE_RETURN(slotList.getItem("seconds", seconds));
+			IGNORE_RETURN(slotList.getItem("delay", delay));
+			IGNORE_RETURN(slotList.getItem("state", state));
+			pack.push_back('\n');
+			pack += "part";
+			pack.push_back('\t');
+			if (hp.empty())
+				pack += '-';
+			else
+				appendSanitizedField(pack, hp);
+			pack.push_back('\t');
+			appendSanitizedField(pack, path);
+			pack.push_back('\t');
+			appendSanitizedField(pack, mode);
+			char nums[224];
+			IGNORE_RETURN(snprintf(nums, sizeof(nums), "\t%f\t%f\t%f\t%f\t%f\t%f\t%f", ax, ay, az, amount, seconds, delay, state));
+			pack += nums;
+			// optional slide (rot parts): stowed offset in hardpoint space, slid home before the turn
+			float mx = 0.f;
+			float my = 0.f;
+			float mz = 0.f;
+			IGNORE_RETURN(slotList.getItem("mx", mx));
+			IGNORE_RETURN(slotList.getItem("my", my));
+			IGNORE_RETURN(slotList.getItem("mz", mz));
+			if (mx != 0.f || my != 0.f || mz != 0.f)
+			{
+				IGNORE_RETURN(snprintf(nums, sizeof(nums), "\t%f\t%f\t%f", mx, my, mz));
+				pack += nums;
+			}
+		}
 	}
 
 	appendMountDynamicMetadata(pack);

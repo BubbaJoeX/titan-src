@@ -37,6 +37,11 @@
 #include "sharedObject/AlterResult.h"
 #include "sharedObject/NetworkIdManager.h"
 #include "serverGame/ServerWorld.h"
+#include "UnicodeUtils.h"
+#include "serverGame/Chat.h"
+#include "serverGame/Client.h"
+#include "sharedCollision/CollisionWorld.h"
+#include "sharedFoundation/Clock.h"
 #include "sharedTerrain/TerrainObject.h"
 
 #include <limits>
@@ -104,6 +109,103 @@ namespace PlayerShipControllerNamespace
 	private:
 		ShipObject const * m_shipObject;
 	};
+
+	/** After the last flight path key, keep streaming transforms this long so every client settles exactly on it. */
+	float const s_flightPathSettleTime = 2.0f;
+
+	/** Cubic Hermite between p0 and p1 (tangents m0/m1 per second, segment length dt seconds) at s in [0, 1]. */
+	void hermite(Vector const & p0, Vector const & m0, Vector const & p1, Vector const & m1, float const dt, float const s, Vector & value, Vector & rate)
+	{
+		float const s2 = s * s;
+		float const s3 = s2 * s;
+		value = p0 * (2.0f * s3 - 3.0f * s2 + 1.0f) + m0 * ((s3 - 2.0f * s2 + s) * dt) + p1 * (3.0f * s2 - 2.0f * s3) + m1 * ((s3 - s2) * dt);
+		rate = (p0 * (6.0f * s2 - 6.0f * s) + m0 * ((3.0f * s2 - 4.0f * s + 1.0f) * dt) + p1 * (6.0f * s - 6.0f * s2) + m1 * ((3.0f * s2 - 2.0f * s) * dt)) * (1.0f / dt);
+	}
+
+	Vector flightPathPosition(PlayerShipController::FlightPathKey const & key)
+	{
+		return key.position;
+	}
+
+	Vector flightPathAngles(PlayerShipController::FlightPathKey const & key)
+	{
+		return Vector(key.yaw, key.pitch, key.roll);
+	}
+
+	/**
+	 * Titan: no-fly zones (atmospheric flight): vertical cylinders round starports, registered by script (traffic
+	 * control, space.atmo.starport_traffic) under the object that owns them. A pilot may not fly a ship into one or
+	 * deeper into it; ships the server flies (autopilot, scripted paths: landing and leaving through traffic control)
+	 * and gods are exempt.
+	 */
+	struct NoFlyZone
+	{
+		float x, z, radius, ceilingY;
+	};
+	typedef std::map<NetworkId, NoFlyZone> NoFlyZones;
+	NoFlyZones s_noFlyZones;
+	unsigned long const s_noFlyWarnIntervalMs = 4000;
+
+	/** How far into a no-fly zone pos is (0 outside): to the zone's wall or up through its ceiling, whichever is nearer. */
+	float noFlyPenetration(Vector const & pos)
+	{
+		float deepest = 0.0f;
+		for (NoFlyZones::const_iterator i = s_noFlyZones.begin(); i != s_noFlyZones.end(); ++i)
+		{
+			NoFlyZone const & zone = i->second;
+			float const dx = pos.x - zone.x;
+			float const dz = pos.z - zone.z;
+			float const toWall = zone.radius - sqrt(dx * dx + dz * dz);
+			float const toCeiling = zone.ceilingY - pos.y;
+			float const depth = std::min(toWall, toCeiling);
+			if (depth > deepest)
+				deepest = depth;
+		}
+		return deepest;
+	}
+
+	/** Titan: how far over a building floor a ship holds where the terrain is cut away (a starport's landing well). */
+	float const s_shipFloorClearance = 2.0f;
+
+	/**
+	 * Titan: the lowest a ship may fly at pos in an atmospheric scene: 15 m over the terrain, or, where the terrain is
+	 * cut away (a landing well and its bays), just over the building floor under it - so a pilot can fly down the well
+	 * and set down in a bay, but not sink through a bay's floor. False when there is nothing under it (the open shaft).
+	 */
+	bool getShipMinimumAltitude(Vector const & pos, float & outMinimumY)
+	{
+		TerrainObject const * const terrain = TerrainObject::getConstInstance();
+		float terrainHeight = 0.0f;
+		bool const hasTerrain = terrain && terrain->getHeightForceChunkCreation(Vector(pos.x, 0.0f, pos.z), terrainHeight);
+
+		//-- a building floor under a ship that is below the terrain's height: the terrain is cut away there (a
+		//-- terrain chunk that isn't cut may still answer), so the floor is the ground
+		float floorHeight = 0.0f;
+		if (CollisionWorld::findObjectFloorHeightBelow(pos, floorHeight) && (!hasTerrain || pos.y < terrainHeight))
+		{
+			outMinimumY = floorHeight + s_shipFloorClearance;
+			return true;
+		}
+
+		if (hasTerrain)
+		{
+			outMinimumY = terrainHeight + 15.0f;
+			return true;
+		}
+
+		return false;
+	}
+
+	/** Catmull-Rom tangent at key i of a timed path; the path starts and ends at rest. */
+	Vector flightPathTangent(std::vector<PlayerShipController::FlightPathKey> const & keys, size_t const i, Vector (*getter)(PlayerShipController::FlightPathKey const &))
+	{
+		if (i == 0 || i + 1 >= keys.size())
+			return Vector::zero;
+		float const dt = keys[i + 1].time - keys[i - 1].time;
+		if (dt <= 0.0f)
+			return Vector::zero;
+		return (getter(keys[i + 1]) - getter(keys[i - 1])) * (1.0f / dt);
+	}
 }
 
 using namespace PlayerShipControllerNamespace;
@@ -147,7 +249,14 @@ PlayerShipController::PlayerShipController(ShipObject * const owner) :
 	m_autopilotPhase(AP_NONE),
 	m_autopilotDesiredY(0.0f),
 	m_autopilotHoldCruise(false),
-	m_autopilotFighterMode(false)
+	m_autopilotFighterMode(false),
+	m_autopilotHasLandingY(false),
+	m_autopilotLandingY(0.0f),
+	m_serverDrivenDocking(false),
+	m_noFlyWarnedAtMs(0),
+	m_flightPath(),
+	m_flightPathElapsed(0.0f),
+	m_flightPathHoldTime(0.0f)
 {
 	preventMovementUpdates();
 }
@@ -231,7 +340,7 @@ void PlayerShipController::receiveTransform(ShipUpdateTransformMessage const & s
 	if (isTeleporting())
 		return;
 
-	if (m_autopilotActive)
+	if (m_autopilotActive || !m_flightPath.empty())
 		return;
 
 	ShipObject * const owner = NON_NULL(getShipOwner());
@@ -251,18 +360,31 @@ void PlayerShipController::receiveTransform(ShipUpdateTransformMessage const & s
 
 		if (ServerWorld::isAtmosphericFlightScene())
 		{
-			TerrainObject const * const terrain = TerrainObject::getConstInstance();
-			if (terrain)
+			Vector const pos = transform.getPosition_p();
+			float minAltitude = 0.0f;
+			if (getShipMinimumAltitude(pos, minAltitude) && pos.y < minAltitude)
+				transform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
+		}
+
+		//-- Titan: no flying into (or on into) a starport's no-fly zone; the move is refused and the ship put back
+		if (ServerWorld::isAtmosphericFlightScene() && !s_noFlyZones.empty())
+		{
+			Client const * const pilotClient = owner->getClient();
+			if (!pilotClient || !pilotClient->isGod())
 			{
-				Vector const pos = transform.getPosition_p();
-				float terrainHeight = 0.0f;
-				if (terrain->getHeightForceChunkCreation(Vector(pos.x, 0.0f, pos.z), terrainHeight))
+				float const before = noFlyPenetration(owner->getPosition_p());
+				float const after = noFlyPenetration(transform.getPosition_p());
+				if (after > 0.0f && after > before + 0.25f)
 				{
-					float const minAltitude = terrainHeight + 15.0f;
-					if (pos.y < minAltitude)
+					unsigned long const now = Clock::timeMs();
+					CreatureObject * const pilot = owner->getPilot();
+					if (pilot && now - m_noFlyWarnedAtMs > s_noFlyWarnIntervalMs)
 					{
-						transform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
+						m_noFlyWarnedAtMs = now;
+						Chat::sendSystemMessage(*pilot, Unicode::narrowToWide("\\#ff4444[Traffic Control]: Restricted airspace. Request landing clearance from the planet map; traffic control will bring you in."), Unicode::emptyString);
 					}
+					teleport(owner->getTransform_o2p(), 0);
+					return;
 				}
 			}
 		}
@@ -557,11 +679,20 @@ float PlayerShipController::realAlter(float const elapsedTime)
 						m_yawPosition = 0.0f;
 						m_shipDynamicsModel->setYawRate(0.0f);
 
-						TerrainObject const * const terrain = TerrainObject::getConstInstance();
-						if (terrain)
+						if (m_autopilotHasLandingY)
+							m_autopilotDesiredY = m_autopilotLandingY;      // Titan: a set height (a hover over a landing well)
+						else
 						{
+							TerrainObject const * const terrain = TerrainObject::getConstInstance();
 							float terrainAtDest = 0.0f;
-							terrain->getHeightForceChunkCreation(Vector(m_autopilotTarget.x, 0.0f, m_autopilotTarget.z), terrainAtDest);
+							if (!terrain || !terrain->getHeightForceChunkCreation(Vector(m_autopilotTarget.x, 0.0f, m_autopilotTarget.z), terrainAtDest))
+							{
+								//-- Titan: no terrain there (cut away under a building): the building floor under the
+								//-- cruise point instead of sea level
+								float floorAtDest = 0.0f;
+								if (CollisionWorld::findObjectFloorHeightBelow(Vector(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z), floorAtDest))
+									terrainAtDest = floorAtDest;
+							}
 							m_autopilotDesiredY = terrainAtDest + m_autopilotLandingAltitude;
 						}
 						m_autopilotPhase = AP_DESCENDING;
@@ -592,68 +723,90 @@ float PlayerShipController::realAlter(float const elapsedTime)
 			}
 		}
 
-		//-- Update flight model
-		if (m_autopilotActive && (m_autopilotPhase == AP_CRUISING))
+		//-- A scripted flight path owns the transform: no flight model and no terrain floor (it may end on the ground)
+		if (!m_flightPath.empty())
+			alterFlightPath(*owner, elapsedTime);
+		else if (!owner->isInWorldCell())
 		{
-			AutopilotShipObjectInterface const autopilotInterface(owner);
-			m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, autopilotInterface);
+			//-- Titan: parked in another pob's cell (a vessel in a hangar).  Its transform is cell-relative, so the
+			//-- world flight model and the terrain floor below would throw it out of the cell; it stays put.
 		}
 		else
 		{
-			ServerShipObjectInterface const serverShipObjectInterface(owner);
-			m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, serverShipObjectInterface);
-		}
-
-		//-- Update the server position based on the model
-		Transform shipTransform = m_shipDynamicsModel->getTransform();
-
-		if (m_autopilotActive && (m_autopilotPhase == AP_ASCENDING || m_autopilotPhase == AP_DESCENDING))
-		{
-			float const elevatorSpeed = s_autopilotElevatorSpeed;
-			Vector pos = shipTransform.getPosition_p();
-			if (m_autopilotPhase == AP_ASCENDING)
+			//-- Update flight model
+			if (m_autopilotActive && (m_autopilotPhase == AP_CRUISING))
 			{
-				pos.y += elevatorSpeed * elapsedTime;
-				if (pos.y >= m_autopilotDesiredY)
-					pos.y = m_autopilotDesiredY;
+				AutopilotShipObjectInterface const autopilotInterface(owner);
+				m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, autopilotInterface);
 			}
 			else
 			{
-				pos.y -= elevatorSpeed * elapsedTime;
-				if (pos.y <= m_autopilotDesiredY)
-					pos.y = m_autopilotDesiredY;
+				ServerShipObjectInterface const serverShipObjectInterface(owner);
+				m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, serverShipObjectInterface);
 			}
-			shipTransform.setPosition_p(pos);
-			m_shipDynamicsModel->setTransform(shipTransform);
-			m_shipDynamicsModel->setVelocity(Vector::zero);
-		}
-		else if (m_autopilotActive && m_autopilotPhase == AP_CRUISING)
-		{
-			Vector pos = shipTransform.getPosition_p();
-			pos.y = m_autopilotDesiredY;
-			shipTransform.setPosition_p(pos);
-			m_shipDynamicsModel->setTransform(shipTransform);
-		}
 
-		if (ServerWorld::isAtmosphericFlightScene())
-		{
-			TerrainObject const * const terrain = TerrainObject::getConstInstance();
-			if (terrain)
+			//-- Update the server position based on the model
+			Transform shipTransform = m_shipDynamicsModel->getTransform();
+
+			if (m_autopilotActive && (m_autopilotPhase == AP_ASCENDING || m_autopilotPhase == AP_DESCENDING))
+			{
+				float const elevatorSpeed = s_autopilotElevatorSpeed;
+				Vector pos = shipTransform.getPosition_p();
+				if (m_autopilotPhase == AP_ASCENDING)
+				{
+					pos.y += elevatorSpeed * elapsedTime;
+					if (pos.y >= m_autopilotDesiredY)
+						pos.y = m_autopilotDesiredY;
+				}
+				else
+				{
+					pos.y -= elevatorSpeed * elapsedTime;
+					if (pos.y <= m_autopilotDesiredY)
+						pos.y = m_autopilotDesiredY;
+				}
+				shipTransform.setPosition_p(pos);
+				m_shipDynamicsModel->setTransform(shipTransform);
+				m_shipDynamicsModel->setVelocity(Vector::zero);
+			}
+			else if (m_autopilotActive && m_autopilotPhase == AP_CRUISING)
+			{
+				Vector pos = shipTransform.getPosition_p();
+				pos.y = m_autopilotDesiredY;
+				shipTransform.setPosition_p(pos);
+				m_shipDynamicsModel->setTransform(shipTransform);
+			}
+
+			if (ServerWorld::isAtmosphericFlightScene())
 			{
 				Vector const pos = shipTransform.getPosition_p();
-				float terrainHeight = 0.0f;
-				if (terrain->getHeightForceChunkCreation(Vector(pos.x, 0.0f, pos.z), terrainHeight))
+				float minAltitude = 0.0f;
+				if (getShipMinimumAltitude(pos, minAltitude) && pos.y < minAltitude)
 				{
-					float const minAltitude = terrainHeight + 15.0f;
-					if (pos.y < minAltitude)
-					{
-						shipTransform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
-						m_shipDynamicsModel->setTransform(shipTransform);
-					}
+					shipTransform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
+					m_shipDynamicsModel->setTransform(shipTransform);
 				}
 			}
+			owner->setTransform_o2p(shipTransform);
 		}
-		owner->setTransform_o2p(shipTransform);
+
+		//-- Titan: in atmospheric flight a ship flown by the server (its autopilot, a scripted path: a starport's
+		//-- landing well) is marked docking, so its pilot's client follows the server's transform instead of flying
+		//-- it from the seat (it ignores the server for its own ship otherwise); cleared when the server lets go
+		if (ServerWorld::isAtmosphericFlightScene() && m_dockingBehavior == nullptr)
+		{
+			bool const serverDriven = (m_autopilotActive && m_autopilotPhase != AP_ARRIVED && m_autopilotPhase != AP_NONE)
+				|| !m_flightPath.empty();
+			if (serverDriven && !owner->hasCondition(static_cast<int>(TangibleObject::C_docking)))
+			{
+				owner->setCondition(static_cast<int>(TangibleObject::C_docking));
+				m_serverDrivenDocking = true;
+			}
+			else if (!serverDriven && m_serverDrivenDocking)
+			{
+				owner->clearCondition(static_cast<int>(TangibleObject::C_docking));
+				m_serverDrivenDocking = false;
+			}
+		}
 
 		// Server autopilot drives transform while receiveTransform() ignores client packets — push
 		// ShipUpdateTransform to all observers (including the pilot) each alter tick.
@@ -1086,6 +1239,7 @@ void PlayerShipController::setAutopilotTarget(Vector const & target, float takeo
 	m_autopilotLandingAltitude = landingAltitude;
 	m_autopilotHoldCruise = holdCruise;
 	m_autopilotFighterMode = fighterMode;
+	m_autopilotHasLandingY = false;
 	m_autopilotPhase = AP_ASCENDING;
 
 	ShipObject * const ship = getShipOwner();
@@ -1122,6 +1276,33 @@ void PlayerShipController::setAutopilotTarget(Vector const & target, float takeo
 
 // ----------------------------------------------------------------------
 
+void PlayerShipController::setNoFlyZone(NetworkId const & owner, float const x, float const z, float const radius, float const ceilingY)
+{
+	NoFlyZone zone;
+	zone.x = x;
+	zone.z = z;
+	zone.radius = radius;
+	zone.ceilingY = ceilingY;
+	s_noFlyZones[owner] = zone;
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::clearNoFlyZone(NetworkId const & owner)
+{
+	s_noFlyZones.erase(owner);
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::setAutopilotLandingY(float const y)
+{
+	m_autopilotHasLandingY = true;
+	m_autopilotLandingY = y;
+}
+
+// ----------------------------------------------------------------------
+
 void PlayerShipController::updateAutopilotTargetXZ(float const x, float const z)
 {
 	if (!m_autopilotActive)
@@ -1140,6 +1321,7 @@ void PlayerShipController::clearAutopilot()
 	m_autopilotDesiredY = 0.0f;
 	m_autopilotHoldCruise = false;
 	m_autopilotFighterMode = false;
+	m_autopilotHasLandingY = false;
 
 	if (m_shipDynamicsModel)
 	{
@@ -1178,6 +1360,152 @@ bool PlayerShipController::fighterAutopilotBeginDescent()
 	}
 	m_autopilotPhase = AP_DESCENDING;
 	return true;
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::setFlightPath(std::vector<FlightPathKey> const & keys)
+{
+	m_flightPath = keys;
+	m_flightPathElapsed = 0.0f;
+	m_flightPathHoldTime = 0.0f;
+
+	for (size_t i = 1; i < m_flightPath.size(); ++i)
+	{
+		FlightPathKey const & previous = m_flightPath[i - 1];
+		FlightPathKey & key = m_flightPath[i];
+
+		//-- Times must ascend; unwrap the angles so each segment turns the short way
+		key.time = std::max(key.time, previous.time);
+		while (key.yaw - previous.yaw > PI)
+			key.yaw -= PI_TIMES_2;
+		while (key.yaw - previous.yaw < -PI)
+			key.yaw += PI_TIMES_2;
+		while (key.roll - previous.roll > PI)
+			key.roll -= PI_TIMES_2;
+		while (key.roll - previous.roll < -PI)
+			key.roll += PI_TIMES_2;
+	}
+
+	if (!m_flightPath.empty())
+	{
+		//-- The path replaces the autopilot
+		m_autopilotActive = false;
+		m_autopilotTarget = Vector::zero;
+		m_autopilotPhase = AP_NONE;
+		m_autopilotHoldCruise = false;
+		m_autopilotFighterMode = false;
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::clearFlightPath()
+{
+	if (m_flightPath.empty())
+		return;
+
+	m_flightPath.clear();
+	m_flightPathElapsed = 0.0f;
+	m_flightPathHoldTime = 0.0f;
+
+	//-- Hand the ship back to the flight model where it is, at rest
+	ShipObject const * const ship = getShipOwner();
+	if (m_shipDynamicsModel)
+	{
+		if (ship)
+			m_shipDynamicsModel->setTransform(ship->getTransform_o2p());
+		m_shipDynamicsModel->setVelocity(Vector::zero);
+		m_shipDynamicsModel->makeStationary();
+	}
+}
+
+// ----------------------------------------------------------------------
+
+bool PlayerShipController::isFlightPathActive() const
+{
+	return !m_flightPath.empty();
+}
+
+// ----------------------------------------------------------------------
+
+float PlayerShipController::getFlightPathElapsed() const
+{
+	return m_flightPath.empty() ? -1.0f : m_flightPathElapsed;
+}
+
+// ----------------------------------------------------------------------
+
+float PlayerShipController::getFlightPathDuration() const
+{
+	return m_flightPath.empty() ? -1.0f : m_flightPath.back().time;
+}
+
+// ----------------------------------------------------------------------
+
+void PlayerShipController::alterFlightPath(ShipObject & owner, float const elapsedTime)
+{
+	float const duration = m_flightPath.back().time;
+	bool const holding = m_flightPathElapsed >= duration;
+	m_flightPathElapsed = std::min(m_flightPathElapsed + elapsedTime, duration);
+
+	if (holding)
+	{
+		//-- Parked on the last key: settle every client on it, then stop streaming
+		if (m_flightPathHoldTime >= s_flightPathSettleTime)
+			return;
+		m_flightPathHoldTime += elapsedTime;
+	}
+
+	//-- Find the segment holding the current time
+	size_t segment = 0;
+	while (segment + 2 < m_flightPath.size() && m_flightPath[segment + 1].time <= m_flightPathElapsed)
+		++segment;
+
+	Vector position = flightPathPosition(m_flightPath[segment]);
+	Vector angles = flightPathAngles(m_flightPath[segment]);
+	Vector velocity;
+	Vector angleRates;
+
+	if (m_flightPath.size() > 1)
+	{
+		FlightPathKey const & key0 = m_flightPath[segment];
+		FlightPathKey const & key1 = m_flightPath[segment + 1];
+		float const dt = key1.time - key0.time;
+		if (dt > 0.0f)
+		{
+			float const s = clamp(0.0f, (m_flightPathElapsed - key0.time) / dt, 1.0f);
+			hermite(key0.position, flightPathTangent(m_flightPath, segment, flightPathPosition), key1.position, flightPathTangent(m_flightPath, segment + 1, flightPathPosition), dt, s, position, velocity);
+			hermite(flightPathAngles(key0), flightPathTangent(m_flightPath, segment, flightPathAngles), flightPathAngles(key1), flightPathTangent(m_flightPath, segment + 1, flightPathAngles), dt, s, angles, angleRates);
+		}
+		else
+		{
+			position = key1.position;
+			angles = flightPathAngles(key1);
+		}
+	}
+
+	if (holding)
+	{
+		velocity = Vector::zero;
+		angleRates = Vector::zero;
+	}
+
+	Transform transform;
+	transform.yaw_l(angles.x);
+	transform.pitch_l(angles.y);
+	transform.roll_l(angles.z);
+	transform.setPosition_p(position);
+
+	//-- Keep the model in step: clients predict from its velocity and rates between updates
+	m_shipDynamicsModel->setTransform(transform);
+	m_shipDynamicsModel->setVelocity(velocity);
+	m_shipDynamicsModel->setYawRate(angleRates.x);
+	m_shipDynamicsModel->setPitchRate(angleRates.y);
+	m_shipDynamicsModel->setRollRate(angleRates.z);
+
+	owner.setTransform_o2p(transform);
+	queueShipUpdatesForObservers(owner);
 }
 
 // ======================================================================

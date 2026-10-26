@@ -551,7 +551,10 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 
 	// check to see whether it's possible to get from the current pob to the destination pob
 	{
-		Object const *sourcePob = ContainerInterface::getTopmostContainer(*creature);
+		// Titan: the source pob is the one that directly owns the creature's cell, not the topmost container,
+		// so a pob nested in another pob's cell (a vessel parked in a hangar cell) is its own pob here.
+		CellObject const * const sourceCell = ContainerInterface::getContainingCellObject(*creature);
+		Object const *sourcePob = sourceCell ? ContainerInterface::getContainedByObject(*sourceCell) : ContainerInterface::getTopmostContainer(*creature);
 		PortalProperty const *sourcePortalProperty = sourcePob ? sourcePob->getPortalProperty() : 0;
 		CellObject const * const destCell = m.getCell();
 		Object const * const destPob = destCell ? ContainerInterface::getContainedByObject(*destCell) : 0;
@@ -560,12 +563,38 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 			return handleInvalidMove("destination cell is not attached to a building");
 		if (sourcePortalProperty != destPortalProperty)
 		{
-			// Moving between pobs.  This is only valid if one of these is nullptr, since pobs only connect to the world
+			// Moving between pobs.  Pobs only connect to their parent cell: the world cell (one side nullptr), or,
+			// for a nested pob, the cell of the outer pob it sits in.  Treat that outer cell like the world cell.
+			bool nested = false;
 			if (sourcePortalProperty && destPortalProperty)
-				return handleInvalidMove("tried to move from one pob to another without passing through the world cell");
-			if (sourcePortalProperty && !sourcePortalProperty->hasPassablePortalToParentCell())
+			{
+				CellObject const * const sourcePobCell = sourcePob ? ContainerInterface::getContainingCellObject(*sourcePob) : 0;
+				CellObject const * const destPobCell = destPob ? ContainerInterface::getContainingCellObject(*destPob) : 0;
+				if (destPobCell && destPobCell == sourceCell)
+				{
+					// entering the nested pob from the outer cell it is parked in
+					if (!destPortalProperty->hasPassablePortalToParentCell())
+						return handleInvalidMove("tried to move from a cell into a nested pob with no entrance");
+					nested = true;
+				}
+				else if (sourcePobCell && sourcePobCell == destCell)
+				{
+					// leaving the nested pob into the outer cell it is parked in
+					if (!sourcePortalProperty->hasPassablePortalToParentCell())
+						return handleInvalidMove("tried to move out of a nested pob with no exits");
+					nested = true;
+				}
+				else
+					return handleInvalidMove("tried to move from one pob to another without passing through the world cell");
+			}
+			// a nested pob is not connected to the world cell
+			else if (sourcePob && !destCell && ContainerInterface::getContainingCellObject(*sourcePob))
+				return handleInvalidMove("tried to move into the world cell from a nested pob");
+			else if (destPob && !sourceCell && ContainerInterface::getContainingCellObject(*destPob))
+				return handleInvalidMove("tried to move from the world cell into a nested pob");
+			if (!nested && sourcePortalProperty && !sourcePortalProperty->hasPassablePortalToParentCell())
 				return handleInvalidMove("tried to move into the world cell from a pob with no exits");
-			if (destPortalProperty && !destPortalProperty->hasPassablePortalToParentCell())
+			if (!nested && destPortalProperty && !destPortalProperty->hasPassablePortalToParentCell())
 				return handleInvalidMove("tried to move from the world cell into a pob with no entrance");
 		}
 	}
@@ -902,7 +931,23 @@ bool PlayerCreatureController::handleInvalidMove(char const *failReason)
 		else
 		{
 			// previously in a cell, but no longer allowed, so expel from the building of that cell
-			cell->getOwnerBuilding()->expelObject(*creature);
+			BuildingObject * const ownerBuilding = cell->getOwnerBuilding();
+			if (ownerBuilding)
+				ownerBuilding->expelObject(*creature);
+			else
+			{
+				// Titan: ship cells (boardable vessels) have no owner building.  Put the creature at the pob's
+				// ejection point in the pob's parent cell (the world, or the hangar cell the vessel is parked in).
+				Object * const pob = ContainerInterface::getContainedByObject(*cell);
+				PortalProperty const * const pobPortalProperty = pob ? pob->getPortalProperty() : 0;
+				if (pobPortalProperty)
+				{
+					CellProperty * const pobParentCell = pob->getParentCell();
+					Transform ejection(Transform::IF_none);
+					ejection.multiply(pob->getTransform_o2p(), pobPortalProperty->getEjectionLocationTransform());
+					teleport(ejection, (pobParentCell && !pobParentCell->isWorldCell()) ? safe_cast<ServerObject *>(&pobParentCell->getOwner()) : 0);
+				}
+			}
 		}
 	}
 	else if (isLocationValid(m_lastVerifiedMove.getPosition_w(), m_lastVerifiedMove.getCell()))
